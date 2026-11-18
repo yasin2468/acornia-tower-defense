@@ -1,19 +1,23 @@
 """Palamut Kalesi — Headless Blender 5.2 production pipeline for Chibi Animal Warriors.
 
-Generates the 12 approved tower upgrade/branch .glb models (Squirrel, Beaver, Hedgehog x4 tiers/branches)
+Generates all 16 approved tower upgrade/branch .glb models (Squirrel, Beaver, Owl V4, Hedgehog x4 tiers/branches)
 plus 3 rigged, animated Boz Pence bear hero class .glb models (Classic, Viking, Royal) in:
   /Users/yasinozkan/Desktop/Projelerim/palamut-kalesi/public/models/
-
-Notice: Owl tower models (tower_owl_*.glb) are intentionally left untouched until Owl V3 is approved.
 
 Run:
   /Applications/Blender.app/Contents/MacOS/Blender -b -P scripts/blender_build_chibi_units.py
   /Applications/Blender.app/Contents/MacOS/Blender -b -P scripts/blender_build_chibi_units.py -- --verify
-  /Applications/Blender.app/Contents/MacOS/Blender -b -P scripts/blender_build_chibi_units.py -- hero_bear_viking tower_hedgehog_shred
+  /Applications/Blender.app/Contents/MacOS/Blender -b -P scripts/blender_build_chibi_units.py -- tower_owl_t1 tower_owl_t2 tower_owl_chain tower_owl_blizzard
 """
+import json
 import math
 import os
+import posixpath
+import ssl
+import subprocess
 import sys
+import urllib.parse
+import urllib.request
 
 import bmesh
 import bpy
@@ -95,6 +99,104 @@ def _save_pixels_img(px, w, h, out_path):
     out.file_format = "PNG"
     out.save()
     bpy.data.images.remove(out)
+
+
+CC0_SOURCES = [
+    (
+        "kaykit_medieval_hex",
+        "KayKit-Game-Assets/KayKit-Medieval-Hexagon-Pack-1.0/main",
+        [
+            "addons/kaykit_medieval_hexagon_pack/Textures/hexagons_medieval.png",
+            "addons/kaykit_medieval_hexagon_pack/Assets/gltf/buildings/blue/building_tower_base_blue.gltf",
+            "addons/kaykit_medieval_hexagon_pack/Assets/gltf/buildings/red/building_tower_base_red.gltf",
+            "addons/kaykit_medieval_hexagon_pack/Assets/gltf/buildings/yellow/building_tower_base_yellow.gltf",
+            "addons/kaykit_medieval_hexagon_pack/Assets/gltf/buildings/green/building_tower_base_green.gltf",
+            "addons/kaykit_medieval_hexagon_pack/Assets/gltf/buildings/yellow/building_tower_catapult_yellow.gltf",
+            "addons/kaykit_medieval_hexagon_pack/Assets/gltf/buildings/neutral/projectile_catapult.gltf",
+            "addons/kaykit_medieval_hexagon_pack/Assets/gltf/decoration/props/flag_blue.gltf",
+            "addons/kaykit_medieval_hexagon_pack/Assets/gltf/decoration/props/flag_red.gltf",
+            "addons/kaykit_medieval_hexagon_pack/Assets/gltf/decoration/props/flag_yellow.gltf",
+            "addons/kaykit_medieval_hexagon_pack/Assets/gltf/decoration/props/flag_green.gltf",
+            "addons/kaykit_medieval_hexagon_pack/Assets/gltf/decoration/props/target.gltf",
+            "addons/kaykit_medieval_hexagon_pack/Assets/gltf/decoration/props/bucket_arrows.gltf",
+            "addons/kaykit_medieval_hexagon_pack/Assets/gltf/decoration/props/barrel.gltf",
+        ],
+    ),
+    (
+        "kaykit_adv",
+        "KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0/main",
+        [
+            "addons/kaykit_character_pack_adventures/Characters/gltf/Mage.glb",
+            "addons/kaykit_character_pack_adventures/Characters/gltf/Rogue.glb",
+            "addons/kaykit_character_pack_adventures/Characters/gltf/Barbarian.glb",
+            "addons/kaykit_character_pack_adventures/Characters/gltf/Knight.glb",
+            "addons/kaykit_character_pack_adventures/Assets/gltf/mage_texture.png",
+            "addons/kaykit_character_pack_adventures/Assets/gltf/rogue_texture.png",
+            "addons/kaykit_character_pack_adventures/Assets/gltf/barbarian_texture.png",
+            "addons/kaykit_character_pack_adventures/Assets/gltf/knight_texture.png",
+            "addons/kaykit_character_pack_adventures/Assets/gltf/quiver.gltf",
+            "addons/kaykit_character_pack_adventures/Assets/gltf/crossbow_2handed.gltf",
+        ],
+    ),
+    (
+        "quaternius",
+        "trebeljahr/quaternius-showcase/main",
+        [
+            "public/glb/rpg_items_pack/Crystal3.glb",
+            "public/glb/rpg_items_pack/Crown.glb",
+            "public/glb/modular_sci_fi_guns_pack/Sniper_1.glb",
+            "public/glb/modular_sci_fi_guns_pack/Crossbow_2.glb",
+            "public/glb/medieval_weapons_pack/Bow_Golden.glb",
+            "public/glb/cyberpunk_pack/Turret_GunDouble.glb",
+            "public/glb/platformer_game_pack/Cannon.glb",
+            "public/glb/platformer_game_pack/Hazard_Saw.glb",
+        ],
+    ),
+]
+
+
+def _download_raw_file(repo_branch, rel_path, dest_dir):
+    local_path = os.path.join(dest_dir, rel_path)
+    if os.path.exists(local_path) and os.path.getsize(local_path) > 0:
+        return local_path
+    os.makedirs(os.path.dirname(local_path), exist_ok=True)
+    quoted = urllib.parse.quote(rel_path)
+    url = f"https://raw.githubusercontent.com/{repo_branch}/{quoted}"
+    headers = {"User-Agent": "PalamutKalesi-ChibiBuilder/1.0"}
+    data = None
+    ca_file = "/etc/ssl/cert.pem"
+    try:
+        ctx = ssl.create_default_context(cafile=ca_file) if os.path.exists(ca_file) else None
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=45, context=ctx) as resp:
+            data = resp.read()
+    except Exception:
+        data = subprocess.check_output(
+            ["curl", "-fsSL", "--max-time", "45", "-A", headers["User-Agent"], url]
+        )
+    if not data:
+        raise RuntimeError(f"Empty download from {url}")
+    with open(local_path, "wb") as f:
+        f.write(data)
+    return local_path
+
+
+def ensure_cc0_sources():
+    """Ensure all required CC0 source models and referenced .bin/.png dependencies exist under /tmp/palamut_cc0."""
+    for folder, repo_branch, rel_paths in CC0_SOURCES:
+        dest_dir = os.path.join(CC0, folder)
+        for rel_path in rel_paths:
+            local_path = _download_raw_file(repo_branch, rel_path, dest_dir)
+            if rel_path.lower().endswith(".gltf"):
+                with open(local_path, "r", encoding="utf-8") as f:
+                    gltf_json = json.load(f)
+                base_dir = posixpath.dirname(rel_path)
+                for sec in ("buffers", "images"):
+                    for item in gltf_json.get(sec, []):
+                        uri = item.get("uri")
+                        if uri and not uri.startswith("data:"):
+                            dep_rel = posixpath.normpath(posixpath.join(base_dir, uri))
+                            _download_raw_file(repo_branch, dep_rel, dest_dir)
 
 
 def ensure_warm_hex_atlas():
@@ -1119,6 +1221,517 @@ def build_tower_crew_mounted(turret_head, char_file, keep_props, action, frame_o
     return char_group, weapon_group
 
 
+# ---------------------------------------------------------------------------
+# Owl V4 Builders (Spherical-Front Heart Face Mask + Feather Crests + Crystal Staff)
+# ---------------------------------------------------------------------------
+
+def _smin(a, b, k):
+    h = np.clip(0.5 + 0.5 * (b - a) / k, 0.0, 1.0)
+    return b * (1.0 - h) + a * h - k * h * (1.0 - h)
+
+
+def _smoothstep(e0, e1, x):
+    t = np.clip((x - e0) / (e1 - e0), 0.0, 1.0)
+    return t * t * (3.0 - 2.0 * t)
+
+
+def paint_owl_head_tex(name, plumage_top_hex, plumage_bot_hex, rim_hex, face_top_hex, face_bot_hex,
+                       crown_fleck_hex=None, snow_speckles=False):
+    """Paint 1024x1024 spherical-front UV texture with smooth heart-shaped Owl facial disc."""
+    out_path = os.path.join(CHIBI_TEX, f"owl_head_{name}.png")
+    if os.path.exists(out_path):
+        return out_path
+    w, h = 1024, 1024
+    vs = np.linspace(0.0, 1.0, h, dtype=np.float32)[:, None]
+    us = np.linspace(0.0, 1.0, w, dtype=np.float32)[None, :]
+
+    ptop = np.array(hex_rgb(plumage_top_hex), dtype=np.float32)[None, None, :]
+    pbot = np.array(hex_rgb(plumage_bot_hex), dtype=np.float32)[None, None, :]
+    rim_c = np.array(hex_rgb(rim_hex), dtype=np.float32)[None, None, :]
+    ftop = np.array(hex_rgb(face_top_hex), dtype=np.float32)[None, None, :]
+    fbot = np.array(hex_rgb(face_bot_hex), dtype=np.float32)[None, None, :]
+
+    t_vert = np.clip((vs - 0.15) / 0.70, 0.0, 1.0)[..., None]
+    rgb = pbot * (1.0 - t_vert) + ptop * t_vert
+
+    nx = (us - 0.5) / 0.155
+    ny = (vs - 0.45) / 0.215
+
+    dL = np.hypot((nx + 0.56) * 0.94, (ny - 0.14) * 1.02) - 0.65
+    dR = np.hypot((nx - 0.56) * 0.94, (ny - 0.14) * 1.02) - 0.65
+    dC = np.hypot(nx * 1.24, (ny + 0.36) * 1.05) - 0.62
+    d_heart = _smin(_smin(dL, dR, 0.14), dC, 0.24)
+
+    rim_mask = (1.0 - _smoothstep(0.0, 0.22, np.abs(d_heart - 0.04))) * _smoothstep(-0.08, 0.06, d_heart)
+    rgb = rgb * (1.0 - rim_mask[..., None] * 0.85) + rim_c * (rim_mask[..., None] * 0.85)
+
+    face_mask = 1.0 - _smoothstep(-0.06, 0.04, d_heart)
+    t_face = np.clip((ny + 0.6) / 1.2, 0.0, 1.0)[..., None]
+    face_col = fbot * (1.0 - t_face) + ftop * t_face
+
+    shadow_L = np.exp(-((nx + 0.50) ** 2 + (ny - 0.10) ** 2) / 0.18) * 0.08
+    shadow_R = np.exp(-((nx - 0.50) ** 2 + (ny - 0.10) ** 2) / 0.18) * 0.08
+    face_col = np.clip(face_col - (shadow_L + shadow_R)[..., None], 0.0, 1.0)
+    rgb = rgb * (1.0 - face_mask[..., None]) + face_col * face_mask[..., None]
+
+    if crown_fleck_hex:
+        fl_c = np.array(hex_rgb(crown_fleck_hex), dtype=np.float32)[None, None, :]
+        flecks = np.zeros((h, w), dtype=np.float32)
+        for fx, fy, rx, ry in (
+            (0.0, 0.90, 0.12, 0.06),
+            (-0.24, 0.98, 0.11, 0.05),
+            (0.24, 0.98, 0.11, 0.05),
+            (-0.12, 1.12, 0.10, 0.05),
+            (0.12, 1.12, 0.10, 0.05),
+        ):
+            d_f = np.hypot((nx - fx) / rx, (ny - fy) / ry)
+            flecks = np.maximum(flecks, 1.0 - _smoothstep(0.55, 1.0, d_f))
+        flecks *= _smoothstep(0.05, 0.20, d_heart)
+        rgb = rgb * (1.0 - flecks[..., None] * 0.65) + fl_c * (flecks[..., None] * 0.65)
+
+    if snow_speckles:
+        sp_c = np.array(hex_rgb("#546b87"), dtype=np.float32)[None, None, :]
+        phase_u = np.sin(us * np.pi * 24.0 + np.sin(vs * np.pi * 10.0) * 1.4)
+        phase_v = np.sin(vs * np.pi * 18.0)
+        bars = _smoothstep(0.58, 0.85, phase_u * phase_v)
+        valid_zone = _smoothstep(0.16, 0.32, d_heart) * _smoothstep(0.28, 0.45, vs)
+        rgb = rgb * (1.0 - (bars * valid_zone)[..., None] * 0.52) + sp_c * ((bars * valid_zone)[..., None] * 0.52)
+
+    px = np.zeros((h, w, 4), dtype=np.float32)
+    px[..., :3] = np.clip(rgb, 0.0, 1.0)
+    px[..., 3] = 1.0
+    _save_pixels_img(px, w, h, out_path)
+    return out_path
+
+
+def apply_spherical_front_uv(obj, tex_path, center=(0.0, -0.02, 1.67)):
+    """Map spherical-front UVs onto sculpted Owl skull so u=0.5 faces -Y cleanly."""
+    me = obj.data
+    if not me.uv_layers:
+        me.uv_layers.new(name="UVMap")
+    uv_layer = me.uv_layers.active.data
+    cx, cy, cz = center
+
+    vert_uvs = []
+    for v in me.vertices:
+        dx, dy, dz = v.co.x - cx, v.co.y - cy, v.co.z - cz
+        r = max(math.sqrt(dx * dx + dy * dy + dz * dz), 1e-5)
+        theta = math.atan2(dx, -dy)
+        phi = math.asin(max(-1.0, min(1.0, dz / r)))
+        u = 0.5 + theta / (2.0 * math.pi)
+        vv = 0.5 + phi / math.pi
+        vert_uvs.append((u, vv))
+
+    for poly in me.polygons:
+        poly.use_smooth = True
+        us_poly = [vert_uvs[me.loops[li].vertex_index][0] for li in poly.loop_indices]
+        wrap = (max(us_poly) - min(us_poly)) > 0.5
+        for li in poly.loop_indices:
+            vi = me.loops[li].vertex_index
+            u, vv = vert_uvs[vi]
+            if wrap and u < 0.5:
+                u += 1.0
+            uv_layer[li].uv = (u, vv)
+
+    mat = bpy.data.materials.new("OwlHeadPaintedMat_" + os.path.basename(tex_path))
+    mat.use_nodes = True
+    nt = mat.node_tree
+    b = nt.nodes.get("Principled BSDF")
+    tex = nt.nodes.new("ShaderNodeTexImage")
+    tex.image = _load_img(tex_path)
+    tex.interpolation = "Linear"
+    nt.links.new(tex.outputs["Color"], b.inputs["Base Color"])
+    b.inputs["Roughness"].default_value = 0.58
+    if "Specular IOR Level" in b.inputs:
+        b.inputs["Specular IOR Level"].default_value = 0.22
+    me.materials.clear()
+    me.materials.append(mat)
+    me.update()
+
+
+def make_owl_mage_tex(name, feather_paw_hex, robe_prim_hex, trim_gold_hex, cape_hex, robe_mix=0.65):
+    """Recolor KayKit Mage texture cleanly for V4 Owls."""
+    out_path = os.path.join(CHIBI_TEX, f"mage_{name}.png")
+    if os.path.exists(out_path):
+        return out_path
+    src_path = os.path.join(ADV_A, "mage_texture.png")
+    px, w, h = _load_pixels_img(src_path)
+    rgb = px[..., :3]
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+
+    skin_mask = (r > 0.72) & (g > 0.50) & (g < 0.88) & (b > 0.35) & (b < 0.75) & ((r - b) > 0.12) & ((r - g) < 0.30)
+    mag_mask = (r > 0.42) & (g < 0.25) & (b > 0.22) & ((r - g) > 0.25)
+    robe_mask = (b > r + 0.06) & (b > g + 0.05) & (~skin_mask) & (~mag_mask)
+    lum = rgb @ np.array([0.299, 0.587, 0.114], dtype=np.float32)
+
+    out = rgb.copy()
+    robe_c = np.array(hex_rgb(robe_prim_hex), dtype=np.float32)
+    robe_shaded = np.clip(robe_c[None, None, :] * (0.42 + 0.95 * lum[..., None]), 0.0, 1.0)
+    out = np.where(robe_mask[..., None], out * (1.0 - robe_mix) + robe_shaded * robe_mix, out)
+
+    cape_c = np.array(hex_rgb(cape_hex), dtype=np.float32)
+    cape_shaded = np.clip(cape_c[None, None, :] * (0.40 + 0.95 * lum[..., None]), 0.0, 1.0)
+    out = np.where(mag_mask[..., None], cape_shaded, out)
+
+    if trim_gold_hex:
+        gold_c = np.array(hex_rgb(trim_gold_hex), dtype=np.float32)
+        grey_trim = (~skin_mask) & (np.abs(r - g) < 0.08) & (np.abs(g - b) < 0.12) & (lum > 0.42)
+        out = np.where(grey_trim[..., None], out * 0.3 + (gold_c[None, None, :] * (0.52 + 0.55 * lum[..., None])) * 0.7, out)
+
+    paw = np.array(hex_rgb(feather_paw_hex), dtype=np.float32)
+    paw_shaded = np.clip(paw[None, None, :] * (0.45 + 0.72 * lum[..., None]), 0.0, 1.0)
+    out = np.where(skin_mask[..., None], paw_shaded, out)
+
+    px[..., :3] = np.clip(out, 0.0, 1.0)
+    _save_pixels_img(px, w, h, out_path)
+    return out_path
+
+
+def make_feather_leaf(name, length, width, thickness, swatch_hex, loc=(0, 0, 0), rot_deg=(0, 0, 0), parent=None):
+    """Build a crisp tapered sculpted feather vane (flattened pointed teardrop)."""
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=14, ring_count=8, radius=1.0, location=(0, 0, 0))
+    obj = bpy.context.active_object
+    obj.name = name
+    me = obj.data
+    for v in me.vertices:
+        z = v.co.z
+        taper = max(0.08, 1.0 - max(0.0, z) * 0.85) * (1.0 - max(0.0, -z) * 0.35)
+        arch = (1.0 - z * z) * 0.14
+        v.co.x *= width * taper
+        v.co.y = v.co.y * thickness * taper - arch * thickness
+        v.co.z = (z + 0.65) * 0.5 * length
+    me.update()
+    for p in me.polygons:
+        p.use_smooth = True
+
+    mat = get_solid_mat(f"FeatherMat_{swatch_hex}", swatch_hex, roughness=0.52)
+    obj.data.materials.clear()
+    obj.data.materials.append(mat)
+    obj.location = loc
+    obj.rotation_euler = tuple(math.radians(a) for a in rot_deg)
+    if parent is not None:
+        obj.parent = parent
+    return obj
+
+
+def build_owl_v4_head(head_tex, crest_dark_hex, crest_mid_hex, ruff_hex,
+                      iris_hex="#f2aa24", beak_hex="#c9802b", crest_scale=1.0,
+                      glasses=False, crown=False):
+    hr = make_empty("AnimalHeadRoot")
+    elems = [
+        {"co": (0.0, 0.0, 0.16), "radius": 0.46, "sx": 1.20, "sy": 0.95, "sz": 0.95},
+        {"co": (-0.22, -0.06, 0.02), "radius": 0.34, "sx": 1.05, "sy": 0.92, "sz": 0.86},
+        {"co": (0.22, -0.06, 0.02), "radius": 0.34, "sx": 1.05, "sy": 0.92, "sz": 0.86},
+        {"co": (0.0, 0.02, -0.08), "radius": 0.30, "sx": 0.98, "sy": 0.94, "sz": 0.65},
+    ]
+    head = sculpt_metaball_mesh("OwlV4Head", elems, target_dims=(1.12, 0.92, 0.86),
+                                target_center_xy=(0.0, -0.02), bottom_z=1.24,
+                                swatch_col=6, resolution=0.036, smooth_iter=6)
+    head.parent = hr
+    apply_spherical_front_uv(head, head_tex, center=(0.0, -0.02, 1.67))
+
+    eye_dark = get_solid_mat("EyeGlossDark", "#0d0f15", roughness=0.05)
+    catch_mat = get_solid_mat("EyeCatchlight", "#ffffff", roughness=0.05, emission=1.55)
+    iris_mat = get_solid_mat(f"OwlSoftIris_{iris_hex}", iris_hex, roughness=0.16, emission=0.14)
+    gold_mat = get_solid_mat("OwlGoldMetal", "#eab83c", roughness=0.24, metallic=0.82)
+
+    eye_locs = []
+    for sx in (-1, 1):
+        ehit, eloc, enorm = raycast_front(head, sx * 0.21, 1.64)
+        if not ehit:
+            eloc = Vector((sx * 0.21, -0.44, 1.64))
+            enorm = Vector((sx * 0.24, -0.96, 0.04)).normalized()
+        quat = enorm.to_track_quat("Z", "Y")
+        rot_deg = tuple(math.degrees(a) for a in quat.to_euler())
+        eye_locs.append((sx, eloc, enorm, quat, rot_deg))
+
+        make_smooth_subdiv_prim(f"OwlIris_{sx}", "SPHERE", eloc + enorm * 0.004,
+                                scale=(0.104, 0.110, 0.026), rot_deg=rot_deg,
+                                solid_mat=iris_mat, segs=20, subdiv=0, parent=hr)
+        pup_pos = eloc + enorm * 0.015
+        make_smooth_subdiv_prim(f"OwlPupil_{sx}", "SPHERE", pup_pos,
+                                scale=(0.078, 0.086, 0.028), rot_deg=rot_deg,
+                                solid_mat=eye_dark, segs=18, subdiv=0, parent=hr)
+        cl_off = quat @ Vector((-0.028, 0.032, 0.024))
+        make_smooth_subdiv_prim(f"CatchlightMain_{sx}", "SPHERE", pup_pos + cl_off,
+                                scale=(0.025, 0.025, 0.014), rot_deg=rot_deg,
+                                solid_mat=catch_mat, segs=10, subdiv=0, parent=hr)
+        cl2_off = quat @ Vector((0.024, -0.026, 0.022))
+        make_smooth_subdiv_prim(f"CatchlightSub_{sx}", "SPHERE", pup_pos + cl2_off,
+                                scale=(0.012, 0.012, 0.010), rot_deg=rot_deg,
+                                solid_mat=catch_mat, segs=8, subdiv=0, parent=hr)
+
+        if glasses:
+            bpy.ops.mesh.primitive_torus_add(
+                major_radius=0.132, minor_radius=0.017,
+                major_segments=32, minor_segments=12, location=(0, 0, 0),
+            )
+            ring = bpy.context.active_object
+            ring.name = f"GlassFrame_{sx}"
+            for p in ring.data.polygons:
+                p.use_smooth = True
+            ring.data.materials.clear()
+            ring.data.materials.append(gold_mat)
+            ring.location = eloc + enorm * 0.018
+            ring.rotation_euler = tuple(math.radians(a) for a in rot_deg)
+            ring.parent = hr
+
+        bhit, bloc, bnorm = raycast_front(head, sx * 0.12, 1.78)
+        b_start = bloc + bnorm * 0.015 if bhit else Vector((sx * 0.12, -0.39, 1.78))
+        crest_root = make_empty(f"OwlCrest_{sx}", loc=(b_start.x, b_start.y + 0.03, b_start.z - 0.02), parent=hr)
+        plumes = [
+            (0.00, 0.00, 0.00, 0.42 * crest_scale, 0.088, 0.032, (-12, sx * 42, sx * -8), crest_dark_hex),
+            (sx * 0.06, 0.02, -0.02, 0.35 * crest_scale, 0.080, 0.030, (-8, sx * 56, sx * -12), crest_mid_hex),
+            (sx * 0.12, 0.05, -0.05, 0.27 * crest_scale, 0.070, 0.026, (-4, sx * 70, sx * -16), crest_dark_hex),
+        ]
+        for pi, (ox, oy, oz, ln, wd, th, rdeg, colh) in enumerate(plumes):
+            make_feather_leaf(f"CrestFeather_{sx}_{pi}", ln, wd, th, colh,
+                              loc=(ox, oy, oz), rot_deg=rdeg, parent=crest_root)
+
+    if glasses and len(eye_locs) == 2:
+        nhit, nloc, nnorm = raycast_front(head, 0.0, 1.655)
+        bridge_pos = (nloc + nnorm * 0.018) if nhit else Vector((0.0, -0.465, 1.655))
+        make_smooth_subdiv_prim("GlassBridge", "CYL", bridge_pos, scale=(0.013, 0.013, 0.18),
+                                rot_deg=(0, 90, 0), solid_mat=gold_mat, segs=12, radius=1.0, depth=1.0, subdiv=0, parent=hr)
+
+    beak_main = get_solid_mat(f"OwlBeakMat_{beak_hex}", beak_hex, roughness=0.38)
+    beak_dark = get_solid_mat("OwlBeakLowerMat", "#6b3e1b", roughness=0.45)
+    bhit, bloc, _ = raycast_front(head, 0.0, 1.56)
+    by = bloc.y - 0.045 if bhit else -0.49
+    make_smooth_subdiv_prim("OwlBeakUpper", "CONE", (0.0, by, 1.54),
+                            scale=(0.076, 0.068, 0.115), rot_deg=(124, 0, 0),
+                            solid_mat=beak_main, segs=16, radius=1.0, depth=2.0, subdiv=0, parent=hr)
+    make_smooth_subdiv_prim("OwlBeakLower", "SPHERE", (0.0, by + 0.022, 1.50),
+                            scale=(0.052, 0.045, 0.042), solid_mat=beak_dark, segs=12, subdiv=1, parent=hr)
+
+    ruff_mat = get_solid_mat(f"OwlRuff_{ruff_hex}", ruff_hex, roughness=0.62)
+    make_smooth_subdiv_prim("OwlChestRuffMain", "SPHERE", (0.0, -0.20, 1.24),
+                            scale=(0.39, 0.26, 0.16), rot_deg=(14, 0, 0),
+                            solid_mat=ruff_mat, segs=18, subdiv=1, parent=hr)
+    for sx in (-1, 0, 1):
+        sc_x = 0.16 if sx == 0 else 0.14
+        sc_z = 0.14 if sx == 0 else 0.12
+        make_smooth_subdiv_prim(f"OwlRuffTuft_{sx}", "SPHERE", (sx * 0.14, -0.34 + abs(sx) * 0.06, 1.15 + abs(sx) * 0.02),
+                                scale=(sc_x, 0.09, sc_z), rot_deg=(24, 0, sx * -14),
+                                solid_mat=ruff_mat, segs=16, subdiv=1, parent=hr)
+
+    if crown:
+        ch_cr, co_cr = place(os.path.join(Q, "rpg_items_pack/Crown.glb"), parent=hr, max_xy=0.46,
+                             loc=(0.0, 0.02, 1.94), rot_deg=(-8, 0, 0), ground=True)
+        ch_cr.name = "NativeHat_OwlCrown"
+        for ob in co_cr:
+            ob.name = "NativeHat_" + ob.name
+        set_flat_color(co_cr, "*", "#f2c144", roughness=0.24, metallic=0.76)
+
+    return hr
+
+
+def attach_owl_wings(char_group, hips_world, scale, primary_hex, tip_hex):
+    for sx in (-1, 1):
+        wh = make_empty(f"OwlWing_{sx}", loc=hips_world + Vector((sx * 0.36 * scale, 0.15 * scale, 0.56 * scale)), parent=None)
+        wh.rotation_euler = (math.radians(10), math.radians(sx * 18), math.radians(sx * 16))
+        wmat1 = get_solid_mat(f"WingCol1_{primary_hex}", primary_hex, roughness=0.55)
+        make_smooth_subdiv_prim("WingShoulder", "SPHERE", (sx * 0.06 * scale, 0, 0),
+                                scale=(0.18 * scale, 0.085 * scale, 0.28 * scale),
+                                solid_mat=wmat1, segs=16, subdiv=1, parent=wh)
+        for fi, (ox, oz, ln, wd, colh) in enumerate((
+            (0.14, -0.14, 0.42, 0.11, primary_hex),
+            (0.08, -0.22, 0.38, 0.10, tip_hex),
+            (-0.02, -0.26, 0.32, 0.09, primary_hex),
+        )):
+            make_feather_leaf(f"WingPlume_{sx}_{fi}", ln * scale, wd * scale, 0.040 * scale, colh,
+                              loc=(sx * ox * scale, 0.02 * scale, oz * scale),
+                              rot_deg=(180, sx * 12, 0), parent=wh)
+        set_parent_keep(wh, char_group)
+
+
+def attach_custom_crystal_staff(weapon_group, staff_verts_world, hand_world, crystal_hex, crystal_emi_hex, double_crystal=False):
+    """Build sculpted wooden staff + gold claw mount + glowing crystal cleanly in WeaponGroup."""
+    top_v = max(staff_verts_world, key=lambda v: v.z)
+    bot_v = min(staff_verts_world, key=lambda v: v.z)
+    axis = (top_v - bot_v)
+    axis = axis.normalized() if axis.length > 0.2 else Vector((-0.18, -0.45, 0.87)).normalized()
+
+    quat = axis.to_track_quat("Z", "Y")
+    sh = make_empty("CustomCrystalStaff", loc=hand_world, parent=None)
+    sh.rotation_euler = quat.to_euler()
+    bpy.context.view_layer.update()
+
+    wood_mat = get_solid_mat("StaffWoodMat", "#704224", roughness=0.68)
+    gold_mat = get_solid_mat("StaffGoldMat", "#f2bf42", roughness=0.25, metallic=0.78)
+
+    up_len = max(0.28, (top_v - hand_world).dot(axis) * 0.78)
+    dn_len = max(0.16, (hand_world - bot_v).dot(axis) * 0.86)
+    mid_z = (up_len - dn_len) * 0.5
+    shaft_len = up_len + dn_len
+
+    make_smooth_subdiv_prim("StaffShaft", "CYL", (0, 0, mid_z), scale=(0.021, 0.021, shaft_len),
+                            solid_mat=wood_mat, segs=14, radius=1.0, depth=1.0, subdiv=0, parent=sh)
+    make_smooth_subdiv_prim("StaffPommel", "SPHERE", (0, 0, -dn_len), scale=(0.030, 0.030, 0.038),
+                            solid_mat=gold_mat, segs=14, subdiv=0, parent=sh)
+    make_smooth_subdiv_prim("StaffCollar", "CYL", (0, 0, up_len), scale=(0.036, 0.036, 0.034),
+                            solid_mat=gold_mat, segs=16, radius=1.0, depth=1.0, subdiv=0, parent=sh)
+    for i in range(4):
+        a = i * math.pi * 0.5 + math.pi * 0.25
+        make_smooth_subdiv_prim(f"StaffProng_{i}", "CONE", (math.cos(a) * 0.036, math.sin(a) * 0.036, up_len + 0.042),
+                                scale=(0.011, 0.011, 0.038), rot_deg=(math.sin(a) * 20, -math.cos(a) * 20, 0),
+                                solid_mat=gold_mat, segs=8, radius=1.0, depth=2.0, subdiv=0, parent=sh)
+
+    c_anchor = make_empty("CrystalTipAnchor", loc=(0.0, 0.0, up_len + 0.012), parent=sh)
+    c_holder, co = place(os.path.join(Q, "rpg_items_pack/Crystal3.glb"), parent=None, height=0.17,
+                         loc=(0, 0, 0), rot_deg=(0, 0, 20), center=True, ground=True)
+    set_flat_color(co, "*", crystal_hex, emission_hex=crystal_emi_hex, emission_strength=1.55, roughness=0.12, force=True)
+    c_holder.parent = c_anchor
+
+    if double_crystal:
+        for sx in (-1, 1):
+            c2_anc = make_empty(f"CrystalSideAnchor_{sx}", loc=(sx * 0.048, 0.0, up_len + 0.020), parent=sh)
+            c2_anc.rotation_euler = (0.0, math.radians(sx * 24), 0.0)
+            c2, co2 = place(os.path.join(Q, "rpg_items_pack/Crystal3.glb"), parent=None, height=0.105,
+                            loc=(0, 0, 0), rot_deg=(0, 0, 0), center=True, ground=True)
+            set_flat_color(co2, "*", crystal_hex, emission_hex=crystal_emi_hex, emission_strength=1.65, roughness=0.12, force=True)
+            c2.parent = c2_anc
+
+    set_parent_keep(sh, weapon_group)
+    return sh
+
+
+def build_owl_v4_crew_mounted(turret_head, head_root, deck_z, tex_path, wing_cols, crystal_cols,
+                              offset=(0.02, 0.04), action="Spellcasting", frame_offset=6,
+                              back_hat=False, double_crystal=False, collar_brooch=None):
+    objs = import_asset(os.path.join(ADV_C, "Mage.glb"))
+    arm = next(o for o in objs if o.type == "ARMATURE")
+    holder = make_empty("WarriorHolder")
+    for r in roots_of(objs):
+        r.parent = holder
+    scale = CREW_SCALE
+    holder.scale = (scale, scale, scale)
+
+    meshes = []
+    staff_obj = None
+    for o in list(objs):
+        if o.type != "MESH":
+            continue
+        if o.name == "2H_Staff":
+            staff_obj = o
+            continue
+        if o.parent_bone in ("handslot.r", "handslot.l") or o.name in ("Mage_Head", "Mage_Hat"):
+            bpy.data.objects.remove(o, do_unlink=True)
+            continue
+        meshes.append(o)
+
+    retexture(meshes, "mage", tex_path)
+
+    clear_nla(arm)
+    for pb in arm.pose.bones:
+        pb.matrix_basis = Matrix.Identity(4)
+    if arm.animation_data:
+        arm.animation_data.action = None
+    bpy.context.view_layer.update()
+    rest_head_q = bone_world(arm, "head").to_quaternion()
+
+    act = set_action(arm, action)
+    bpy.context.scene.frame_set(int(act.frame_range[0]) + frame_offset)
+    bpy.context.view_layer.update()
+
+    head_m = bone_world(arm, "head")
+    hips_m = bone_world(arm, "hips")
+    hand_m = bone_world(arm, "handslot.r")
+    head_delta_q = head_m.to_quaternion() @ rest_head_q.inverted()
+
+    staff_verts = [staff_obj.matrix_world @ v.co for v in staff_obj.data.vertices] if staff_obj else []
+    if staff_obj:
+        bpy.data.objects.remove(staff_obj, do_unlink=True)
+
+    dg = bpy.context.evaluated_depsgraph_get()
+    for o in meshes:
+        mw = o.matrix_world.copy()
+        if any(m.type == "ARMATURE" for m in o.modifiers):
+            ev = o.evaluated_get(dg)
+            new_me = bpy.data.meshes.new_from_object(ev, preserve_all_data_layers=True, depsgraph=dg)
+            for mod in list(o.modifiers):
+                o.modifiers.remove(mod)
+            o.data = new_me
+        o.parent = None
+        o.matrix_world = mw
+    bpy.data.objects.remove(arm, do_unlink=True)
+    bpy.data.objects.remove(holder, do_unlink=True)
+
+    bpy.ops.object.select_all(action="DESELECT")
+    for o in meshes:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = meshes[0]
+    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+
+    mn, mx = mesh_bounds(meshes)
+    delta = Vector((offset[0] - (mn.x + mx.x) * 0.5, offset[1] - (mn.y + mx.y) * 0.5, deck_z - mn.z))
+    for o in meshes:
+        o.location += delta
+    bpy.context.view_layer.update()
+
+    char_group = make_empty("CharacterGroup", loc=(offset[0], offset[1], 0), parent=turret_head)
+    weapon_group = make_empty("WeaponGroup", loc=(0, 0, 0), parent=turret_head)
+    for o in meshes:
+        set_parent_keep(o, char_group)
+
+    head_root.parent = char_group
+    for c in list(head_root.children):
+        c.location.z -= 1.228
+    head_rot_m = head_delta_q.to_matrix().to_4x4()
+    head_root.matrix_world = Matrix.Translation(head_m.translation + delta) @ head_rot_m @ Matrix.Scale(scale, 4)
+    bpy.context.view_layer.update()
+
+    sock = make_empty("HeadSocket", parent=char_group)
+    sock_loc = head_m.translation + delta + head_rot_m @ Vector((0, -0.02 * scale, -0.04 * scale))
+    sock.matrix_world = Matrix.Translation(sock_loc) @ head_rot_m @ Matrix.Scale(scale / HERO_SCALE, 4)
+    bpy.context.view_layer.update()
+
+    if collar_brooch:
+        gold = get_solid_mat("OwlGoldMetal", "#eab83c", roughness=0.24, metallic=0.82)
+        gem = get_solid_mat(f"BroochGem_{collar_brooch}", collar_brooch, roughness=0.12, emission=0.85)
+        bp = head_m.translation + delta + Vector((0.0, -0.17 * scale, -0.24 * scale))
+        rim_o = make_smooth_subdiv_prim("CollarGoldRim", "SPHERE", bp, scale=(0.048, 0.025, 0.048),
+                                        solid_mat=gold, segs=14, subdiv=0, parent=None)
+        gem_o = make_smooth_subdiv_prim("CollarGem", "SPHERE", bp + Vector((0.0, -0.014, 0.0)), scale=(0.032, 0.022, 0.032),
+                                        solid_mat=gem, segs=12, subdiv=0, parent=None)
+        set_parent_keep(rim_o, char_group)
+        set_parent_keep(gem_o, char_group)
+
+    if back_hat:
+        h_world = Matrix.Translation(head_m.translation + delta) @ head_rot_m @ Matrix.Translation((0, 0.10 * scale, 0.50 * scale))
+        hh, h_objs = place(os.path.join(ADV_C, "Mage.glb"), parent=None,
+                            drop_names=("Body", "Arm", "Leg", "Cape", "Head", "1H_", "2H_", "Shield", "Mug", "Spellbook", "Knife", "Crossbow", "Throwable"),
+                            width_x=0.96 * scale, loc=h_world.translation, rot_deg=(-20, 6, 0), ground=True)
+        hh.name = "NativeHat_BackHat"
+        for ho in h_objs:
+            ho.name = "NativeHat_" + ho.name
+        retexture(h_objs, "mage", tex_path)
+        set_parent_keep(hh, char_group)
+
+    attach_owl_wings(char_group, hips_m.translation + delta, scale, wing_cols[0], wing_cols[1])
+
+    staff_verts_shifted = [v + delta for v in staff_verts]
+    attach_custom_crystal_staff(weapon_group, staff_verts_shifted, hand_m.translation + delta,
+                                crystal_cols[0], crystal_cols[1], double_crystal=double_crystal)
+    return char_group, weapon_group
+
+
+def spin_orbit_crystals(turret_head, z, count, radius, color, emi, height=0.18):
+    spin = make_empty("SpinPart", loc=(0, 0, z), parent=turret_head)
+    c = spin.matrix_world.translation.copy()
+    for i in range(count):
+        a = i * math.pi * 2 / count
+        hh, o = place(os.path.join(Q, "rpg_items_pack/Crystal3.glb"), parent=None, height=height,
+                      loc=(c.x + math.cos(a) * radius, c.y + math.sin(a) * radius, c.z - height * 0.5),
+                      rot_z=math.degrees(a))
+        for ob in o:
+            if ob.type == "MESH":
+                ob.name = f"OrbitCrystal_glow_{i}"
+        set_flat_color(o, "*", color, emission_hex=emi, emission_strength=1.8, roughness=0.16, force=True)
+        set_parent_keep(hh, spin)
+    return spin
+
+
 def hex_building(color, name):
     return os.path.join(HEX_B, color, f"building_{name}_{color}.gltf")
 
@@ -1371,6 +1984,96 @@ def build_tower_glb(model_name):
             bpy.context.view_layer.update()
             set_parent_keep(sh, spin)
             set_flat_color(so, "*", "#d8e4ef", roughness=0.25, metallic=0.82, force=True)
+
+    elif model_name.startswith("tower_owl_"):
+        color = "blue"
+        suf = model_name.replace("tower_owl_", "")
+        tier = 1 if suf == "t1" else 2 if suf == "t2" else 3
+        ht = {1: 1.24, 2: 1.46, 3: 1.66}[tier]
+        _, o = place(hex_building(color, "tower_base"), parent=root, height=ht)
+        retexture(o, "hexagons_medieval", warm)
+        mn, mx = mesh_bounds(o)
+        deck_z = mx.z - (mx.z - mn.z) * 0.085
+
+        if tier >= 2:
+            _, fo = place(os.path.join(HEX_P, f"flag_{color}.gltf"), parent=root, height=0.58 + 0.10 * (tier - 2),
+                          loc=(-0.38, 0.30, deck_z - 0.02))
+            retexture(fo, "hexagons_medieval", warm)
+        if tier == 3:
+            _, fo2 = place(os.path.join(HEX_P, f"flag_{color}.gltf"), parent=root, height=0.68,
+                           loc=(0.38, 0.30, deck_z - 0.02), rot_z=180)
+            retexture(fo2, "hexagons_medieval", warm)
+
+        turret_head = make_empty("TurretHead", loc=(0, 0, deck_z), parent=root)
+        if suf == "t1":
+            head_tex = paint_owl_head_tex(
+                "sapphire", plumage_top_hex="#4ea8e8", plumage_bot_hex="#1c5fa3", rim_hex="#143a73",
+                face_top_hex="#fffcf5", face_bot_hex="#e9f2fb", crown_fleck_hex="#8dd4ff",
+            )
+            mage_tex = make_owl_mage_tex("v4_sapphire", feather_paw_hex="#479ee0", robe_prim_hex="#1b6bb8",
+                                         trim_gold_hex="#f2be38", cape_hex="#8f2978", robe_mix=0.78)
+            head = build_owl_v4_head(
+                head_tex, crest_dark_hex="#183f78", crest_mid_hex="#338cd4", ruff_hex="#f7f5ee",
+                iris_hex="#f2b224", beak_hex="#c97d28", crest_scale=1.02, glasses=False, crown=False,
+            )
+            build_owl_v4_crew_mounted(
+                turret_head, head, deck_z, mage_tex, wing_cols=("#2268b3", "#163b73"),
+                crystal_cols=("#7ef2ff", "#24d4ff"), action="Spellcasting", frame_offset=4,
+                collar_brooch=None,
+            )
+        elif suf == "t2":
+            head_tex = paint_owl_head_tex(
+                "sapphire", plumage_top_hex="#4ea8e8", plumage_bot_hex="#1c5fa3", rim_hex="#143a73",
+                face_top_hex="#fffcf5", face_bot_hex="#e9f2fb", crown_fleck_hex="#8dd4ff",
+            )
+            mage_tex = make_owl_mage_tex("v4_sapphire", feather_paw_hex="#479ee0", robe_prim_hex="#1b6bb8",
+                                         trim_gold_hex="#f2be38", cape_hex="#8f2978", robe_mix=0.78)
+            head = build_owl_v4_head(
+                head_tex, crest_dark_hex="#183f78", crest_mid_hex="#338cd4", ruff_hex="#f7f5ee",
+                iris_hex="#f2b224", beak_hex="#c97d28", crest_scale=1.12, glasses=True, crown=False,
+            )
+            build_owl_v4_crew_mounted(
+                turret_head, head, deck_z, mage_tex, wing_cols=("#2268b3", "#163b73"),
+                crystal_cols=("#7ef2ff", "#24d4ff"), action="Spellcasting", frame_offset=6,
+                collar_brooch="#45e6ff",
+            )
+            spin_orbit_crystals(turret_head, z=0.14, count=2, radius=0.64, color="#7ff0ff", emi="#33dcff", height=0.16)
+        elif suf == "chain":
+            head_tex = paint_owl_head_tex(
+                "horned", plumage_top_hex="#b87639", plumage_bot_hex="#693c1b", rim_hex="#3d210f",
+                face_top_hex="#fff7ea", face_bot_hex="#ebd6b8", crown_fleck_hex="#e6af65",
+            )
+            mage_tex = make_owl_mage_tex("v4_storm", feather_paw_hex="#a66832", robe_prim_hex="#1b396b",
+                                         trim_gold_hex="#f2be38", cape_hex="#d48924", robe_mix=0.72)
+            head = build_owl_v4_head(
+                head_tex, crest_dark_hex="#3b2010", crest_mid_hex="#a8642d", ruff_hex="#fff2dc",
+                iris_hex="#f5ab22", beak_hex="#e0a426", crest_scale=1.28, glasses=False, crown=True,
+            )
+            build_owl_v4_crew_mounted(
+                turret_head, head, deck_z, mage_tex, wing_cols=("#8a5226", "#422412"),
+                crystal_cols=("#ffe675", "#ffaa1c"), action="Spellcasting", frame_offset=10,
+                collar_brooch="#ffd245",
+            )
+            spin_orbit_crystals(turret_head, z=0.14, count=3, radius=0.72, color="#ffe675", emi="#ffaa1c", height=0.19)
+        elif suf == "blizzard":
+            head_tex = paint_owl_head_tex(
+                "snowy", plumage_top_hex="#f2f7fc", plumage_bot_hex="#d2e2f2", rim_hex="#4e6a8c",
+                face_top_hex="#ffffff", face_bot_hex="#eef6fc", crown_fleck_hex=None, snow_speckles=True,
+            )
+            mage_tex = make_owl_mage_tex("v4_snowy", feather_paw_hex="#e6eff7", robe_prim_hex="#287da8",
+                                         trim_gold_hex="#b5dcff", cape_hex="#58c2e3", robe_mix=0.76)
+            head = build_owl_v4_head(
+                head_tex, crest_dark_hex="#3b5370", crest_mid_hex="#a6bdd6", ruff_hex="#ffffff",
+                iris_hex="#32dcff", beak_hex="#6e7f91", crest_scale=1.08, glasses=False, crown=False,
+            )
+            build_owl_v4_crew_mounted(
+                turret_head, head, deck_z, mage_tex, wing_cols=("#eef5fc", "#597394"),
+                crystal_cols=("#ccfaff", "#3de3ff"), action="Spellcasting", frame_offset=4,
+                back_hat=True, double_crystal=True, collar_brooch="#8af2ff",
+            )
+            spin_orbit_crystals(turret_head, z=0.14, count=3, radius=0.72, color="#e8f8ff", emi="#5ce6ff", height=0.19)
+        else:
+            raise ValueError(f"Unknown owl variant: {model_name}")
     else:
         raise ValueError(f"Unknown tower model: {model_name}")
 
@@ -1514,7 +2217,7 @@ def build_hero_bear_variant(variant_name):
 # Post-export verification contact sheet renderer (renders actual shipped .glbs!)
 # ---------------------------------------------------------------------------
 
-def render_live_verification_sheet():
+def render_live_verification_sheet(want=None):
     ensure_animal_chibi_atlas()
     verify_models = [
         ("tower_squirrel_t1", False),
@@ -1525,6 +2228,10 @@ def render_live_verification_sheet():
         ("tower_beaver_t2", False),
         ("tower_beaver_resin", False),
         ("tower_beaver_mortar", False),
+        ("tower_owl_t1", False),
+        ("tower_owl_t2", False),
+        ("tower_owl_chain", False),
+        ("tower_owl_blizzard", False),
         ("tower_hedgehog_t1", False),
         ("tower_hedgehog_t2", False),
         ("tower_hedgehog_rail", False),
@@ -1536,6 +2243,8 @@ def render_live_verification_sheet():
     tmp_dir = os.path.join(CHIBI_TEX, "verify_thumbs")
     os.makedirs(tmp_dir, exist_ok=True)
     for name, is_hero in verify_models:
+        if want and name not in want:
+            continue
         clear_scene()
         objs = import_asset(os.path.join(OUT_DIR, f"{name}.glb"))
         if is_hero:
@@ -1591,6 +2300,7 @@ def render_live_verification_sheet():
 ALL_TOWER_NAMES = [
     "tower_squirrel_t1", "tower_squirrel_t2", "tower_squirrel_sniper", "tower_squirrel_gatling",
     "tower_beaver_t1", "tower_beaver_t2", "tower_beaver_resin", "tower_beaver_mortar",
+    "tower_owl_t1", "tower_owl_t2", "tower_owl_chain", "tower_owl_blizzard",
     "tower_hedgehog_t1", "tower_hedgehog_t2", "tower_hedgehog_rail", "tower_hedgehog_shred",
 ]
 ALL_HERO_NAMES = ["hero_bear", "hero_bear_viking", "hero_bear_royal"]
@@ -1601,6 +2311,7 @@ def main():
     verify = "--verify" in args
     want = {a for a in args if a != "--verify"}
 
+    ensure_cc0_sources()
     ensure_warm_hex_atlas()
     ensure_animal_chibi_atlas()
 
@@ -1612,7 +2323,7 @@ def main():
             build_hero_bear_variant(hn)
 
     if verify:
-        render_live_verification_sheet()
+        render_live_verification_sheet(want=want or None)
 
 
 if __name__ == "__main__":

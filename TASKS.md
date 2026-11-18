@@ -3,26 +3,24 @@
 Kural: **Carbon satır açar**, **GLM uygular**, **Carbon doğrular**. Aynı satırı iki taraf
 aynı anda değiştirmez. Durumlar: `planlandi` → `devam` → `dogrulaniyor` → `dogrulandi`.
 
-## Aktif
+## Aktif / Doğrulanan
 
 | # | İş | Sorumlu | Durum | Doğrulama |
 |---|---|---|---|---|
 | T1 | `git init` + `.gitignore` + ilk commit | Carbon | dogrulandi | `git log --oneline` → d8c3be1 |
 | T2 | Mevcut oyunun baseline'ını doğrula (`npm test`, `tsc --noEmit`) | GLM-5.3 | dogrulandi | 28 pass / 0 fail, tsc OK, build ✓ |
+| D1–D4 | Dalga HP eğrisi, L4 regresyonu, L12 altın/HP erozyonu, sniper & boss TTK | GLM-5.3 | dogrulandi | `99fa29f` · `tests/balance.test.ts` (5/5 pass, Carbon doğruladı) |
+| K1–K4 | `boot()` hata kurtarma, düşman materyal `.dispose()`, `SaveManager` v3, i18n paritesi | GLM-5.3 | dogrulandi | `99fa29f` · `185/185` anahtar paritesi + regresyon testleri ✓ |
+| A1, B1, C1 | HP bar WCAG AA kontrast, sandık olasılık metni, `DrawCallCounter` + PNG ikonlar | GLM-5.3 | dogrulandi | `34d830a` · `contrast.test.ts` & `drawcall.test.ts` ✓ |
+| O3-A | Mağaza metin/davranış tutarlılığı (aylık VIP günlük zümrüt, referans fiyat, AFK birimi, promo kapısı) | GLM-5.3 | dogrulandi | `15e7891` · `tests/vip.test.ts` (7/7 pass, Carbon incelemesiyle eksiklik yakalandı) |
+| O3-B | Süresi dolan aylık VIP ayrıcalık sızıntısını kapat (`isVipActive`: reklam atlama, 16h AFK, x2/x3 hız) | Carbon | dogrulandi | `87f93f6` · `tests/vip.test.ts` 10/10 + `simulation.test.ts`, 59/59 pass, build ✓ |
+| M1 | Baykuş V4 chibi kule modellerini (`t1`, `t2`, `chain`, `blizzard`) `scripts/blender_build_chibi_units.py` ile üret ve doğrula | Carbon | dogrulandi | Blender `--verify` Cycles + canlı tarayıcı (`http://localhost:5173/?promo=1`) HTTP 200 & 0 hata ✓ |
 
 ## Kuyruk (Carbon doldurur)
 
 | # | İş | Not |
 |---|---|---|
-| D1 | Dalga HP eğrisini 1.12–1.18 banda normalize et, L4 regresyonunu kapat | GLM-5.3 |
-| D2 | Altın/HP erozyonu: L12'de oran ≥ 0.014 | GLM-5.3 |
-| D3 | Sniper evrimi marjinal verimi ≤ 0.5 DPS/altın | GLM-5.3 |
-| D4 | Boss TTK dengesi (tek T1 kule öldüremesin, 3 kule öldürebilsin) | GLM-5.3 |
-| K1 | `boot()` hata yakalama + düşürücü yükleme mesajı | GLM-5.3 |
-| K2 | Ölen düşman materyal/geometri dispose | GLM-5.3 |
-| K3 | SaveManager sürüm migration + sessiz sıfırlama kaldır | GLM-5.3 |
-| K4 | 20+ gömülü TR metni i18n anahtarına taşı (parite korunur) | GLM-5.3 |
-| G1 | 674 çizim çağrısı: LOD/birleştirme (ayrı iş, varlık hattı) | bekliyor |
+| G1 | 674 çizim çağrısı: LOD / `env_castle` 23 materyal atlas birleştirme (ayrı iş, varlık hattı) | bekliyor |
 | O1 | Çok oyunculu gerçek soket katmanı | bekliyor |
 
 ## Devir notu
