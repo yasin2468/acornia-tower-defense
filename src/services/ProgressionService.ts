@@ -1,4 +1,5 @@
 import { CARD_MAX_LEVEL } from '../data/towers.ts';
+import { isVipActive } from './CommercialServices.ts';
 import type { CardUnitId, SaveManager, SaveState } from './SaveManager.ts';
 
 export interface AfkAccumulation {
@@ -30,7 +31,7 @@ export function getCardUpgradeCost(currentLevel: number): { shards: number; oakC
 }
 
 export function calculateAfkAccumulation(save: SaveState, nowMs = Date.now()): AfkAccumulation {
-  const capHours = save.vipTier === 'none' ? 8 : 16;
+  const capHours = isVipActive(save, nowMs) ? 16 : 8;
   const elapsedMs = Math.max(0, nowMs - save.afkLastClaimAt);
   const hoursElapsed = Math.min(capHours, elapsedMs / (3600 * 1000));
   const oakCoins = Math.floor(hoursElapsed * AFK_OAK_PER_HOUR);

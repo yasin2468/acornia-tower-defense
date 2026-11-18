@@ -83,8 +83,11 @@ describe('Palamut Kalesi deterministic simulation & economy', () => {
     assert.equal(calculateAfkAccumulation(freeSave, now).hoursElapsed, 8);
 
     freeSave.vipTier = 'monthly';
+    freeSave.vipExpiresAt = now + 30 * 24 * 3600 * 1000;
     assert.equal(calculateAfkAccumulation(freeSave, now).capHours, 16);
     assert.equal(calculateAfkAccumulation(freeSave, now).hoursElapsed, 16);
+    assert.equal(calculateAfkAccumulation(freeSave, freeSave.vipExpiresAt + 1).capHours, 8);
+    assert.equal(calculateAfkAccumulation(freeSave, freeSave.vipExpiresAt + 1).hoursElapsed, 8);
   });
 
   it('triggers Boss Phase 2 at 50% HP: spawns 4 swarm_saws, smokes closest tower, and allows clear', () => {

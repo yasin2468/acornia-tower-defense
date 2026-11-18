@@ -3,7 +3,13 @@ import type { SimulationEngine } from '../core/SimulationEngine.ts';
 import { TOWER_LIST, TOWERS, type TargetingPriority, type TowerId } from '../data/towers.ts';
 import { t, tParams, type Locale } from '../i18n/locales.ts';
 import type { SceneManager } from '../rendering/SceneManager.ts';
-import { getFailOfferPrices, type AdService, type BillingService, type RemoteConfigService } from '../services/CommercialServices.ts';
+import {
+  getFailOfferPrices,
+  isVipActive,
+  type AdService,
+  type BillingService,
+  type RemoteConfigService,
+} from '../services/CommercialServices.ts';
 import type { SaveManager } from '../services/SaveManager.ts';
 import { ICONS, PORTRAIT_URLS, UI_ICON_URLS } from './icons.ts';
 
@@ -101,8 +107,9 @@ export class BattleView {
   resetForLevel(levelId: number): void {
     this.selectedSlotId = null;
     this.targetingSkill = null;
-    this.speedMultiplier = this.saveManager.get().vipTier === 'none' ? 1 : 2;
-    this.speed2xUnlockedThisMatch = this.saveManager.get().vipTier !== 'none';
+    const vipActive = isVipActive(this.saveManager.get());
+    this.speedMultiplier = vipActive ? 2 : 1;
+    this.speed2xUnlockedThisMatch = vipActive;
     this.paused = false;
     this.bannerText = '';
     this.bannerTimer = 0;
@@ -235,7 +242,7 @@ export class BattleView {
             this.speed2xUnlockedThisMatch = true;
           }
           this.speedMultiplier = 2;
-        } else if (this.speedMultiplier === 2 && this.saveManager.get().vipTier !== 'none') {
+        } else if (this.speedMultiplier === 2 && isVipActive(this.saveManager.get())) {
           this.speedMultiplier = 3;
         } else {
           this.speedMultiplier = 1;

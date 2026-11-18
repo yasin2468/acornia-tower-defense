@@ -5,6 +5,7 @@ import { t, tParams, type Locale } from '../i18n/locales.ts';
 import {
   claimVipDaily,
   getVipDailyStatus,
+  isVipActive,
   VIP_DAILY_CLAIM_GEMS,
   VIP_LIFETIME_GEMS,
   type VipDailyStatus,
@@ -419,8 +420,9 @@ export class MetaView {
 
   private renderShopTab(loc: Locale): string {
     const save = this.saveManager.get();
-    const vipStatus = getVipDailyStatus(save, Date.now());
-    const vipActive = save.vipTier !== 'none' && vipStatus.reason !== 'expired';
+    const nowMs = Date.now();
+    const vipStatus = getVipDailyStatus(save, nowMs);
+    const vipActive = isVipActive(save, nowMs);
 
     return `
       <div class="card-panel" style="border-color: var(--accent-gold); background: linear-gradient(180deg, #3c3118 0%, #201a11 100%); display:flex; flex-direction:column; gap:10px;">

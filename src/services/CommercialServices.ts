@@ -40,6 +40,12 @@ export interface VipDailyClaimResult extends VipDailyStatus {
   gemsGranted: number;
 }
 
+export function isVipActive(save: SaveState, nowMs = Date.now()): boolean {
+  if (save.vipTier === 'lifetime') return true;
+  if (save.vipTier === 'monthly') return save.vipExpiresAt > nowMs;
+  return false;
+}
+
 export function getVipDailyStatus(save: SaveState, nowMs: number): VipDailyStatus {
   if (save.vipTier === 'none') {
     return { reason: 'not_vip', canClaim: false, vipRemainingMs: 0, nextClaimInMs: 0 };
@@ -99,18 +105,21 @@ export class AdService {
     this.saveManager = saveManager;
   }
 
-  canBypassWithVipOrTicket(): boolean {
+  canBypassWithVipOrTicket(nowMs = Date.now()): boolean {
     const s = this.saveManager.get();
-    return s.vipTier !== 'none' || s.skipTickets > 0;
+    return isVipActive(s, nowMs) || s.skipTickets > 0;
   }
 
   /**
    * Phase 1 simulated rewarded ad hook.
    * Phase 4 replaces body with AdMob / AppLovin MAX Capacitor bridge.
    */
-  async showRewarded(placement: AdPlacement): Promise<{ rewarded: boolean; bypassed: boolean }> {
+  async showRewarded(
+    placement: AdPlacement,
+    nowMs = Date.now(),
+  ): Promise<{ rewarded: boolean; bypassed: boolean }> {
     const s = this.saveManager.get();
-    if (s.vipTier !== 'none') {
+    if (isVipActive(s, nowMs)) {
       return { rewarded: true, bypassed: true };
     }
     if (s.skipTickets > 0 && placement !== 'speed_2x') {

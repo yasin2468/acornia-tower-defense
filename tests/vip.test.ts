@@ -1,14 +1,17 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  AdService,
   BillingService,
   claimVipDaily,
   getVipDailyStatus,
+  isVipActive,
   VIP_DAILY_CLAIM_COOLDOWN_MS,
   VIP_DAILY_CLAIM_GEMS,
   VIP_LIFETIME_GEMS,
   VIP_MONTHLY_DURATION_MS,
 } from '../src/services/CommercialServices.ts';
+import { calculateAfkAccumulation } from '../src/services/ProgressionService.ts';
 import { createInitialSave, migrateSave, SAVE_VERSION, SaveManager, type SaveState } from '../src/services/SaveManager.ts';
 
 const NOW = 1_700_000_000_000;
@@ -116,5 +119,56 @@ describe('VIP gunluk zumrut tutarlılığı (O3-A)', () => {
     const again = migrateSave(state, NOW);
     assert.equal(again.migrated, false, 'v3 kaydı tekrar migrate edilmemeli');
     assert.equal(again.state.vipExpiresAt, NOW + VIP_MONTHLY_DURATION_MS, 'tekrar migrate süreyi değiştirmemeli');
+  });
+
+  it('isVipActive: aktif/süresi dolmuş aylık ve ömürlük VIP durumunu doğru ayırt eder', () => {
+    const sm = freshSave();
+    assert.equal(isVipActive(sm.get(), NOW), false, 'VIP yokken pasif');
+
+    new BillingService(sm).purchaseVip('monthly', NOW);
+    assert.equal(isVipActive(sm.get(), NOW), true, 'satın alma anında aktif');
+    assert.equal(isVipActive(sm.get(), NOW + VIP_MONTHLY_DURATION_MS - 1), true, 'bitimden 1 ms önce aktif');
+    assert.equal(isVipActive(sm.get(), NOW + VIP_MONTHLY_DURATION_MS), false, 'tam bitim anında pasif');
+    assert.equal(isVipActive(sm.get(), NOW + VIP_MONTHLY_DURATION_MS + 1), false, 'süre bitince pasif');
+
+    new BillingService(sm).purchaseVip('lifetime', NOW);
+    assert.equal(isVipActive(sm.get(), NOW + VIP_MONTHLY_DURATION_MS * 100), true, 'ömürlük süresiz aktif');
+  });
+
+  it('AdService: süresi dolan aylık VIP reklamı ücretsiz atlayamaz', async () => {
+    const sm = freshSave();
+    const ads = new AdService(sm);
+    new BillingService(sm).purchaseVip('monthly', NOW);
+
+    assert.equal(ads.canBypassWithVipOrTicket(NOW + 1000), true);
+    const activeRes = await ads.showRewarded('afk_boost_4h', NOW + 1000);
+    assert.deepEqual(activeRes, { rewarded: true, bypassed: true });
+    assert.equal(sm.get().skipTickets, 1, 'aktif VIP atlama bileti harcamamalı');
+
+    const afterExpiry = NOW + VIP_MONTHLY_DURATION_MS + 1;
+    assert.equal(ads.canBypassWithVipOrTicket(afterExpiry), true, 'bilet varken bilet sayesinde geçebilir');
+    const ticketRes = await ads.showRewarded('afk_boost_4h', afterExpiry);
+    assert.deepEqual(ticketRes, { rewarded: true, bypassed: true });
+    assert.equal(sm.get().skipTickets, 0, 'süresi dolan VIP bilet harcamalı');
+
+    assert.equal(ads.canBypassWithVipOrTicket(afterExpiry), false, 'bilet de kalmayınca VIP geçişi kapanmalı');
+    const noBypassRes = await ads.showRewarded('afk_boost_4h', afterExpiry);
+    assert.deepEqual(noBypassRes, { rewarded: true, bypassed: false });
+  });
+
+  it('calculateAfkAccumulation: aylık VIP süresi bitince 16 saatten 8 saate düşer, ömürlükte 16 kalır', () => {
+    const sm = freshSave();
+    new BillingService(sm).purchaseVip('monthly', NOW);
+    const s = { ...sm.get(), afkLastClaimAt: NOW - 20 * 3600 * 1000 };
+
+    assert.equal(calculateAfkAccumulation(s, NOW + 1000).capHours, 16);
+    const expiredNow = NOW + VIP_MONTHLY_DURATION_MS + 1;
+    const expiredSnap = { ...sm.get(), afkLastClaimAt: expiredNow - 20 * 3600 * 1000 };
+    assert.equal(calculateAfkAccumulation(expiredSnap, expiredNow).capHours, 8);
+    assert.equal(calculateAfkAccumulation(expiredSnap, expiredNow).hoursElapsed, 8);
+
+    new BillingService(sm).purchaseVip('lifetime', NOW);
+    const lifeSnap = { ...sm.get(), afkLastClaimAt: expiredNow - 20 * 3600 * 1000 };
+    assert.equal(calculateAfkAccumulation(lifeSnap, expiredNow).capHours, 16);
   });
 });
