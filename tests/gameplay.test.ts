@@ -93,3 +93,82 @@ describe('Paket 1 — Boz Pençe akıllı nöbet, vuruş olayı ve sınıf ultil
     assert.ok(slot.tower!.cooldown < passiveCd, `Aktif Sancak daha da hızlandırmalı (${slot.tower!.cooldown.toFixed(3)} < ${passiveCd.toFixed(3)})`);
   });
 });
+
+function distToSegment(px: number, pz: number, ax: number, az: number, bx: number, bz: number): number {
+  const dx = bx - ax;
+  const dz = bz - az;
+  const lenSq = dx * dx + dz * dz;
+  if (lenSq <= 1e-9) return Math.hypot(px - ax, pz - az);
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / lenSq));
+  return Math.hypot(px - (ax + dx * t), pz - (az + dz * t));
+}
+
+function minDistToPath(px: number, pz: number, path: Array<{ x: number; z: number }>): number {
+  let minD = Infinity;
+  for (let i = 0; i < path.length - 1; i++) {
+    const d = distToSegment(px, pz, path[i].x, path[i].z, path[i + 1].x, path[i + 1].z);
+    if (d < minD) minD = d;
+  }
+  return minD;
+}
+
+describe('Paket 2 — 12 bölüm yol/yuva geometrisi ve çatallı ikincil yollar', () => {
+  it('12 bölümün tümünde yuvalar görüş alanında, yoldan >= 1.55m ve birbirinden >= 1.70m uzak, kahraman yol üzerinde', () => {
+    for (const lvl of LEVELS) {
+      for (const s of lvl.slots) {
+        assert.ok(Math.abs(s.x) <= 3.5, `${lvl.id} ${s.id} x sınır dışı (${s.x})`);
+        assert.ok(s.z >= -6.8 && s.z <= 6.8, `${lvl.id} ${s.id} z sınır dışı (${s.z})`);
+
+        const dMain = minDistToPath(s.x, s.z, lvl.path);
+        assert.ok(dMain >= 1.55, `${lvl.id} ${s.id} ana yola çok yakın (${dMain.toFixed(2)}m)`);
+        if (lvl.secondaryPath) {
+          const dSec = minDistToPath(s.x, s.z, lvl.secondaryPath);
+          assert.ok(dSec >= 1.55, `${lvl.id} ${s.id} ikincil yola çok yakın (${dSec.toFixed(2)}m)`);
+        }
+      }
+
+      for (let i = 0; i < lvl.slots.length; i++) {
+        for (let j = i + 1; j < lvl.slots.length; j++) {
+          const a = lvl.slots[i];
+          const b = lvl.slots[j];
+          const d = Math.hypot(a.x - b.x, a.z - b.z);
+          assert.ok(d >= 1.7, `${lvl.id} ${a.id}-${b.id} çok yakın (${d.toFixed(2)}m)`);
+        }
+      }
+
+      const heroRoadDist = Math.min(
+        minDistToPath(lvl.heroStart.x, lvl.heroStart.z, lvl.path),
+        lvl.secondaryPath ? minDistToPath(lvl.heroStart.x, lvl.heroStart.z, lvl.secondaryPath) : Infinity
+      );
+      assert.ok(heroRoadDist <= 0.5, `${lvl.id} heroStart yola uzak (${heroRoadDist.toFixed(2)}m)`);
+    }
+  });
+
+  it('çatallı bölümde (Seviye 2) düşmanlar lane 0 ve lane 1 arasında dönüşümlü doğar ve ikinci yolu izler', () => {
+    const level2 = LEVELS[1];
+    assert.ok(level2.secondaryPath && level2.secondaryPath.length >= 2, 'Seviye 2 secondaryPath içermeli');
+
+    const sim = new SimulationEngine(level2, { seed: 202 });
+    let lane1SpawnedPos: { x: number; z: number } | null = null;
+    for (let i = 0; i < 450; i++) {
+      sim.step(FIXED_DT);
+      if (!lane1SpawnedPos) {
+        const firstLane1 = sim.enemies.find((e) => e.lane === 1);
+        if (firstLane1) lane1SpawnedPos = { x: firstLane1.x, z: firstLane1.z };
+      }
+      if (sim.enemies.length >= 4) break;
+    }
+
+    const lanes = new Set(sim.enemies.map((e) => e.lane));
+    assert.equal(lanes.has(0), true, 'ana yoldan (lane 0) düşman doğmalı');
+    assert.equal(lanes.has(1), true, 'ikincil yoldan (lane 1) düşman doğmalı');
+
+    const startX = level2.secondaryPath![0].x;
+    const startZ = level2.secondaryPath![0].z;
+    assert.ok(lane1SpawnedPos !== null, 'ikincil yolda düşman belirmeli');
+    assert.ok(
+      Math.hypot(lane1SpawnedPos.x - startX, lane1SpawnedPos.z - startZ) < 0.25,
+      `lane 1 düşmanı secondaryPath başından ilerlemeli (x=${lane1SpawnedPos.x.toFixed(2)}, z=${lane1SpawnedPos.z.toFixed(2)})`
+    );
+  });
+});

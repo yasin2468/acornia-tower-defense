@@ -221,12 +221,14 @@ canvas.addEventListener('pointerdown', (ev) => {
       return;
     }
     battleView.selectedSlotId = battleView.selectedSlotId === hit.slotId ? null : hit.slotId;
+    battleView.previewTowerId = null;
     battleView.render(uiRoot, activeSim, sceneMgr);
     return;
   }
 
   if (battleView.selectedSlotId !== null) {
     battleView.selectedSlotId = null;
+    battleView.previewTowerId = null;
     battleView.render(uiRoot, activeSim, sceneMgr);
     return;
   }
@@ -272,7 +274,14 @@ function frame(nowMs: number): void {
       }
     }
     battleView.updateTimers(rawDt, activeSim);
-    sceneMgr.sync(activeSim, battleView.selectedSlotId, saveManager.get().equippedHat, rawDt, simDt);
+    sceneMgr.sync(
+      activeSim,
+      battleView.selectedSlotId,
+      saveManager.get().equippedHat,
+      rawDt,
+      simDt,
+      battleView.previewTowerId,
+    );
     // World overlay (HP ghost bars + damage numbers) runs every frame for smooth pops
     battleView.renderOverlay(activeSim, sceneMgr);
 

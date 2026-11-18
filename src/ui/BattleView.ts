@@ -43,6 +43,7 @@ export interface BattleViewCallbacks {
 
 export class BattleView {
   selectedSlotId: string | null = null;
+  previewTowerId: TowerId | null = null;
   targetingSkill: 'rain' | 'hero_leap' | null = null;
   speedMultiplier: 1 | 2 | 3 = 1;
   speed2xUnlockedThisMatch = false;
@@ -111,6 +112,7 @@ export class BattleView {
 
   resetForLevel(levelId: number): void {
     this.selectedSlotId = null;
+    this.previewTowerId = null;
     this.targetingSkill = null;
     const vipActive = isVipActive(this.saveManager.get());
     this.speedMultiplier = vipActive ? 2 : 1;
@@ -648,14 +650,22 @@ export class BattleView {
 
   private bindContextEvents(host: HTMLElement, sim: SimulationEngine): void {
     host.querySelectorAll<HTMLElement>('[data-build-tower]').forEach((btn) => {
+      const tid = btn.dataset.buildTower as TowerId;
+      btn.onpointerenter = () => {
+        this.previewTowerId = tid;
+      };
+      btn.onpointerleave = () => {
+        if (this.previewTowerId === tid) this.previewTowerId = null;
+      };
       btn.onclick = () => {
         if (!this.selectedSlotId) return;
         sim.dispatch({
           type: 'BUILD_TOWER',
           slotId: this.selectedSlotId,
-          towerId: btn.dataset.buildTower as TowerId,
+          towerId: tid,
         });
         this.selectedSlotId = null;
+        this.previewTowerId = null;
         if (this.tutorialPhase === 'build_tower') this.tutorialPhase = 'move_hero';
       };
     });

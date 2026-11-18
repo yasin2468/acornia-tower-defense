@@ -83,6 +83,7 @@ export interface EnemyInstance {
   armorHalved: boolean;
   phase2Triggered: boolean;
   engagedByHero: boolean;
+  lane?: 0 | 1;
 }
 
 export interface ProjectileInstance {
@@ -183,6 +184,7 @@ export class SimulationEngine {
   readonly towerDamageBonusPct: number;
 
   private nextUid = 1;
+  private spawnLaneToggle = 0;
   private pathLengths: number[] = [];
   private totalPathLength = 0;
   private events: SimEvent[] = [];
@@ -518,7 +520,8 @@ export class SimulationEngine {
       while (this.spawnQueue.length > 0 && this.spawnQueue[0].delay <= 0) {
         const leftover = -this.spawnQueue[0].delay;
         const entry = this.spawnQueue.shift()!;
-        this.spawnEnemy(entry.enemyId, entry.hp, entry.speed, entry.bounty);
+        const lane: 0 | 1 = this.level.secondaryPath && (this.spawnLaneToggle++ % 2) === 1 ? 1 : 0;
+        this.spawnEnemy(entry.enemyId, entry.hp, entry.speed, entry.bounty, undefined, lane);
         if (this.spawnQueue.length > 0) {
           this.spawnQueue[0].delay -= leftover;
         }
@@ -541,6 +544,7 @@ export class SimulationEngine {
     this.currentWaveIndex = index;
     this.waveInProgress = true;
     this.waveCountdown = 0;
+    this.spawnLaneToggle = 0;
     if (earlyBonus > 0) this.gold += earlyBonus;
 
     this.spawnQueue = [];
@@ -564,9 +568,17 @@ export class SimulationEngine {
     });
   }
 
-  spawnEnemy(enemyId: EnemyId, hpOverride?: number, speedOverride?: number, bountyOverride?: number, startAt?: Partial<Vec2> & { wpIndex?: number; progress?: number }): EnemyInstance {
+  spawnEnemy(
+    enemyId: EnemyId,
+    hpOverride?: number,
+    speedOverride?: number,
+    bountyOverride?: number,
+    startAt?: Partial<Vec2> & { wpIndex?: number; progress?: number },
+    lane: 0 | 1 = 0,
+  ): EnemyInstance {
     const spec = ENEMIES[enemyId];
-    const start = this.level.path[0];
+    const activePath = lane === 1 && this.level.secondaryPath ? this.level.secondaryPath : this.level.path;
+    const start = activePath[0];
     const hp = hpOverride ?? spec.baseHp;
     const enemy: EnemyInstance = {
       uid: this.nextUid++,
@@ -592,6 +604,7 @@ export class SimulationEngine {
       armorHalved: false,
       phase2Triggered: false,
       engagedByHero: false,
+      lane,
     };
     this.enemies.push(enemy);
     return enemy;
@@ -780,8 +793,9 @@ export class SimulationEngine {
       let leaked = false;
 
       // Exact waypoint carry-over (tower-defense skill §1)
+      const activePath = e.lane === 1 && this.level.secondaryPath ? this.level.secondaryPath : this.level.path;
       while (remaining > 0) {
-        const wp = this.level.path[e.wpIndex];
+        const wp = activePath[e.wpIndex];
         if (!wp) {
           leaked = true;
           break;
@@ -800,7 +814,7 @@ export class SimulationEngine {
           e.progress += toGo;
           remaining -= toGo;
           e.wpIndex += 1;
-          if (e.wpIndex >= this.level.path.length) {
+          if (e.wpIndex >= activePath.length) {
             leaked = true;
             break;
           }

@@ -8,7 +8,7 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { resolveHeroVisualVariant, type HeroClassId } from '../data/enemies.ts';
 import type { LevelSpec, Vec2 } from '../data/levels.ts';
-import type { HatId, TowerId } from '../data/towers.ts';
+import { TOWERS, type HatId, type TowerId } from '../data/towers.ts';
 import type {
   EnemyInstance,
   ProjectileInstance,
@@ -287,8 +287,8 @@ function buildRoadCurbstones(curve: THREE.CatmullRomCurve3): THREE.InstancedMesh
   return mesh;
 }
 
-function buildMeadowFoliageTufts(curve: THREE.CatmullRomCurve3, level: LevelSpec): THREE.InstancedMesh {
-  const curveSamples = curve.getSpacedPoints(80);
+function buildMeadowFoliageTufts(curves: THREE.CatmullRomCurve3[], level: LevelSpec): THREE.InstancedMesh {
+  const curveSamples = curves.flatMap((c) => c.getSpacedPoints(80));
   const count = 95;
   const rockGeo = new THREE.DodecahedronGeometry(0.14, 0);
   rockGeo.translate(0, 0.06, 0);
@@ -988,24 +988,30 @@ export class SceneManager {
     ground.receiveShadow = true;
     this.levelGroup.add(ground);
 
-    const curvePts = level.path.map((p: Vec2) => new THREE.Vector3(p.x, 0.035, p.z));
-    const curve = new THREE.CatmullRomCurve3(curvePts, false, 'catmullrom', 0.32);
+    const curves: THREE.CatmullRomCurve3[] = [];
+    const pathList = level.secondaryPath?.length ? [level.path, level.secondaryPath] : [level.path];
+    for (const pPts of pathList) {
+      const curvePts = pPts.map((p: Vec2) => new THREE.Vector3(p.x, 0.035, p.z));
+      const c = new THREE.CatmullRomCurve3(curvePts, false, 'catmullrom', 0.32);
+      curves.push(c);
 
-    const borderGeo = buildCurvedRibbonGeometry(curve, 1.86, 160);
-    const borderMat = new THREE.MeshStandardMaterial({ color: theme.border, roughness: 0.92, metalness: 0.02 });
-    const borderMesh = new THREE.Mesh(borderGeo, borderMat);
-    borderMesh.position.y = -0.015;
-    borderMesh.receiveShadow = true;
-    this.levelGroup.add(borderMesh);
+      const borderGeo = buildCurvedRibbonGeometry(c, 1.86, 160);
+      const borderMat = new THREE.MeshStandardMaterial({ color: theme.border, roughness: 0.92, metalness: 0.02 });
+      const borderMesh = new THREE.Mesh(borderGeo, borderMat);
+      borderMesh.position.y = -0.015;
+      borderMesh.receiveShadow = true;
+      this.levelGroup.add(borderMesh);
 
-    const roadGeo = buildCurvedRibbonGeometry(curve, 1.48, 160);
-    const roadMat = new THREE.MeshStandardMaterial({ map: cobbleTex, roughness: 0.88, metalness: 0.02 });
-    const roadMesh = new THREE.Mesh(roadGeo, roadMat);
-    roadMesh.receiveShadow = true;
-    this.levelGroup.add(roadMesh);
+      const roadGeo = buildCurvedRibbonGeometry(c, 1.48, 160);
+      const roadMat = new THREE.MeshStandardMaterial({ map: cobbleTex, roughness: 0.88, metalness: 0.02 });
+      const roadMesh = new THREE.Mesh(roadGeo, roadMat);
+      roadMesh.receiveShadow = true;
+      this.levelGroup.add(roadMesh);
 
-    this.levelGroup.add(buildRoadCurbstones(curve));
-    this.levelGroup.add(buildMeadowFoliageTufts(curve, level));
+      this.levelGroup.add(buildRoadCurbstones(c));
+    }
+
+    this.levelGroup.add(buildMeadowFoliageTufts(curves, level));
 
     // Sunlit Cream-Sandstone Castle Fortress at end of path
     const castle = createGreatOakCastle();
@@ -1146,7 +1152,7 @@ export class SceneManager {
       [2.25, -7.2, -0.35],
       [-2.1, -7.8, 0.35],
     ];
-    const pathSamplesForFence = curve.getSpacedPoints(50);
+    const pathSamplesForFence = curves.flatMap((c) => c.getSpacedPoints(50));
     for (const [fx, fz, rot] of fencePositions) {
       const tooCloseToSlot = level.slots.some((sl) => Math.hypot(sl.x - fx, sl.z - fz) < 1.55);
       const tooCloseToRoad = pathSamplesForFence.some((pt) => Math.hypot(pt.x - fx, pt.z - fz) < 1.22);
@@ -1204,7 +1210,14 @@ export class SceneManager {
     }
   }
 
-  sync(sim: SimulationEngine, selectedSlotId: string | null, equippedHat: HatId, realDt: number, simDt: number): void {
+  sync(
+    sim: SimulationEngine,
+    selectedSlotId: string | null,
+    equippedHat: HatId,
+    realDt: number,
+    simDt: number,
+    previewTowerId: TowerId | null = null,
+  ): void {
     this.animTime += realDt;
     this.lastSim = sim;
     this.monitorFps(realDt);
@@ -1262,12 +1275,23 @@ export class SceneManager {
       }
     }
 
-    const selectedTower = selectedSlotId ? sim.slots.get(selectedSlotId)?.tower : null;
+    const selectedSlot = selectedSlotId ? sim.slots.get(selectedSlotId) : null;
+    const selectedTower = selectedSlot?.tower ?? null;
+    const rangeRingMat = this.rangeRing.material as THREE.MeshBasicMaterial;
     if (selectedTower) {
       const stats = sim.getTowerStats(selectedTower);
       this.rangeRing.visible = true;
       this.rangeRing.position.set(selectedTower.x, 0.07, selectedTower.z);
       this.rangeRing.scale.setScalar(stats.range);
+      rangeRingMat.color.set('#ffd966');
+      rangeRingMat.opacity = 0.88;
+    } else if (selectedSlot && !selectedSlot.stumpLocked) {
+      const r = previewTowerId ? TOWERS[previewTowerId].tier1.range : 7.0;
+      this.rangeRing.visible = true;
+      this.rangeRing.position.set(selectedSlot.x, 0.07, selectedSlot.z);
+      this.rangeRing.scale.setScalar(r);
+      rangeRingMat.color.set(previewTowerId ? this.getTowerColorPreview(previewTowerId) : '#7fe8ff');
+      rangeRingMat.opacity = previewTowerId ? 0.9 : 0.55;
     } else {
       this.rangeRing.visible = false;
     }
