@@ -1,0 +1,150 @@
+{
+  "start_gold": 150,
+  "tower": {
+    "cost": 50,
+    "dps": 24
+  },
+  "kill_zone": 14,
+  "efficiency": 0.6,
+  "waves": [
+    {
+      "clear_bonus": 15,
+      "groups": [
+        {
+          "hp": 42,
+          "count": 9,
+          "speed": 2.3,
+          "spacing": 0.95,
+          "bounty": 5,
+          "armor": 0
+        }
+      ]
+    },
+    {
+      "clear_bonus": 15,
+      "groups": [
+        {
+          "hp": 44,
+          "count": 8,
+          "speed": 2.3,
+          "spacing": 0.85,
+          "bounty": 5,
+          "armor": 0
+        },
+        {
+          "hp": 24,
+          "count": 12,
+          "speed": 3.1,
+          "spacing": 0.35,
+          "bounty": 3,
+          "armor": 0
+        }
+      ]
+    },
+    {
+      "clear_bonus": 20,
+      "groups": [
+        {
+          "hp": 135,
+          "count": 5,
+          "speed": 1.35,
+          "spacing": 1.6,
+          "bounty": 11,
+          "armor": 0.45
+        }
+      ]
+    },
+    {
+      "clear_bonus": 20,
+      "groups": [
+        {
+          "hp": 65,
+          "count": 10,
+          "speed": 2.3,
+          "spacing": 0.7,
+          "bounty": 6,
+          "armor": 0.1
+        },
+        {
+          "hp": 26,
+          "count": 12,
+          "speed": 3.1,
+          "spacing": 0.32,
+          "bounty": 3,
+          "armor": 0
+        }
+      ]
+    },
+    {
+      "clear_bonus": 25,
+      "groups": [
+        {
+          "hp": 135,
+          "count": 6,
+          "speed": 1.4,
+          "spacing": 1.3,
+          "bounty": 12,
+          "armor": 0.45
+        },
+        {
+          "hp": 65,
+          "count": 7,
+          "speed": 2.3,
+          "spacing": 0.75,
+          "bounty": 6,
+          "armor": 0.1
+        }
+      ]
+    },
+    {
+      "clear_bonus": 25,
+      "groups": [
+        {
+          "hp": 34,
+          "count": 20,
+          "speed": 3.2,
+          "spacing": 0.26,
+          "bounty": 3,
+          "armor": 0
+        },
+        {
+          "hp": 150,
+          "count": 6,
+          "speed": 1.4,
+          "spacing": 1.05,
+          "bounty": 11,
+          "armor": 0.45
+        }
+      ]
+    },
+    {
+      "clear_bonus": 50,
+      "groups": [
+        {
+          "hp": 165,
+          "count": 7,
+          "speed": 1.4,
+          "spacing": 0.9,
+          "bounty": 11,
+          "armor": 0.45
+        },
+        {
+          "hp": 75,
+          "count": 10,
+          "speed": 2.35,
+          "spacing": 0.5,
+          "bounty": 6,
+          "armor": 0.1
+        },
+        {
+          "hp": 1320,
+          "count": 1,
+          "speed": 0.95,
+          "spacing": 1.2,
+          "bounty": 60,
+          "armor": 0.35
+        }
+      ]
+    }
+  ]
+}

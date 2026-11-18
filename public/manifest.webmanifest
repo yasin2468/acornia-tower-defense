@@ -1,0 +1,18 @@
+{
+  "name": "Palamut Kalesi",
+  "short_name": "Palamut",
+  "description": "Orman hayvanları vs hurda robotlar — 3D mobil kule savunma oyunu",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#111923",
+  "theme_color": "#16202e",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,0 +1,306 @@
+export type EnemyId =
+  | 'scout_bot'
+  | 'swarm_saw'
+  | 'shield_loader'
+  | 'hover_drone'
+  | 'mega_harvester'
+  | 'turbo_hopper'
+  | 'chomp_brute'
+  | 'repair_drone'
+  | 'crystal_golem'
+  | 'cryo_colossus';
+
+export interface EnemySpec {
+  id: EnemyId;
+  nameKey: string;
+  descKey: string;
+  isFlying: boolean;
+  isBoss: boolean;
+  baseHp: number;
+  speed: number; // world meters per second
+  armor: number; // 0..0.95
+  bounty: number;
+  baseDamage: number;
+  radius: number;
+  color: string;
+  accentColor: string;
+  biomeTag?: 'forest' | 'canyon' | 'cavern' | 'snow';
+  dashInterval?: number;
+  dashDuration?: number;
+  dashMult?: number;
+  splitOnDeath?: { enemyId: EnemyId; count: number; hp?: number };
+  healAura?: { radius: number; hpPerSec: number };
+  regenPerSec?: number;
+  phase2Summon?: { enemyId: EnemyId; count: number; hp?: number; speed?: number };
+}
+
+export const ENEMIES: Record<EnemyId, EnemySpec> = {
+  scout_bot: {
+    id: 'scout_bot',
+    nameKey: 'enemy.scout_bot.name',
+    descKey: 'enemy.scout_bot.desc',
+    isFlying: false,
+    isBoss: false,
+    baseHp: 42,
+    speed: 2.3,
+    armor: 0.0,
+    bounty: 5,
+    baseDamage: 10,
+    radius: 0.44,
+    color: '#e6352e',
+    accentColor: '#ffb626',
+    biomeTag: 'forest',
+  },
+  swarm_saw: {
+    id: 'swarm_saw',
+    nameKey: 'enemy.swarm_saw.name',
+    descKey: 'enemy.swarm_saw.desc',
+    isFlying: false,
+    isBoss: false,
+    baseHp: 24,
+    speed: 3.1,
+    armor: 0.0,
+    bounty: 3,
+    baseDamage: 5,
+    radius: 0.34,
+    color: '#5fe62c',
+    accentColor: '#1d2b16',
+    biomeTag: 'forest',
+  },
+  shield_loader: {
+    id: 'shield_loader',
+    nameKey: 'enemy.shield_loader.name',
+    descKey: 'enemy.shield_loader.desc',
+    isFlying: false,
+    isBoss: false,
+    baseHp: 135,
+    speed: 1.35,
+    armor: 0.45,
+    bounty: 11,
+    baseDamage: 20,
+    radius: 0.56,
+    color: '#274cd4',
+    accentColor: '#ffc83d',
+    biomeTag: 'forest',
+  },
+  hover_drone: {
+    id: 'hover_drone',
+    nameKey: 'enemy.hover_drone.name',
+    descKey: 'enemy.hover_drone.desc',
+    isFlying: true,
+    isBoss: false,
+    baseHp: 65,
+    speed: 2.3,
+    armor: 0.1,
+    bounty: 6,
+    baseDamage: 12,
+    radius: 0.42,
+    color: '#8e2bd6',
+    accentColor: '#ff5ad9',
+    biomeTag: 'forest',
+  },
+  mega_harvester: {
+    id: 'mega_harvester',
+    nameKey: 'enemy.mega_harvester.name',
+    descKey: 'enemy.mega_harvester.desc',
+    isFlying: false,
+    isBoss: true,
+    baseHp: 1320,
+    speed: 0.95,
+    armor: 0.35,
+    bounty: 60,
+    baseDamage: 50,
+    radius: 0.88,
+    color: '#4a2838',
+    accentColor: '#ff3030',
+    biomeTag: 'forest',
+  },
+  turbo_hopper: {
+    id: 'turbo_hopper',
+    nameKey: 'enemy.turbo_hopper.name',
+    descKey: 'enemy.turbo_hopper.desc',
+    isFlying: false,
+    isBoss: false,
+    baseHp: 58,
+    speed: 3.75,
+    armor: 0.0,
+    bounty: 6,
+    baseDamage: 12,
+    radius: 0.4,
+    color: '#ff7b1c',
+    accentColor: '#4be8ff',
+    biomeTag: 'canyon',
+    dashInterval: 3.2,
+    dashDuration: 0.65,
+    dashMult: 1.45,
+  },
+  chomp_brute: {
+    id: 'chomp_brute',
+    nameKey: 'enemy.chomp_brute.name',
+    descKey: 'enemy.chomp_brute.desc',
+    isFlying: false,
+    isBoss: false,
+    baseHp: 185,
+    speed: 1.72,
+    armor: 0.22,
+    bounty: 13,
+    baseDamage: 18,
+    radius: 0.54,
+    color: '#c93b2b',
+    accentColor: '#f5ead0',
+    biomeTag: 'canyon',
+    splitOnDeath: { enemyId: 'swarm_saw', count: 2, hp: 28 },
+  },
+  repair_drone: {
+    id: 'repair_drone',
+    nameKey: 'enemy.repair_drone.name',
+    descKey: 'enemy.repair_drone.desc',
+    isFlying: true,
+    isBoss: false,
+    baseHp: 92,
+    speed: 2.05,
+    armor: 0.15,
+    bounty: 9,
+    baseDamage: 12,
+    radius: 0.44,
+    color: '#22c997',
+    accentColor: '#d9fff3',
+    biomeTag: 'cavern',
+    healAura: { radius: 2.8, hpPerSec: 15 },
+  },
+  crystal_golem: {
+    id: 'crystal_golem',
+    nameKey: 'enemy.crystal_golem.name',
+    descKey: 'enemy.crystal_golem.desc',
+    isFlying: false,
+    isBoss: false,
+    baseHp: 320,
+    speed: 1.05,
+    armor: 0.58,
+    bounty: 18,
+    baseDamage: 26,
+    radius: 0.64,
+    color: '#5842c4',
+    accentColor: '#57dcff',
+    biomeTag: 'cavern',
+    regenPerSec: 10,
+  },
+  cryo_colossus: {
+    id: 'cryo_colossus',
+    nameKey: 'enemy.cryo_colossus.name',
+    descKey: 'enemy.cryo_colossus.desc',
+    isFlying: false,
+    isBoss: true,
+    baseHp: 2450,
+    speed: 0.88,
+    armor: 0.45,
+    bounty: 95,
+    baseDamage: 60,
+    radius: 0.94,
+    color: '#3b6ea8',
+    accentColor: '#9fe8ff',
+    biomeTag: 'snow',
+    regenPerSec: 8,
+    phase2Summon: { enemyId: 'crystal_golem', count: 2, hp: 220, speed: 1.15 },
+  },
+};
+
+export const ENEMY_LIST: EnemySpec[] = Object.values(ENEMIES);
+
+export interface HeroSpec {
+  id: 'boz_pence';
+  nameKey: string;
+  maxHp: number;
+  damage: number;
+  attackInterval: number;
+  moveSpeed: number;
+  blockCap: number;
+  engageRange: number;
+  respawnSeconds: number;
+  regenPerSecond: number;
+  clawShockInterval: number;
+  clawShockDamage: number;
+  clawShockRadius: number;
+}
+
+export type HeroClassId = 'auto' | 'classic' | 'viking' | 'royal';
+export type HeroVisualVariant = 'classic' | 'viking' | 'royal';
+
+export interface HeroClassSpec {
+  id: HeroClassId;
+  nameKey: string;
+  descKey: string;
+  hpMult: number;
+  damageMult: number;
+  clawShockRadius: number;
+  blockCap: number;
+  regenMult: number;
+}
+
+export const HERO_CLASSES: Record<HeroClassId, HeroClassSpec> = {
+  auto: {
+    id: 'auto',
+    nameKey: 'hero.class.auto',
+    descKey: 'hero.class.auto.desc',
+    hpMult: 1.0,
+    damageMult: 1.0,
+    clawShockRadius: 2.7,
+    blockCap: 3,
+    regenMult: 1.0,
+  },
+  classic: {
+    id: 'classic',
+    nameKey: 'hero.class.classic',
+    descKey: 'hero.class.classic.desc',
+    hpMult: 1.0,
+    damageMult: 1.0,
+    clawShockRadius: 2.7,
+    blockCap: 3,
+    regenMult: 1.0,
+  },
+  viking: {
+    id: 'viking',
+    nameKey: 'hero.class.viking',
+    descKey: 'hero.class.viking.desc',
+    hpMult: 0.92,
+    damageMult: 1.25,
+    clawShockRadius: 3.1,
+    blockCap: 3,
+    regenMult: 1.0,
+  },
+  royal: {
+    id: 'royal',
+    nameKey: 'hero.class.royal',
+    descKey: 'hero.class.royal.desc',
+    hpMult: 1.3,
+    damageMult: 0.95,
+    clawShockRadius: 2.7,
+    blockCap: 4,
+    regenMult: 1.35,
+  },
+};
+
+export function resolveHeroVisualVariant(heroClass: HeroClassId, heroLevel: number): HeroVisualVariant {
+  if (heroClass === 'classic' || heroClass === 'viking' || heroClass === 'royal') {
+    return heroClass;
+  }
+  if (heroLevel >= 4) return 'royal';
+  if (heroLevel >= 2) return 'viking';
+  return 'classic';
+}
+
+export const BEAR_HERO_SPEC: HeroSpec = {
+  id: 'boz_pence',
+  nameKey: 'hero.boz_pence.name',
+  maxHp: 280,
+  damage: 20,
+  attackInterval: 0.85,
+  moveSpeed: 5.2,
+  blockCap: 3,
+  engageRange: 2.1,
+  respawnSeconds: 15,
+  regenPerSecond: 14,
+  clawShockInterval: 8,
+  clawShockDamage: 35,
+  clawShockRadius: 2.7,
+};
