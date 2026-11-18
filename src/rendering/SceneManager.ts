@@ -18,6 +18,7 @@ import type {
   SlotState,
 } from '../core/SimulationEngine.ts';
 import { CameraController } from './CameraController.ts';
+import { countDrawCalls } from './DrawCallCounter.ts';
 import { createCobbleRoadTexture, createMeadowTexture } from './ProceduralTextures.ts';
 import {
   createBearHeroRig,
@@ -1139,6 +1140,13 @@ export class SceneManager {
     this.heroRig = createBearHeroRig(equippedHat, heroVariant);
     this.heroRig.root.position.set(level.heroStart.x, 0, level.heroStart.z);
     this.dynamicGroup.add(this.heroRig.root);
+
+    if (import.meta.env.DEV) {
+      const stats = countDrawCalls(this.levelGroup);
+      console.info(
+        `[drawcall] level=${level.id} meshes=${stats.meshes} materials=${stats.materials} estimated=${stats.estimatedDrawCalls}`,
+      );
+    }
   }
 
   private clearLevel(): void {

@@ -437,6 +437,9 @@ export class MetaView {
           <button class="btn btn-gold btn-sm" style="width:100%;" id="btn-chest-epic" ${save.emeraldGems >= 120 ? '' : 'disabled'}>120 ${t(loc, 'cur.gem')}</button>
         </div>
       </div>
+      <div style="margin-top:6px; font-size:11px; color:var(--text-muted);">
+        <span style="font-weight:800; color:#e4d9bd;">${t(loc, 'shop.odds.title')}:</span> ${t(loc, 'shop.odds.body')}
+      </div>
     `;
   }
 
