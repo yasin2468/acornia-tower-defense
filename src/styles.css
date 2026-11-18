@@ -1026,6 +1026,118 @@ body,
   box-shadow: 0 4px 0 #101926, 0 8px 18px rgba(0, 0, 0, 0.45);
 }
 
+.boss-hud-bar {
+  align-self: center;
+  width: min(332px, calc(100% - 24px));
+  margin-top: 6px;
+  padding: 6px 10px 7px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(46, 17, 22, 0.94) 0%, rgba(25, 11, 15, 0.96) 100%);
+  border: 1.5px solid #ff6b4f;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.55);
+}
+
+.boss-hud-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 900;
+  color: #ffd7c4;
+  margin-bottom: 4px;
+}
+
+.boss-hud-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #ffbd59;
+}
+
+.boss-hud-track {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(12, 6, 8, 0.92);
+  border: 1px solid rgba(255, 160, 130, 0.45);
+  overflow: hidden;
+}
+
+.boss-hud-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #dc2626 0%, #ff7a2b 60%, #ffcb57 100%);
+  transition: width 0.12s ease;
+}
+
+.wave-preview-strip {
+  align-self: center;
+  margin-top: 6px;
+  max-width: calc(100% - 24px);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(14, 24, 37, 0.88);
+  border: 1.5px solid rgba(132, 200, 255, 0.38);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+  font-size: 11px;
+  font-weight: 800;
+  color: #dfeeff;
+}
+
+.wp-label {
+  color: #ffd970;
+  font-weight: 900;
+}
+
+.wp-group-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(34, 52, 74, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.wp-badge {
+  padding: 1px 5px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.wp-badge.flying {
+  background: #0e4a6b;
+  color: #7ee3ff;
+}
+
+.wp-badge.armor {
+  background: #423522;
+  color: #ffd37a;
+}
+
+.wp-badge.boss {
+  background: #6b1515;
+  color: #ff9c8a;
+}
+
+.btn.pulse-cta {
+  padding: 8px 14px;
+  font-size: 13px;
+  box-shadow: 0 4px 0 #995800, 0 0 18px rgba(255, 204, 64, 0.72);
+  animation: ctaPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes ctaPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
 .hud-bottom {
   margin-top: auto;
   padding: 0 12px calc(env(safe-area-inset-bottom, 12px) + 10px);

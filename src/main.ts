@@ -109,6 +109,7 @@ function startLevel(levelId: number, ironMode: boolean): void {
     cardLevels: save.cardLevels,
     heroClass: save.heroClass,
     extraStartGold: remoteConfig.get().startGoldDelta,
+    waitForFirstWave: !isPromoMode,
   });
 
   syncAudioAndCameraSettings();

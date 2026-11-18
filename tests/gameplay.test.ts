@@ -249,3 +249,41 @@ describe('Paket 3 — Patlayıcı kanyon fıçısı, rün yuvası bonusu ve buz 
     assert.ok(Math.abs(flying.progress - expectedFlying) < 1e-4, `uçan hız=${flying.progress.toFixed(4)}`);
   });
 });
+
+describe('Paket 4 — Hazırlık fazı, erken dalga bonusu ve üst HUD uyumu', () => {
+  it('waitForFirstWave=true iken sayaç geçse de 1. dalga başlamaz; CALL_WAVE_EARLY ile başlar', () => {
+    const sim = new SimulationEngine(LEVELS[0], { seed: 401, waitForFirstWave: true });
+    assert.equal(sim.waitingForFirstWave, true);
+    assert.equal(sim.getEarlyWaveBonus(), 0);
+
+    for (let i = 0; i < 360; i++) sim.step(FIXED_DT);
+    assert.equal(sim.currentWaveIndex, -1);
+    assert.equal(sim.waveInProgress, false);
+    assert.equal(sim.enemies.length, 0);
+
+    const goldBefore = sim.gold;
+    sim.dispatch({ type: 'CALL_WAVE_EARLY' }, 'p1', 0);
+    sim.step(FIXED_DT);
+    assert.equal(sim.waitingForFirstWave, false);
+    assert.equal(sim.waveInProgress, true);
+    assert.equal(sim.currentWaveIndex, 0);
+    assert.equal(sim.gold, goldBefore, '1. dalga hazırlığından başlatmada ekstra erken çağrı altını olmamalı');
+  });
+
+  it('2+ dalga aralarında erken çağrı bonusu verir ve doğru dalgayı başlatır', () => {
+    const sim = new SimulationEngine(LEVELS[0], { seed: 402, waitForFirstWave: true });
+    sim.currentWaveIndex = 0;
+    sim.waveInProgress = false;
+    sim.waitingForFirstWave = false;
+    sim.waveCountdown = 6.0;
+
+    const bonus = sim.getEarlyWaveBonus();
+    assert.equal(bonus, 15, '6.0s * 2.5 = 15 altın bonusu beklenir');
+    const goldBefore = sim.gold;
+    sim.dispatch({ type: 'CALL_WAVE_EARLY' }, 'p1', 0);
+    sim.step(FIXED_DT);
+    assert.equal(sim.currentWaveIndex, 1);
+    assert.equal(sim.waveInProgress, true);
+    assert.equal(sim.gold, goldBefore + 15);
+  });
+});

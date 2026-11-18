@@ -149,6 +149,7 @@ export interface SimOptions {
   heroClass?: HeroClassId;
   extraStartGold?: number;
   towerDamageBonusPct?: number;
+  waitForFirstWave?: boolean;
 }
 
 export class SimulationEngine {
@@ -167,6 +168,7 @@ export class SimulationEngine {
   currentWaveIndex = -1; // -1 = pre-wave 1
   waveCountdown = 3.5;
   waveInProgress = false;
+  waitingForFirstWave = false;
   totalKills = 0;
   reviveUsed = false;
 
@@ -196,6 +198,7 @@ export class SimulationEngine {
     this.level = level;
     this.rng = new SeededRNG(options.seed ?? 1337 + level.id * 97);
     this.ironMode = Boolean(options.ironMode);
+    this.waitingForFirstWave = Boolean(options.waitForFirstWave);
     this.heroClass = options.heroClass ?? 'auto';
     this.towerDamageBonusPct = options.towerDamageBonusPct ?? 0;
 
@@ -509,8 +512,7 @@ export class SimulationEngine {
         if (this.waveInProgress) return;
         const nextIdx = this.currentWaveIndex + 1;
         if (nextIdx >= this.level.waves.length) return;
-        const bonus = this.currentWaveIndex >= 0 ? Math.min(20, Math.floor(Math.max(0, this.waveCountdown) * 2)) : 0;
-        this.startWave(nextIdx, bonus);
+        this.startWave(nextIdx, this.getEarlyWaveBonus());
         break;
       }
       case 'REVIVE_BASE': {
@@ -526,8 +528,15 @@ export class SimulationEngine {
     }
   }
 
+  getEarlyWaveBonus(): number {
+    if (this.waveInProgress || this.currentWaveIndex < 0) return 0;
+    if (this.currentWaveIndex + 1 >= this.level.waves.length) return 0;
+    return Math.min(30, Math.max(4, Math.floor(Math.max(0, this.waveCountdown) * 2.5)));
+  }
+
   private updateWaves(dt: number): void {
     if (!this.waveInProgress) {
+      if (this.waitingForFirstWave) return;
       const nextIdx = this.currentWaveIndex + 1;
       if (nextIdx < this.level.waves.length) {
         this.waveCountdown -= dt;
@@ -566,6 +575,7 @@ export class SimulationEngine {
     if (!wave) return;
     this.currentWaveIndex = index;
     this.waveInProgress = true;
+    this.waitingForFirstWave = false;
     this.waveCountdown = 0;
     this.spawnLaneToggle = 0;
     if (earlyBonus > 0) this.gold += earlyBonus;

@@ -15,6 +15,10 @@ aynı anda değiştirmez. Durumlar: `planlandi` → `devam` → `dogrulaniyor` �
 | O3-A | Mağaza metin/davranış tutarlılığı (aylık VIP günlük zümrüt, referans fiyat, AFK birimi, promo kapısı) | GLM-5.3 | dogrulandi | `15e7891` · `tests/vip.test.ts` (7/7 pass, Carbon incelemesiyle eksiklik yakalandı) |
 | O3-B | Süresi dolan aylık VIP ayrıcalık sızıntısını kapat (`isVipActive`: reklam atlama, 16h AFK, x2/x3 hız) | Carbon | dogrulandi | `87f93f6` · `tests/vip.test.ts` 10/10 + `simulation.test.ts`, 59/59 pass, build ✓ |
 | M1 | Baykuş V4 chibi kule modellerini (`t1`, `t2`, `chain`, `blizzard`) `scripts/blender_build_chibi_units.py` ile üret ve doğrula | Carbon | dogrulandi | Blender `--verify` Cycles + canlı tarayıcı (`http://localhost:5173/?promo=1`) HTTP 200 & 0 hata ✓ |
+| P1 | Boz Pençe akıllı nöbet takip, melee saldırı/vuruş VFX, menü kapatma koruması, 3 sınıf ultisi ve sağ-alt `#bw-skill-hero` madalyonu | Carbon | dogrulandi | `2fe85d2` · `tests/gameplay.test.ts` (4/4 pass) + build ✓ + tarayıcıda Lv/HP/Ulti bekleme süresi doğrulandı |
+| P2 | 12 bölüm çatallı ikincil yol (`secondaryPath`), görüş alanı/mesafe garantili taktik yuvalar ve boş yuvada canlı menzil halkası (`previewTowerId`) | Carbon | dogrulandi | `88fd10d` · `tests/gameplay.test.ts` (2/2 geometri & iki koridor testi) + build ✓ + tarayıcı Seviye 2 çatallı yol doğrulandı |
+| P3 | Biyom atmosferi & güneş ışığı, `ambientMotes` hava partikülleri, Kanyon patlayıcı fıçıları, Mağara rün yuvaları, Karlı Zirve buz bölgeleri | Carbon | dogrulandi | `2094ffa` · `tests/gameplay.test.ts` (3/3 fıçı/rün/buz testi) + build ✓ + Seviye 1 mor kristalsiz/polenli görsel doğrulandı |
+| P4 | Dalga 1 hazırlık fazı (`waitForFirstWave`), sonraki dalga önizleme şeridi (`#bw-wave-preview`), vurgulu `Savaşı Başlat` / erken bonus & üst `#bw-boss-bar` | Carbon | dogrulandi | `tests/gameplay.test.ts` (2/2 hazırlık & erken bonus testi, toplam 70/70 pass) + `tsc/build` ✓ + canlı QA `0` hata ✓ |
 
 ## Kuyruk (Carbon doldurur)
 

@@ -1,6 +1,6 @@
 import { easeOutCubic, GhostHpTracker, popScale } from '../core/JuiceController.ts';
 import type { SimulationEngine } from '../core/SimulationEngine.ts';
-import { resolveHeroVisualVariant } from '../data/enemies.ts';
+import { ENEMIES, resolveHeroVisualVariant } from '../data/enemies.ts';
 import { TOWER_LIST, TOWERS, type TargetingPriority, type TowerId } from '../data/towers.ts';
 import { t, tParams, type Locale } from '../i18n/locales.ts';
 import type { SceneManager } from '../rendering/SceneManager.ts';
@@ -77,6 +77,11 @@ export class BattleView {
   private heroCdEl: HTMLElement | null = null;
   private heroHpBarEl: HTMLElement | null = null;
   private heroLvlEl: HTMLElement | null = null;
+  private bossBarEl: HTMLElement | null = null;
+  private bossNameEl: HTMLElement | null = null;
+  private bossHpTextEl: HTMLElement | null = null;
+  private bossHpFillEl: HTMLElement | null = null;
+  private wavePreviewEl: HTMLElement | null = null;
   private modalHostEl: HTMLElement | null = null;
   private hudTopEl: HTMLElement | null = null;
   private hudBottomEl: HTMLElement | null = null;
@@ -84,6 +89,7 @@ export class BattleView {
 
   private lastContextKey = '';
   private lastModalKey = '';
+  private lastWavePreviewKey = '';
 
   /** Delayed white/amber "ghost damage" trail for every enemy HP bar. */
   readonly ghostHp = new GhostHpTracker(0.3, 0.45, 5.5);
@@ -129,6 +135,7 @@ export class BattleView {
     this.mountedRoot = null;
     this.lastContextKey = '';
     this.lastModalKey = '';
+    this.lastWavePreviewKey = '';
   }
 
   showBanner(text: string, seconds = 3.2): void {
@@ -189,6 +196,14 @@ export class BattleView {
         </div>
       </div>
 
+      <div class="boss-hud-bar" id="bw-boss-bar" style="display:none;">
+        <div class="boss-hud-head">
+          <span class="boss-hud-title"><span class="svg-ico" style="width:14px;height:14px;">${ICONS.skullCrown}</span><span id="bw-boss-name"></span></span>
+          <span id="bw-boss-hp-text"></span>
+        </div>
+        <div class="boss-hud-track"><div class="boss-hud-fill" id="bw-boss-hp-fill" style="width:100%"></div></div>
+      </div>
+      <div class="wave-preview-strip" id="bw-wave-preview" style="display:none;"></div>
       <div class="banner-toast" id="bw-banner" style="display:none;"></div>
 
       <div class="hud-bottom" id="bw-hud-bottom">
@@ -234,6 +249,12 @@ export class BattleView {
     this.heroCdEl = container.querySelector('#bw-hero-cd');
     this.heroHpBarEl = container.querySelector('#bw-hero-hp');
     this.heroLvlEl = container.querySelector('#bw-hero-lvl');
+    this.bossBarEl = container.querySelector('#bw-boss-bar');
+    this.bossNameEl = container.querySelector('#bw-boss-name');
+    this.bossHpTextEl = container.querySelector('#bw-boss-hp-text');
+    this.bossHpFillEl = container.querySelector('#bw-boss-hp-fill');
+    this.wavePreviewEl = container.querySelector('#bw-wave-preview');
+    this.lastWavePreviewKey = '';
     this.rainBtnEl = container.querySelector('#bw-skill-rain');
     this.rainCdEl = container.querySelector('#bw-rain-cd');
     this.magnetBtnEl = container.querySelector('#bw-skill-magnet');
@@ -323,8 +344,8 @@ export class BattleView {
     const totalWaves = sim.level.waves.length;
     const hpPct = Math.max(0, Math.min(100, (sim.baseHp / sim.maxBaseHp) * 100));
 
+    const hide = this.promoMode && this.promoHideHud;
     if (this.hudTopEl && this.hudBottomEl) {
-      const hide = this.promoMode && this.promoHideHud;
       this.hudTopEl.style.display = hide ? 'none' : 'flex';
       this.hudBottomEl.style.display = hide ? 'none' : 'flex';
     }
@@ -337,6 +358,45 @@ export class BattleView {
     if (this.waveTextEl) this.waveTextEl.textContent = `${t(loc, 'hud.wave')} ${waveNum}/${totalWaves}`;
     if (this.goldTextEl) this.goldTextEl.textContent = `${sim.gold}`;
 
+    if (this.bossBarEl) {
+      const liveBoss = !hide ? sim.enemies.find((e) => e.isBoss && e.hp > 0) : undefined;
+      this.bossBarEl.style.display = liveBoss ? 'block' : 'none';
+      if (liveBoss) {
+        const bSpec = ENEMIES[liveBoss.enemyId];
+        const bPct = Math.max(0, Math.min(100, (liveBoss.hp / liveBoss.maxHp) * 100));
+        if (this.bossNameEl) this.bossNameEl.textContent = t(loc, bSpec.nameKey);
+        if (this.bossHpTextEl) this.bossHpTextEl.textContent = `${Math.ceil(liveBoss.hp)}/${liveBoss.maxHp}`;
+        if (this.bossHpFillEl) this.bossHpFillEl.style.width = `${bPct.toFixed(1)}%`;
+      }
+    }
+
+    if (this.wavePreviewEl) {
+      const nextWave = !hide && !sim.waveInProgress && sim.status === 'playing'
+        ? sim.level.waves[sim.currentWaveIndex + 1]
+        : undefined;
+      this.wavePreviewEl.style.display = nextWave ? 'flex' : 'none';
+      if (nextWave) {
+        const wKey = `${sim.level.id}|${nextWave.waveNumber}|${loc}`;
+        if (wKey !== this.lastWavePreviewKey) {
+          this.lastWavePreviewKey = wKey;
+          const chips = nextWave.groups
+            .map((g) => {
+              const spec = ENEMIES[g.enemyId];
+              const badge = spec.isBoss
+                ? `<span class="wp-badge boss">${t(loc, 'hud.tagBoss')}</span>`
+                : spec.isFlying
+                  ? `<span class="wp-badge flying">${t(loc, 'hud.tagFlying')}</span>`
+                  : spec.armor >= 0.25
+                    ? `<span class="wp-badge armor">${t(loc, 'hud.tagArmor')}</span>`
+                    : '';
+              return `<span class="wp-group-chip">${t(loc, spec.nameKey)} ×${g.count}${badge}</span>`;
+            })
+            .join('');
+          this.wavePreviewEl.innerHTML = `<span class="wp-label">${t(loc, 'hud.nextWavePreview')}</span>${chips}`;
+        }
+      }
+    }
+
     if (this.bannerEl) {
       const showBanner = this.bannerTimer > 0 && Boolean(this.bannerText);
       this.bannerEl.style.display = showBanner ? 'block' : 'none';
@@ -347,7 +407,14 @@ export class BattleView {
       const canCallEarly = !sim.waveInProgress && sim.currentWaveIndex + 1 < totalWaves;
       this.earlyBtnEl.style.display = canCallEarly ? 'inline-flex' : 'none';
       if (canCallEarly) {
-        this.earlyBtnEl.textContent = `${t(loc, 'hud.earlyWave')} (${Math.ceil(sim.waveCountdown)}s)`;
+        if (sim.waitingForFirstWave) {
+          this.earlyBtnEl.textContent = t(loc, 'hud.startBattle');
+          this.earlyBtnEl.classList.add('pulse-cta');
+        } else {
+          const bonus = sim.getEarlyWaveBonus();
+          this.earlyBtnEl.textContent = `${tParams(loc, 'hud.earlyWaveBonus', { gold: bonus })} (${Math.ceil(sim.waveCountdown)}s)`;
+          this.earlyBtnEl.classList.remove('pulse-cta');
+        }
       }
     }
 
