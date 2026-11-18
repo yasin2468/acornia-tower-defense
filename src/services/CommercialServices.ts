@@ -1,4 +1,4 @@
-import type { SaveManager } from './SaveManager.ts';
+import type { SaveManager, SaveState } from './SaveManager.ts';
 
 export type AdPlacement =
   | 'speed_2x'
@@ -15,9 +15,81 @@ export interface AnalyticsEvent {
 
 export interface RemoteEconomicConfig {
   startGoldDelta: number;
+  failOfferPriceUsd: number;
   failOfferDiscountPct: number;
   vipMonthlyPriceUsd: number;
   vipLifetimePriceUsd: number;
+}
+
+export const VIP_MONTHLY_DURATION_MS = 30 * 24 * 3600 * 1000;
+export const VIP_DAILY_CLAIM_COOLDOWN_MS = 24 * 3600 * 1000;
+export const VIP_DAILY_CLAIM_GEMS = 50;
+export const VIP_LIFETIME_GEMS = 200;
+
+export type VipDailyClaimReason = 'ok' | 'cooldown' | 'expired' | 'not_vip' | 'lifetime';
+
+export interface VipDailyStatus {
+  reason: VipDailyClaimReason;
+  canClaim: boolean;
+  vipRemainingMs: number;
+  nextClaimInMs: number;
+}
+
+export interface VipDailyClaimResult extends VipDailyStatus {
+  claimed: boolean;
+  gemsGranted: number;
+}
+
+export function getVipDailyStatus(save: SaveState, nowMs: number): VipDailyStatus {
+  if (save.vipTier === 'none') {
+    return { reason: 'not_vip', canClaim: false, vipRemainingMs: 0, nextClaimInMs: 0 };
+  }
+  if (save.vipTier === 'lifetime') {
+    return { reason: 'lifetime', canClaim: false, vipRemainingMs: 0, nextClaimInMs: 0 };
+  }
+  const vipRemainingMs = Math.max(0, save.vipExpiresAt - nowMs);
+  if (vipRemainingMs === 0) {
+    return { reason: 'expired', canClaim: false, vipRemainingMs: 0, nextClaimInMs: 0 };
+  }
+  const sinceLastClaim = nowMs - save.lastVipClaimAt;
+  if (save.lastVipClaimAt > 0 && sinceLastClaim < VIP_DAILY_CLAIM_COOLDOWN_MS) {
+    return {
+      reason: 'cooldown',
+      canClaim: false,
+      vipRemainingMs,
+      nextClaimInMs: VIP_DAILY_CLAIM_COOLDOWN_MS - sinceLastClaim,
+    };
+  }
+  return { reason: 'ok', canClaim: true, vipRemainingMs, nextClaimInMs: 0 };
+}
+
+export function claimVipDaily(saveManager: SaveManager, nowMs = Date.now()): VipDailyClaimResult {
+  const status = getVipDailyStatus(saveManager.get(), nowMs);
+  if (!status.canClaim) {
+    return { ...status, claimed: false, gemsGranted: 0 };
+  }
+  saveManager.update((draft) => {
+    draft.emeraldGems += VIP_DAILY_CLAIM_GEMS;
+    draft.lastVipClaimAt = nowMs;
+  });
+  return { ...status, claimed: true, gemsGranted: VIP_DAILY_CLAIM_GEMS };
+}
+
+export interface FailOfferPrices {
+  priceUsd: number;
+  referenceUsd: number;
+  discountPct: number;
+}
+
+export function getFailOfferPrices(config: RemoteEconomicConfig): FailOfferPrices {
+  const discountPct = Math.max(0, Math.min(99, config.failOfferDiscountPct));
+  const referenceUsd =
+    discountPct === 0 ? config.failOfferPriceUsd : config.failOfferPriceUsd / (1 - discountPct / 100);
+  return {
+    priceUsd: config.failOfferPriceUsd,
+    referenceUsd: Math.round(referenceUsd * 100) / 100,
+    discountPct,
+  };
 }
 
 export class AdService {
@@ -71,12 +143,18 @@ export class BillingService {
     return true;
   }
 
-  purchaseVip(tier: 'monthly' | 'lifetime'): void {
+  purchaseVip(tier: 'monthly' | 'lifetime', nowMs = Date.now()): void {
     this.saveManager.update((draft) => {
       draft.vipTier = tier;
-      draft.emeraldGems += tier === 'lifetime' ? 200 : 50;
-      if (tier === 'lifetime' && !draft.unlockedHats.includes('viking')) {
-        draft.unlockedHats.push('viking');
+      if (tier === 'monthly') {
+        // Aylık VIP'te zümrüt tek seferlik değil; günlük talep akışıyla verilir.
+        draft.vipExpiresAt = Math.max(draft.vipExpiresAt, nowMs) + VIP_MONTHLY_DURATION_MS;
+      } else {
+        draft.vipExpiresAt = 0;
+        draft.emeraldGems += VIP_LIFETIME_GEMS;
+        if (!draft.unlockedHats.includes('viking')) {
+          draft.unlockedHats.push('viking');
+        }
       }
     });
   }
@@ -100,6 +178,7 @@ export class AnalyticsService {
 export class RemoteConfigService {
   private config: RemoteEconomicConfig = {
     startGoldDelta: 0,
+    failOfferPriceUsd: 1.99,
     failOfferDiscountPct: 80,
     vipMonthlyPriceUsd: 4.99,
     vipLifetimePriceUsd: 17.99,

@@ -1,9 +1,21 @@
 import { ENEMIES, ENEMY_LIST, HERO_CLASSES, type EnemyId, type HeroClassId } from '../data/enemies.ts';
 import { LEVELS, WORLD_MAP_NODES, isLevelUnlocked, type LevelSpec } from '../data/levels.ts';
 import { TOWER_LIST, TOWERS, type HatId } from '../data/towers.ts';
-import { t, type Locale } from '../i18n/locales.ts';
-import type { AdService, BillingService, NetworkTransportStub } from '../services/CommercialServices.ts';
+import { t, tParams, type Locale } from '../i18n/locales.ts';
 import {
+  claimVipDaily,
+  getVipDailyStatus,
+  VIP_DAILY_CLAIM_GEMS,
+  VIP_LIFETIME_GEMS,
+  type VipDailyStatus,
+  type AdService,
+  type BillingService,
+  type NetworkTransportStub,
+} from '../services/CommercialServices.ts';
+import {
+  AFK_QUICK_BOOST_HOURS,
+  AFK_QUICK_BOOST_OAK,
+  AFK_QUICK_BOOST_TOTAL_SHARDS,
   calculateAfkAccumulation,
   claimAfkPatrol,
   getCardUpgradeCost,
@@ -211,13 +223,13 @@ export class MetaView {
         <div style="display:flex; align-items:center; gap:9px;">
           <img class="afk-chest-thumb" src="${UI_ICON_URLS.chestFree}" alt="" />
           <div>
-            <div style="font-size: 13px; font-weight: 800;">${t(loc, 'map.afk.title')} · ${afk.hoursElapsed}/${afk.capHours}s</div>
-            <div style="font-size: 11px; color: var(--text-muted);">+${afk.oakCoins} Palamut · +${afk.shards} Kart (${t(loc, 'map.afk.vip')})</div>
+            <div style="font-size: 13px; font-weight: 800;">${t(loc, 'map.afk.title')} · ${afk.hoursElapsed}/${t(loc, afk.capHours === 16 ? 'afk.duration16' : 'afk.duration8')}</div>
+            <div style="font-size: 11px; color: var(--text-muted);">+${afk.oakCoins} Palamut · +${afk.shards} Kart (${tParams(loc, 'map.afk.vip', { duration: t(loc, 'afk.duration16') })})</div>
           </div>
         </div>
         <div style="display:flex; gap:6px;">
           <button class="btn btn-sm btn-gold" id="btn-afk-claim" ${afk.oakCoins < 1 ? 'disabled' : ''}>${t(loc, 'map.afk.collect')}</button>
-          <button class="btn btn-sm" id="btn-afk-boost">${t(loc, 'map.afk.boost')}</button>
+          <button class="btn btn-sm" id="btn-afk-boost">${tParams(loc, 'map.afk.boost', { amount: AFK_QUICK_BOOST_OAK, hours: AFK_QUICK_BOOST_HOURS })}</button>
         </div>
       </div>
 
@@ -407,7 +419,8 @@ export class MetaView {
 
   private renderShopTab(loc: Locale): string {
     const save = this.saveManager.get();
-    const vipActive = save.vipTier !== 'none';
+    const vipStatus = getVipDailyStatus(save, Date.now());
+    const vipActive = save.vipTier !== 'none' && vipStatus.reason !== 'expired';
 
     return `
       <div class="card-panel" style="border-color: var(--accent-gold); background: linear-gradient(180deg, #3c3118 0%, #201a11 100%); display:flex; flex-direction:column; gap:10px;">
@@ -415,7 +428,8 @@ export class MetaView {
           <div style="font-size:16px; font-weight:900; color:#ffe17a;">${t(loc, 'shop.vipTitle')}</div>
           ${vipActive ? `<span class="pill-badge gold">${t(loc, 'shop.vipActive')} (${save.vipTier})</span>` : ''}
         </div>
-        <div style="font-size:12px; color:#f2e2be;">${t(loc, 'shop.vipPerks')}</div>
+        <div style="font-size:12px; color:#f2e2be;">${tParams(loc, 'shop.vipPerks', { daily: VIP_DAILY_CLAIM_GEMS, lump: VIP_LIFETIME_GEMS, duration: t(loc, 'afk.duration16') })}</div>
+        ${save.vipTier !== 'none' ? this.renderVipClaimSection(loc, vipStatus) : ''}
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
           <button class="btn btn-gold btn-sm" id="btn-vip-monthly">${t(loc, 'shop.vipMonthly')}</button>
           <button class="btn btn-primary btn-sm" id="btn-vip-lifetime">${t(loc, 'shop.vipLifetime')}</button>
@@ -439,6 +453,27 @@ export class MetaView {
       </div>
       <div style="margin-top:6px; font-size:11px; color:var(--text-muted);">
         <span style="font-weight:800; color:#e4d9bd;">${t(loc, 'shop.odds.title')}:</span> ${t(loc, 'shop.odds.body')}
+      </div>
+    `;
+  }
+
+  private renderVipClaimSection(loc: Locale, vip: VipDailyStatus): string {
+    if (vip.reason === 'lifetime') {
+      return `<div style="font-size:11.5px; color:var(--text-muted);">${tParams(loc, 'shop.vipLifetimeNote', { gems: VIP_LIFETIME_GEMS })}</div>`;
+    }
+    if (vip.reason === 'expired') {
+      return `<div style="font-size:11.5px; color:var(--accent-red); font-weight:800;">${t(loc, 'shop.vipExpired')}</div>`;
+    }
+    const daysLeft = Math.ceil(vip.vipRemainingMs / (24 * 3600 * 1000));
+    const remainingText = tParams(loc, 'shop.vipTimeLeft', { days: daysLeft });
+    const nextClaimText =
+      vip.reason === 'cooldown'
+        ? `<br/>${tParams(loc, 'shop.vipNextClaim', { hours: Math.ceil(vip.nextClaimInMs / (3600 * 1000)) })}`
+        : '';
+    return `
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+        <div style="font-size:11.5px; color:var(--text-muted);">${remainingText}${nextClaimText}</div>
+        <button class="btn btn-gold btn-sm" id="btn-vip-claim" ${vip.canClaim ? '' : 'disabled'}>${tParams(loc, 'shop.vipClaim', { gems: VIP_DAILY_CLAIM_GEMS })}</button>
       </div>
     `;
   }
@@ -516,7 +551,9 @@ export class MetaView {
       afkBoost.onclick = async () => {
         await this.adService.showRewarded('afk_boost_4h');
         const ok = grantQuickAfkBoost(this.saveManager);
-        this.statusNotice = ok ? '+140 Palamut +2 Kart' : '2/2';
+        this.statusNotice = ok
+          ? tParams(loc, 'map.afk.boostGranted', { amount: AFK_QUICK_BOOST_OAK, cards: AFK_QUICK_BOOST_TOTAL_SHARDS })
+          : '2/2';
         this.callbacks.onRefresh();
       };
     }
@@ -548,6 +585,15 @@ export class MetaView {
     const vipLifetime = container.querySelector<HTMLButtonElement>('#btn-vip-lifetime');
     if (vipMonthly) vipMonthly.onclick = () => { this.billingService.purchaseVip('monthly'); this.statusNotice = `${t(loc, 'shop.vipActive')} (Monthly)`; this.callbacks.onRefresh(); };
     if (vipLifetime) vipLifetime.onclick = () => { this.billingService.purchaseVip('lifetime'); this.statusNotice = `${t(loc, 'shop.vipActive')} (Lifetime)`; this.callbacks.onRefresh(); };
+
+    const vipClaim = container.querySelector<HTMLButtonElement>('#btn-vip-claim');
+    if (vipClaim) {
+      vipClaim.onclick = () => {
+        const res = claimVipDaily(this.saveManager);
+        if (res.claimed) this.statusNotice = `+${res.gemsGranted} ${t(loc, 'cur.gem')}`;
+        this.callbacks.onRefresh();
+      };
+    }
 
     const freeChest = container.querySelector<HTMLButtonElement>('#btn-chest-free');
     if (freeChest) {

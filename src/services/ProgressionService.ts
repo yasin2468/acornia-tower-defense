@@ -16,6 +16,12 @@ export interface ChestReward {
 
 const UNIT_IDS: CardUnitId[] = ['squirrel', 'beaver', 'owl', 'hedgehog', 'boz_pence'];
 
+export const AFK_OAK_PER_HOUR = 35;
+export const AFK_QUICK_BOOST_HOURS = 4;
+export const AFK_QUICK_BOOST_OAK = AFK_OAK_PER_HOUR * AFK_QUICK_BOOST_HOURS; // 140
+export const AFK_QUICK_BOOST_SHARDS: Readonly<Record<'squirrel' | 'owl', number>> = { squirrel: 1, owl: 1 };
+export const AFK_QUICK_BOOST_TOTAL_SHARDS = AFK_QUICK_BOOST_SHARDS.squirrel + AFK_QUICK_BOOST_SHARDS.owl;
+
 export function getCardUpgradeCost(currentLevel: number): { shards: number; oakCoins: number } {
   return {
     shards: 2 + currentLevel * 2,
@@ -27,7 +33,7 @@ export function calculateAfkAccumulation(save: SaveState, nowMs = Date.now()): A
   const capHours = save.vipTier === 'none' ? 8 : 16;
   const elapsedMs = Math.max(0, nowMs - save.afkLastClaimAt);
   const hoursElapsed = Math.min(capHours, elapsedMs / (3600 * 1000));
-  const oakCoins = Math.floor(hoursElapsed * 35);
+  const oakCoins = Math.floor(hoursElapsed * AFK_OAK_PER_HOUR);
   const shards = Math.floor(hoursElapsed / 2);
   return {
     hoursElapsed: Number(hoursElapsed.toFixed(1)),
@@ -56,9 +62,9 @@ export function grantQuickAfkBoost(saveManager: SaveManager, nowMs = Date.now())
   if (s.dailyAfkBoostsUsed >= 2) return false;
   saveManager.update((draft) => {
     draft.dailyAfkBoostsUsed += 1;
-    draft.oakCoins += 140;
-    draft.cardShards.squirrel += 1;
-    draft.cardShards.owl += 1;
+    draft.oakCoins += AFK_QUICK_BOOST_OAK;
+    draft.cardShards.squirrel += AFK_QUICK_BOOST_SHARDS.squirrel;
+    draft.cardShards.owl += AFK_QUICK_BOOST_SHARDS.owl;
   });
   return true;
 }

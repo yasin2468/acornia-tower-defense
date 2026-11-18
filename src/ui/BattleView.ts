@@ -1,9 +1,9 @@
 import { easeOutCubic, GhostHpTracker, popScale } from '../core/JuiceController.ts';
 import type { SimulationEngine } from '../core/SimulationEngine.ts';
 import { TOWER_LIST, TOWERS, type TargetingPriority, type TowerId } from '../data/towers.ts';
-import { t, type Locale } from '../i18n/locales.ts';
+import { t, tParams, type Locale } from '../i18n/locales.ts';
 import type { SceneManager } from '../rendering/SceneManager.ts';
-import type { AdService, BillingService } from '../services/CommercialServices.ts';
+import { getFailOfferPrices, type AdService, type BillingService, type RemoteConfigService } from '../services/CommercialServices.ts';
 import type { SaveManager } from '../services/SaveManager.ts';
 import { ICONS, PORTRAIT_URLS, UI_ICON_URLS } from './icons.ts';
 
@@ -50,6 +50,7 @@ export class BattleView {
   private readonly saveManager: SaveManager;
   private readonly adService: AdService;
   private readonly billingService: BillingService;
+  private readonly remoteConfig: RemoteConfigService;
   private readonly callbacks: BattleViewCallbacks;
 
   private mountedRoot: HTMLElement | null = null;
@@ -85,12 +86,14 @@ export class BattleView {
     saveManager: SaveManager,
     adService: AdService,
     billingService: BillingService,
+    remoteConfig: RemoteConfigService,
     callbacks: BattleViewCallbacks,
     promoMode = false,
   ) {
     this.saveManager = saveManager;
     this.adService = adService;
     this.billingService = billingService;
+    this.remoteConfig = remoteConfig;
     this.callbacks = callbacks;
     this.promoMode = promoMode;
   }
@@ -693,19 +696,28 @@ export class BattleView {
     if (sim.status === 'lost') {
       const save = this.saveManager.get();
       const showFirstFailBundle = !save.firstDefeatBundleBought;
+      const failPrices = showFirstFailBundle ? getFailOfferPrices(this.remoteConfig.get()) : null;
+      const priceParams = failPrices
+        ? {
+            ref: failPrices.referenceUsd.toFixed(2),
+            price: failPrices.priceUsd.toFixed(2),
+            pct: failPrices.discountPct,
+          }
+        : null;
       return `
         <div class="modal-backdrop">
           <div class="modal-card">
             <div style="font-size:19px; font-weight:800; color:var(--accent-red);">${t(loc, 'hud.defeat')}</div>
             ${!sim.reviveUsed ? `<button class="btn btn-gold" id="btn-revive-ad">${t(loc, 'hud.reviveAd')}</button>` : ''}
             ${
-              showFirstFailBundle
+              showFirstFailBundle && priceParams
                 ? `
                   <div class="card-panel" style="border-color:var(--accent-gold); display:flex; flex-direction:column; gap:6px;">
-                    <div style="font-size:11px; color:var(--accent-gold); font-weight:800;">${t(loc, 'offer.failBadge')}</div>
+                    <div style="font-size:11px; color:var(--accent-gold); font-weight:800;">${tParams(loc, 'offer.failBadge', { pct: priceParams.pct })}</div>
                     <div style="font-size:14px; font-weight:800;">${t(loc, 'offer.failTitle')}</div>
                     <div style="font-size:12px; color:var(--text-muted);">${t(loc, 'offer.failBody')}</div>
-                    <button class="btn btn-primary btn-sm" id="btn-buy-fail-offer">${t(loc, 'offer.buy')}</button>
+                    <div style="font-size:12px; color:var(--text-muted);"><s>$${priceParams.ref}</s> · ${tParams(loc, 'offer.failPrice', priceParams)}</div>
+                    <button class="btn btn-primary btn-sm" id="btn-buy-fail-offer">${tParams(loc, 'offer.buy', { price: priceParams.price })}</button>
                   </div>
                 `
                 : ''

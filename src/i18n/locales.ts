@@ -27,8 +27,11 @@ const DICT: Record<Locale, Record<string, string>> = {
     'map.bossTag': 'BOSS',
     'map.afk.title': 'Devriye Sandığı',
     'map.afk.collect': 'Topla',
-    'map.afk.boost': '4 Saatlik Hızlandır (Reklam)',
-    'map.afk.vip': 'VIP ile 16s kapasite',
+    'map.afk.boost': '+{amount} Palamut ({hours} saatlik devriye) (Reklam)',
+    'map.afk.boostGranted': '+{amount} Palamut +{cards} Kart',
+    'map.afk.vip': 'VIP ile {duration} kapasite',
+    'afk.duration8': '8 sa',
+    'afk.duration16': '16 sa',
     'level.1.name': 'Yosun Geçidi',
     'level.2.name': 'Palamut Kavşağı',
     'level.3.name': 'Ulu Meşe Kapısı',
@@ -137,7 +140,12 @@ const DICT: Record<Locale, Record<string, string>> = {
     'hat.viking': 'Viking',
     'shop.title': 'Orman Mağazası & VIP',
     'shop.vipTitle': 'Orman VIP Kartı',
-    'shop.vipPerks': 'Kalıcı x2 & x3 Hız · Reklamsız Ödüller · Günlük +50 Zümrüt · 16s Devriye',
+    'shop.vipPerks': 'Kalıcı x2 & x3 Hız · Reklamsız Ödüller · Aylık: Günlük +{daily} Zümrüt · Ömürlük: Tek Seferlik +{lump} Zümrüt · {duration} Devriye',
+    'shop.vipClaim': 'Günlük +{gems} Zümrüt Al',
+    'shop.vipNextClaim': 'Sonraki talep: {hours} sa',
+    'shop.vipTimeLeft': 'VIP süresi: {days} gün kaldı',
+    'shop.vipExpired': 'VIP süresi doldu',
+    'shop.vipLifetimeNote': 'Ömürlük VIP: günlük talep yok — alımında tek seferlik +{gems} zümrüt verildi',
     'shop.vipMonthly': 'Aylık VIP — $4.99',
     'shop.vipLifetime': 'Ömür Boyu VIP — $17.99',
     'shop.vipActive': 'VIP Aktif',
@@ -145,9 +153,10 @@ const DICT: Record<Locale, Record<string, string>> = {
     'shop.freeChest': 'Ücretsiz Sandık (Reklam)',
     'shop.epicChest': 'Efsanevi Sandık (120 Zümrüt)',
     'offer.failTitle': 'İlk Yenilgi Kurtarma Paketi',
-    'offer.failBadge': '%80 İndirim · Sınırlı Teklif',
+    'offer.failBadge': '%{pct} İndirim · Sınırlı Teklif',
     'offer.failBody': '300 Zümrüt + 10 Kirpi Kartı + 5 Reklam Atlama Bileti',
-    'offer.buy': 'Paketi Al — $1.99',
+    'offer.failPrice': 'Normalde ${ref} — şimdi ${price} (%{pct} indirim)',
+    'offer.buy': 'Paketi Al — ${price}',
     'multi.title': 'Arkadaşla & 1v1 Düello',
     'multi.coopName': 'İkiz Meşe Nöbeti (2P Co-op)',
     'multi.coopDesc': 'Ortak Ulu Ağaç, sol/sağ koridor, +25 Palamut transferi (Faz 2)',
@@ -205,8 +214,11 @@ const DICT: Record<Locale, Record<string, string>> = {
     'map.bossTag': 'BOSS',
     'map.afk.title': 'Patrol Chest',
     'map.afk.collect': 'Collect',
-    'map.afk.boost': '4h Boost (Ad)',
-    'map.afk.vip': '16h cap with VIP',
+    'map.afk.boost': '+{amount} Acorns ({hours}h Patrol) (Ad)',
+    'map.afk.boostGranted': '+{amount} Acorns +{cards} Cards',
+    'map.afk.vip': '{duration} cap with VIP',
+    'afk.duration8': '8 h',
+    'afk.duration16': '16 h',
     'level.1.name': 'Mossy Crossing',
     'level.2.name': 'Acorn Junction',
     'level.3.name': 'Great Oak Gate',
@@ -315,7 +327,12 @@ const DICT: Record<Locale, Record<string, string>> = {
     'hat.viking': 'Viking',
     'shop.title': 'Forest Shop & VIP',
     'shop.vipTitle': 'Forest VIP Pass',
-    'shop.vipPerks': 'Permanent 2x & 3x Speed · Instant Rewards · +50 Daily Gems · 16h Patrol',
+    'shop.vipPerks': 'Permanent 2x & 3x Speed · Instant Rewards · Monthly: +{daily} Daily Gems · Lifetime: One-Time +{lump} Gems · {duration} Patrol',
+    'shop.vipClaim': 'Claim Daily +{gems} Gems',
+    'shop.vipNextClaim': 'Next claim: {hours}h',
+    'shop.vipTimeLeft': 'VIP: {days} days left',
+    'shop.vipExpired': 'VIP expired',
+    'shop.vipLifetimeNote': 'Lifetime VIP: no daily claim — one-time +{gems} gems granted at purchase',
     'shop.vipMonthly': 'Monthly VIP — $4.99',
     'shop.vipLifetime': 'Lifetime VIP — $17.99',
     'shop.vipActive': 'VIP Active',
@@ -323,9 +340,10 @@ const DICT: Record<Locale, Record<string, string>> = {
     'shop.freeChest': 'Free Chest (Ad)',
     'shop.epicChest': 'Epic Chest (120 Gems)',
     'offer.failTitle': 'First Defeat Rescue Bundle',
-    'offer.failBadge': '80% Off · Limited Offer',
+    'offer.failBadge': '{pct}% Off · Limited Offer',
     'offer.failBody': '300 Gems + 10 Hedgehog Cards + 5 Ad-Skip Tickets',
-    'offer.buy': 'Get Bundle — $1.99',
+    'offer.failPrice': 'Normally ${ref} — now ${price} ({pct}% off)',
+    'offer.buy': 'Get Bundle — ${price}',
     'multi.title': 'Co-op & 1v1 Duel',
     'multi.coopName': 'Twin Oak Watch (2P Co-op)',
     'multi.coopDesc': 'Shared Great Oak, left/right lanes, +25 Acorn share (Phase 2)',
@@ -368,4 +386,15 @@ export function detectLocale(): Locale {
 
 export function t(locale: Locale, key: string): string {
   return DICT[locale][key] ?? DICT.tr[key] ?? key;
+}
+
+export function tParams(
+  locale: Locale,
+  key: string,
+  params: Record<string, string | number>,
+): string {
+  return t(locale, key).replace(/\{(\w+)\}/g, (match, name: string) => {
+    const value = params[name];
+    return value === undefined ? match : String(value);
+  });
 }

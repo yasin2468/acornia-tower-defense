@@ -24,7 +24,8 @@ const uiRoot = document.getElementById('ui-root') as HTMLElement;
 const shell = document.getElementById('phone-shell') as HTMLElement;
 
 const urlParams = new URLSearchParams(window.location.search);
-const isPromoMode = urlParams.get('promo') === '1';
+// ?promo=1 sahne modu yalnızca geliştirme build'inde geçerli; üretimde parametre sessizce yok sayılır.
+const isPromoMode = import.meta.env.DEV && urlParams.get('promo') === '1';
 
 const saveManager = new SaveManager();
 const adService = new AdService(saveManager);
@@ -68,6 +69,7 @@ const battleView = new BattleView(
   saveManager,
   adService,
   billingService,
+  remoteConfig,
   {
     onRestart: () => startLevel(currentLevelId, currentIronMode),
     onExitToMap: () => exitToMap(),

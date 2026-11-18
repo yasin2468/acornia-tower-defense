@@ -1,6 +1,7 @@
 import type { HeroClassId } from '../data/enemies.ts';
 import type { HatId, TowerId } from '../data/towers.ts';
 import { detectLocale, type Locale } from '../i18n/locales.ts';
+import { VIP_MONTHLY_DURATION_MS } from './CommercialServices.ts';
 
 export type CardUnitId = TowerId | 'boz_pence';
 export type VipTier = 'none' | 'monthly' | 'lifetime';
@@ -25,6 +26,8 @@ export interface SaveState {
   unlockedHats: HatId[];
   equippedHat: HatId;
   vipTier: VipTier;
+  vipExpiresAt: number; // epoch ms; 0 = süre takibi yok (none/ömürlük)
+  lastVipClaimAt: number; // son günlük VIP zümrüt talebi; 0 = hiç talep edilmedi
   firstDefeatOfferTriggered: boolean;
   firstDefeatOfferExpiresAt: number;
   firstDefeatBundleBought: boolean;
@@ -39,7 +42,7 @@ export interface SaveState {
 
 const STORAGE_KEY = 'palamut_kalesi_save_v1';
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 export interface SaveLoadResult {
   state: SaveState;
@@ -87,6 +90,8 @@ export function createInitialSave(nowMs = Date.now()): SaveState {
     unlockedHats: ['none', 'pirate', 'chef'],
     equippedHat: 'none',
     vipTier: 'none',
+    vipExpiresAt: 0,
+    lastVipClaimAt: 0,
     firstDefeatOfferTriggered: false,
     firstDefeatOfferExpiresAt: 0,
     firstDefeatBundleBought: false,
@@ -107,6 +112,18 @@ export function createInitialSave(nowMs = Date.now()): SaveState {
 export function migrateSave(parsed: Partial<SaveState>, nowMs = Date.now()): { state: SaveState; migrated: boolean } {
   const prevVersion = typeof parsed.version === 'number' ? parsed.version : 1;
   const state: SaveState = { ...createInitialSave(nowMs), ...parsed, version: SAVE_VERSION };
+  state.vipExpiresAt =
+    typeof state.vipExpiresAt === 'number' && Number.isFinite(state.vipExpiresAt)
+      ? Math.max(0, state.vipExpiresAt)
+      : 0;
+  state.lastVipClaimAt =
+    typeof state.lastVipClaimAt === 'number' && Number.isFinite(state.lastVipClaimAt)
+      ? Math.max(0, state.lastVipClaimAt)
+      : 0;
+  // v2 kayıtlarında VIP süre alanı yoktu: aktif aylık VIP sahibine tam bir ay bağışlanır.
+  if (prevVersion < 3 && state.vipTier === 'monthly' && state.vipExpiresAt === 0) {
+    state.vipExpiresAt = nowMs + VIP_MONTHLY_DURATION_MS;
+  }
   return { state, migrated: prevVersion < SAVE_VERSION };
 }
 
