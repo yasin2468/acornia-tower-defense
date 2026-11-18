@@ -1,4 +1,4 @@
-import { BEAR_HERO_SPEC, ENEMIES, HERO_CLASSES, type EnemyId, type HeroClassId } from '../data/enemies.ts';
+import { BEAR_HERO_SPEC, ENEMIES, HERO_CLASSES, resolveHeroVisualVariant, type EnemyId, type HeroClassId } from '../data/enemies.ts';
 import type { LevelSpec, Vec2 } from '../data/levels.ts';
 import {
   SELL_REFUND_RATE,
@@ -25,7 +25,10 @@ export type SimEvent =
   | { type: 'ENEMY_KILLED'; enemyId: number; x: number; z: number; isBoss: boolean; bounty: number }
   | { type: 'BOSS_PHASE_TWO'; enemyId: number; bossId?: EnemyId; smokedSlotId?: string; x: number; z: number }
   | { type: 'PINECONE_RAIN'; x: number; z: number; hits: number }
+  | { type: 'HERO_ATTACK'; x: number; z: number; targetX: number; targetZ: number }
   | { type: 'HERO_CLAW_SHOCK'; x: number; z: number; hits: number }
+  | { type: 'HERO_ULTIMATE'; variant: 'classic' | 'viking' | 'royal'; x: number; z: number; hits: number }
+  | { type: 'HERO_RALLY'; x: number; z: number }
   | { type: 'HERO_LEVELED'; level: number; x: number; z: number }
   | { type: 'WAVE_STARTED'; waveNumber: number; announceEnemy?: EnemyId; earlyBonus: number }
   | { type: 'BASE_HIT'; damage: number; remainingHp: number }
@@ -112,6 +115,8 @@ export interface HeroState {
   z: number;
   targetX: number;
   targetZ: number;
+  moving: boolean;
+  facingAngle: number;
   hp: number;
   maxHp: number;
   level: number;
@@ -120,6 +125,9 @@ export interface HeroState {
   respawnTimer: number;
   attackCooldown: number;
   clawShockCooldown: number;
+  skillCooldown: number;
+  skillActiveTimer: number;
+  activeBuff: 'none' | 'berserk' | 'banner';
   outOfCombatTimer: number;
 }
 
@@ -217,6 +225,8 @@ export class SimulationEngine {
       z: level.heroStart.z,
       targetX: level.heroStart.x,
       targetZ: level.heroStart.z,
+      moving: false,
+      facingAngle: 0,
       hp: heroHp,
       maxHp: heroHp,
       level: 1,
@@ -225,6 +235,9 @@ export class SimulationEngine {
       respawnTimer: 0,
       attackCooldown: 0,
       clawShockCooldown: BEAR_HERO_SPEC.clawShockInterval,
+      skillCooldown: 0,
+      skillActiveTimer: 0,
+      activeBuff: 'none',
       outOfCombatTimer: 0,
     };
 
@@ -373,9 +386,77 @@ export class SimulationEngine {
       }
       case 'MOVE_HERO': {
         if (!this.hero.dead) {
-          this.hero.targetX = Math.max(-4.8, Math.min(4.8, cmd.x));
+          this.hero.targetX = Math.max(-4.6, Math.min(4.6, cmd.x));
           this.hero.targetZ = Math.max(-8.2, Math.min(9.0, cmd.z));
+          this.events.push({ type: 'HERO_RALLY', x: this.hero.targetX, z: this.hero.targetZ });
         }
+        break;
+      }
+      case 'CAST_HERO_ULTIMATE': {
+        const h = this.hero;
+        if (h.dead || h.skillCooldown > 0) return;
+        const variant = resolveHeroVisualVariant(this.heroClass, h.level);
+        const lvlMult = 1 + (h.level - 1) * 0.12;
+        const cardMult = cardLevelMultiplier(this.cardLevels.boz_pence);
+        let hits = 0;
+
+        if (variant === 'classic') {
+          h.skillCooldown = 18;
+          h.hp = Math.min(h.maxHp, h.hp + Math.round(h.maxHp * 0.25));
+          const dmg = Math.round(65 * lvlMult * cardMult);
+          for (const e of [...this.enemies]) {
+            if (e.hp <= 0) continue;
+            if (Math.hypot(e.x - h.x, e.z - h.z) <= 3.6) {
+              hits += 1;
+              e.armor = Math.max(0, e.armor * 0.75);
+              e.stunTimer = Math.max(e.stunTimer, 1.8);
+              this.damageEnemy(e, dmg, 0.25, false, false, e.armor > 0);
+            }
+          }
+        } else if (variant === 'viking') {
+          const leading = this.enemies
+            .filter((e) => !e.isFlying && e.hp > 0)
+            .sort((a, b) => b.progress - a.progress)[0];
+          const rawX = cmd.x ?? leading?.x ?? h.x;
+          const rawZ = cmd.z ?? leading?.z ?? h.z;
+          const tx = Math.max(-4.6, Math.min(4.6, rawX));
+          const tz = Math.max(-8.0, Math.min(8.8, rawZ));
+          if (Math.hypot(tx - h.x, tz - h.z) > 0.05) {
+            h.facingAngle = Math.atan2(tx - h.x, tz - h.z);
+          }
+          h.x = tx;
+          h.z = tz;
+          h.targetX = tx;
+          h.targetZ = tz;
+          h.skillCooldown = 16;
+          h.skillActiveTimer = 6.0;
+          h.activeBuff = 'berserk';
+          const dmg = Math.round(85 * lvlMult * cardMult);
+          for (const e of [...this.enemies]) {
+            if (e.hp <= 0) continue;
+            if (Math.hypot(e.x - tx, e.z - tz) <= 3.2) {
+              hits += 1;
+              e.stunTimer = Math.max(e.stunTimer, 1.0);
+              this.damageEnemy(e, dmg, 0.25, true);
+            }
+          }
+        } else {
+          h.skillCooldown = 20;
+          h.skillActiveTimer = 8.0;
+          h.activeBuff = 'banner';
+          h.hp = Math.min(h.maxHp, h.hp + Math.round(h.maxHp * 0.35));
+          const dmg = Math.round(50 * lvlMult * cardMult);
+          for (const e of [...this.enemies]) {
+            if (e.hp <= 0) continue;
+            if (Math.hypot(e.x - h.x, e.z - h.z) <= 3.5) {
+              hits += 1;
+              e.stunTimer = Math.max(e.stunTimer, 1.2);
+              this.damageEnemy(e, dmg, 0.2, false);
+            }
+          }
+        }
+
+        this.events.push({ type: 'HERO_ULTIMATE', variant, x: h.x, z: h.z, hits });
         break;
       }
       case 'CAST_PINECONE_RAIN': {
@@ -518,30 +599,27 @@ export class SimulationEngine {
 
   private updateHero(dt: number): void {
     const h = this.hero;
+    if (h.skillCooldown > 0) h.skillCooldown = Math.max(0, h.skillCooldown - dt);
+    if (h.skillActiveTimer > 0) {
+      h.skillActiveTimer = Math.max(0, h.skillActiveTimer - dt);
+      if (h.skillActiveTimer === 0) h.activeBuff = 'none';
+    }
+
     if (h.dead) {
+      h.moving = false;
       h.respawnTimer -= dt;
       if (h.respawnTimer <= 0) {
         h.dead = false;
         h.hp = h.maxHp;
-        h.x = this.level.heroStart.x;
-        h.z = this.level.heroStart.z;
-        h.targetX = h.x;
-        h.targetZ = h.z;
+        h.x = h.targetX;
+        h.z = h.targetZ;
       }
       return;
     }
 
-    const dx = h.targetX - h.x;
-    const dz = h.targetZ - h.z;
-    const dist = Math.hypot(dx, dz);
-    if (dist > 0.05) {
-      const step = Math.min(dist, BEAR_HERO_SPEC.moveSpeed * dt);
-      h.x += (dx / dist) * step;
-      h.z += (dz / dist) * step;
-    }
-
     // Engage ground enemies within engageRange up to blockCap
     const cls = HERO_CLASSES[this.heroClass];
+    const HERO_LEASH_RANGE = 4.2;
     for (const e of this.enemies) e.engagedByHero = false;
     const nearbyGround = this.enemies
       .filter((e) => !e.isFlying && e.hp > 0 && Math.hypot(e.x - h.x, e.z - h.z) <= BEAR_HERO_SPEC.engageRange)
@@ -550,6 +628,42 @@ export class SimulationEngine {
 
     for (const e of nearbyGround) {
       e.engagedByHero = true;
+    }
+
+    let destX = h.targetX;
+    let destZ = h.targetZ;
+    if (nearbyGround.length > 0) {
+      const lead = nearbyGround[0];
+      destX = Math.hypot(lead.x - h.x, lead.z - h.z) > 0.78 ? lead.x : h.x;
+      destZ = Math.hypot(lead.x - h.x, lead.z - h.z) > 0.78 ? lead.z : h.z;
+    } else {
+      const chaseTarget = this.enemies
+        .filter(
+          (e) =>
+            !e.isFlying &&
+            e.hp > 0 &&
+            (Math.hypot(e.x - h.targetX, e.z - h.targetZ) <= HERO_LEASH_RANGE ||
+              Math.hypot(e.x - h.x, e.z - h.z) <= 2.4),
+        )
+        .sort((a, b) => b.progress - a.progress)[0];
+      if (chaseTarget) {
+        destX = chaseTarget.x;
+        destZ = chaseTarget.z;
+      }
+    }
+
+    const dx = destX - h.x;
+    const dz = destZ - h.z;
+    const dist = Math.hypot(dx, dz);
+    if (dist > 0.08) {
+      const moveSpd = BEAR_HERO_SPEC.moveSpeed * (h.activeBuff === 'berserk' ? 1.35 : 1.0);
+      const step = Math.min(dist, moveSpd * dt);
+      h.x += (dx / dist) * step;
+      h.z += (dz / dist) * step;
+      h.facingAngle = Math.atan2(dx, dz);
+      h.moving = true;
+    } else {
+      h.moving = false;
     }
 
     if (nearbyGround.length > 0) {
@@ -573,19 +687,25 @@ export class SimulationEngine {
 
       h.attackCooldown -= dt;
       if (h.attackCooldown <= 0) {
-        h.attackCooldown = BEAR_HERO_SPEC.attackInterval;
+        h.attackCooldown = BEAR_HERO_SPEC.attackInterval * (h.activeBuff === 'berserk' ? 0.5 : 1.0);
         const target = nearbyGround[0];
         const dmg = Math.round(BEAR_HERO_SPEC.damage * lvlMult * cardMult * cls.damageMult);
+        h.facingAngle = Math.atan2(target.x - h.x, target.z - h.z);
         this.damageEnemy(target, dmg, 0.15, false);
         this.grantHeroXp(12);
+        this.events.push({ type: 'HERO_ATTACK', x: h.x, z: h.z, targetX: target.x, targetZ: target.z });
       }
 
-      // Blocked enemies retaliate mildly
-      const incomingDps = nearbyGround.reduce((acc, e) => acc + (e.isBoss ? 22 : 7), 0);
+      // Blocked enemies retaliate mildly (Royal Banner aura mitigates incoming damage by 35%)
+      const dmgTakenScale = h.activeBuff === 'banner' ? 0.65 : 1.0;
+      const incomingDps = nearbyGround.reduce((acc, e) => acc + (e.isBoss ? 22 : 7), 0) * dmgTakenScale;
       h.hp -= incomingDps * dt;
       if (h.hp <= 0) {
         h.hp = 0;
         h.dead = true;
+        h.moving = false;
+        h.skillActiveTimer = 0;
+        h.activeBuff = 'none';
         h.respawnTimer = BEAR_HERO_SPEC.respawnSeconds;
         for (const e of this.enemies) e.engagedByHero = false;
       }
@@ -757,7 +877,15 @@ export class SimulationEngine {
       if (!target) continue;
 
       const stats = this.getTowerStats(tower);
-      tower.cooldown = 1 / stats.fireRate;
+      let effectiveFireRate = stats.fireRate;
+      if (!this.hero.dead && Math.hypot(this.hero.x - tower.x, this.hero.z - tower.z) <= 4.5) {
+        if (this.hero.activeBuff === 'banner') {
+          effectiveFireRate *= 1.3;
+        } else if (resolveHeroVisualVariant(this.heroClass, this.hero.level) === 'royal') {
+          effectiveFireRate *= 1.12;
+        }
+      }
+      tower.cooldown = 1 / effectiveFireRate;
       tower.shotsFired += 1;
       tower.angle = Math.atan2(target.x - tower.x, target.z - tower.z);
 

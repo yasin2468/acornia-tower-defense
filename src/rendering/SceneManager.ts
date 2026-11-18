@@ -542,6 +542,8 @@ export class SceneManager {
   private heroRig: HeroRig | null = null;
   private heroVisualKey = '';
   private rangeRing: THREE.Mesh;
+  private rallyMarker: THREE.Group;
+  private rallyShowTimer = 0;
   private particles: ParticleItem[] = [];
   private coins: ParticleItem[] = [];
   private shockRings: ShockRing[] = [];
@@ -627,7 +629,27 @@ export class SceneManager {
     this.rangeRing.position.y = 0.07;
     this.rangeRing.visible = false;
 
-    this.scene.add(this.levelGroup, this.dynamicGroup, this.rangeRing);
+    this.rallyMarker = new THREE.Group();
+    const rallyRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.42, 0.54, 24),
+      new THREE.MeshBasicMaterial({ color: '#ffd966', transparent: true, opacity: 0.85, side: THREE.DoubleSide }),
+    );
+    rallyRing.rotation.x = -Math.PI / 2;
+    rallyRing.position.y = 0.06;
+    const rallyPole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.026, 0.026, 0.62, 8),
+      new THREE.MeshStandardMaterial({ color: '#8a5a32', roughness: 0.7 }),
+    );
+    rallyPole.position.y = 0.31;
+    const rallyFlag = new THREE.Mesh(
+      new THREE.BoxGeometry(0.24, 0.16, 0.04),
+      new THREE.MeshBasicMaterial({ color: '#ffd24c' }),
+    );
+    rallyFlag.position.set(0.12, 0.54, 0);
+    this.rallyMarker.add(rallyRing, rallyPole, rallyFlag);
+    this.rallyMarker.visible = false;
+
+    this.scene.add(this.levelGroup, this.dynamicGroup, this.rangeRing, this.rallyMarker);
     this.initPools();
   }
 
@@ -1266,13 +1288,29 @@ export class SceneManager {
     if (this.heroRig) {
       this.heroRig.root.visible = !sim.hero.dead;
       this.heroRig.root.position.set(sim.hero.x, 0, sim.hero.z);
-      const dx = sim.hero.targetX - sim.hero.x;
-      const dz = sim.hero.targetZ - sim.hero.z;
-      const moving = Math.hypot(dx, dz) > 0.1;
-      if (moving) {
-        this.heroRig.body.rotation.y = Math.atan2(dx, dz);
+      this.heroRig.body.rotation.y = sim.hero.facingAngle;
+      const ringMat = this.heroRig.ring.material as THREE.MeshBasicMaterial;
+      if (sim.hero.activeBuff === 'banner') {
+        ringMat.color.set('#ffd454');
+        ringMat.opacity = 0.72 + Math.sin(this.animTime * 6) * 0.18;
+        this.heroRig.ring.scale.setScalar(6.4);
+      } else if (sim.hero.activeBuff === 'berserk') {
+        ringMat.color.set('#ff6b3d');
+        ringMat.opacity = 0.92;
+        this.heroRig.ring.scale.setScalar(1.32 + Math.sin(this.animTime * 10) * 0.12);
+      } else {
+        ringMat.color.set('#7eed87');
+        ringMat.opacity = 0.9;
+        this.heroRig.ring.scale.setScalar(1.0);
       }
-      updateHeroAnimation(this.heroRig, moving, this.animTime, realDt);
+      updateHeroAnimation(this.heroRig, sim.hero.moving, this.animTime, realDt);
+    }
+
+    if (this.rallyShowTimer > 0) this.rallyShowTimer = Math.max(0, this.rallyShowTimer - realDt);
+    const rallyDist = Math.hypot(sim.hero.targetX - sim.hero.x, sim.hero.targetZ - sim.hero.z);
+    this.rallyMarker.visible = !sim.hero.dead && (rallyDist > 0.45 || this.rallyShowTimer > 0);
+    if (this.rallyMarker.visible) {
+      this.rallyMarker.position.set(sim.hero.targetX, 0.01, sim.hero.targetZ);
     }
 
     // Sync skeletal-animated Scrap-Bot enemies + hit flinch + flash
@@ -1754,6 +1792,27 @@ export class SceneManager {
         this.spawnParticles(ev.x, 0.5, ev.z, '#6b4a2e', 8, 1.2);
         this.cameraCtrl.addTrauma(0.56);
         this.cameraCtrl.addZoomPunch(1.8);
+      } else if (ev.type === 'HERO_RALLY') {
+        this.rallyShowTimer = 2.2;
+        this.spawnShockRing(ev.x, ev.z, '#ffda6b', 0.85, 0.25);
+      } else if (ev.type === 'HERO_ATTACK') {
+        if (this.heroRig) {
+          this.heroRig.attackTimer = 0.36;
+          this.heroRig.body.rotation.y = Math.atan2(ev.targetX - ev.x, ev.targetZ - ev.z);
+        }
+        const hx = ev.targetX - ev.x;
+        const hz = ev.targetZ - ev.z;
+        this.spawnSparks(ev.targetX, 0.65, ev.targetZ, hx, 0.25, hz, '#ffe27a', 5, 6.5, 0.5);
+      } else if (ev.type === 'HERO_ULTIMATE') {
+        if (this.heroRig) this.heroRig.attackTimer = 0.42;
+        const col = ev.variant === 'viking' ? '#ff7b3b' : ev.variant === 'royal' ? '#ffd84f' : '#80f272';
+        this.spawnShockRing(ev.x, ev.z, '#ffffff', 1.8, 0.18);
+        this.spawnShockRing(ev.x, ev.z, col, 3.8, 0.45);
+        this.spawnSparks(ev.x, 0.55, ev.z, 0, 0, 0, col, 24, 9.5);
+        this.spawnParticles(ev.x, 0.55, ev.z, col, 16, 1.35);
+        if (ev.variant !== 'royal') this.spawnScorch(ev.x, ev.z, 1.6);
+        this.cameraCtrl.addTrauma(0.5);
+        this.cameraCtrl.addZoomPunch(1.5);
       } else if (ev.type === 'HERO_CLAW_SHOCK') {
         if (this.heroRig) this.heroRig.attackTimer = 0.26;
         this.spawnShockRing(ev.x, ev.z, '#ffffff', 1.6, 0.16);

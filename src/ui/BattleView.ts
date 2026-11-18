@@ -1,5 +1,6 @@
 import { easeOutCubic, GhostHpTracker, popScale } from '../core/JuiceController.ts';
 import type { SimulationEngine } from '../core/SimulationEngine.ts';
+import { resolveHeroVisualVariant } from '../data/enemies.ts';
 import { TOWER_LIST, TOWERS, type TargetingPriority, type TowerId } from '../data/towers.ts';
 import { t, tParams, type Locale } from '../i18n/locales.ts';
 import type { SceneManager } from '../rendering/SceneManager.ts';
@@ -42,7 +43,7 @@ export interface BattleViewCallbacks {
 
 export class BattleView {
   selectedSlotId: string | null = null;
-  targetingSkill: 'rain' | null = null;
+  targetingSkill: 'rain' | 'hero_leap' | null = null;
   speedMultiplier: 1 | 2 | 3 = 1;
   speed2xUnlockedThisMatch = false;
   paused = false;
@@ -71,6 +72,10 @@ export class BattleView {
   private rainCdEl: HTMLElement | null = null;
   private magnetBtnEl: HTMLButtonElement | null = null;
   private magnetCdEl: HTMLElement | null = null;
+  private heroBtnEl: HTMLButtonElement | null = null;
+  private heroCdEl: HTMLElement | null = null;
+  private heroHpBarEl: HTMLElement | null = null;
+  private heroLvlEl: HTMLElement | null = null;
   private modalHostEl: HTMLElement | null = null;
   private hudTopEl: HTMLElement | null = null;
   private hudBottomEl: HTMLElement | null = null;
@@ -191,6 +196,12 @@ export class BattleView {
         <div class="hud-controls">
           <button class="tactile-sq-btn" id="bw-speed">x1</button>
           <button class="tactile-sq-btn" id="bw-pause"><span class="svg-ico">${ICONS.pause}</span></button>
+          <button class="skill-medallion-btn hero-skill-btn" id="bw-skill-hero" title="${t(loc, 'hero.boz_pence.name')}">
+            <img src="${PORTRAIT_URLS.boz_pence}" alt="${t(loc, 'hero.boz_pence.name')}" />
+            <span class="hero-skill-lvl" id="bw-hero-lvl">${t(loc, 'cards.level')}1</span>
+            <span class="hero-skill-hp"><span class="hero-skill-hp-fill" id="bw-hero-hp" style="width:100%"></span></span>
+            <span class="cd-badge" id="bw-hero-cd" style="display:none;"></span>
+          </button>
           <button class="skill-medallion-btn" id="bw-skill-rain" title="${t(loc, 'skill.rain')}">
             <img src="${UI_ICON_URLS.skillRain}" alt="${t(loc, 'skill.rain')}" />
             <span class="cd-badge" id="bw-rain-cd" style="display:none;"></span>
@@ -217,6 +228,10 @@ export class BattleView {
     this.bannerEl = container.querySelector('#bw-banner');
     this.earlyBtnEl = container.querySelector('#bw-early-wave');
     this.speedBtnEl = container.querySelector('#bw-speed');
+    this.heroBtnEl = container.querySelector('#bw-skill-hero');
+    this.heroCdEl = container.querySelector('#bw-hero-cd');
+    this.heroHpBarEl = container.querySelector('#bw-hero-hp');
+    this.heroLvlEl = container.querySelector('#bw-hero-lvl');
     this.rainBtnEl = container.querySelector('#bw-skill-rain');
     this.rainCdEl = container.querySelector('#bw-rain-cd');
     this.magnetBtnEl = container.querySelector('#bw-skill-magnet');
@@ -260,6 +275,22 @@ export class BattleView {
     }
     if (this.magnetBtnEl) {
       this.magnetBtnEl.onclick = () => sim.dispatch({ type: 'CAST_ACORN_MAGNET' });
+    }
+    if (this.heroBtnEl) {
+      this.heroBtnEl.onclick = () => {
+        if (sim.hero.dead || sim.hero.skillCooldown > 0) return;
+        const variant = resolveHeroVisualVariant(sim.heroClass, sim.hero.level);
+        if (variant === 'viking') {
+          this.targetingSkill = this.targetingSkill === 'hero_leap' ? null : 'hero_leap';
+          if (this.targetingSkill === 'hero_leap') {
+            this.showBanner(t(this.saveManager.get().settings.locale, 'skill.hero.leapHint'), 2.5);
+          }
+        } else {
+          this.targetingSkill = null;
+          sim.dispatch({ type: 'CAST_HERO_ULTIMATE' });
+          this.showBanner(t(this.saveManager.get().settings.locale, `skill.hero.${variant}`), 2.0);
+        }
+      };
     }
 
     if (this.promoHudBtnEl) {
@@ -328,6 +359,25 @@ export class BattleView {
     if (this.magnetCdEl) {
       this.magnetCdEl.style.display = sim.magnetCooldown > 0 ? 'flex' : 'none';
       if (sim.magnetCooldown > 0) this.magnetCdEl.textContent = `${Math.ceil(sim.magnetCooldown)}`;
+    }
+    if (this.heroBtnEl) {
+      const variant = resolveHeroVisualVariant(sim.heroClass, sim.hero.level);
+      this.heroBtnEl.title = t(loc, `skill.hero.${variant}`);
+      this.heroBtnEl.classList.toggle(
+        'active',
+        this.targetingSkill === 'hero_leap' || sim.hero.skillActiveTimer > 0,
+      );
+      this.heroBtnEl.classList.toggle('dead', sim.hero.dead);
+    }
+    if (this.heroLvlEl) this.heroLvlEl.textContent = `${t(loc, 'cards.level')}${sim.hero.level}`;
+    if (this.heroHpBarEl) {
+      const heroPct = sim.hero.dead ? 0 : Math.max(0, Math.min(100, (sim.hero.hp / sim.hero.maxHp) * 100));
+      this.heroHpBarEl.style.width = `${heroPct.toFixed(1)}%`;
+    }
+    if (this.heroCdEl) {
+      const waitSec = sim.hero.dead ? sim.hero.respawnTimer : sim.hero.skillCooldown;
+      this.heroCdEl.style.display = waitSec > 0 ? 'flex' : 'none';
+      if (waitSec > 0) this.heroCdEl.textContent = `${Math.ceil(waitSec)}`;
     }
 
     if (this.tutorialLayerEl) {

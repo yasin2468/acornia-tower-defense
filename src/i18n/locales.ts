@@ -187,6 +187,10 @@ const DICT: Record<Locale, Record<string, string>> = {
     'shop.odds.body': 'Sandıklar sabit ödül verir, olasılık yoktur. Ücretsiz: 90 Palamut + 6 Zümrüt + 3 Kart. Efsanevi: 320 Palamut + 25 Zümrüt + 10 Kart.',
     'cards.plusTen': '+10 Kart',
     'multi.statusReady': 'SmartBotDirector hazır — Faz 2 Co-op & Faz 3 PvP senkronizasyonu bağlı.',
+    'skill.hero.classic': 'Kükreme Depremi',
+    'skill.hero.viking': 'Vahşi Sıçrama',
+    'skill.hero.royal': 'Kraliyet Sancağı',
+    'skill.hero.leapHint': 'Vahşi Sıçrama için haritada hedef noktaya dokun',
   },
   en: {
     'app.title': 'Acorn Bastion',
@@ -374,6 +378,10 @@ const DICT: Record<Locale, Record<string, string>> = {
     'shop.odds.body': 'Chests give fixed rewards; there are no random odds. Free: 90 Acorns + 6 Gems + 3 Cards. Epic: 320 Acorns + 25 Gems + 10 Cards.',
     'cards.plusTen': '+10 Cards',
     'multi.statusReady': 'SmartBotDirector ready — Phase 2 Co-op & Phase 3 PvP sync pending.',
+    'skill.hero.classic': 'Roar Quake',
+    'skill.hero.viking': 'Savage Leap',
+    'skill.hero.royal': 'Royal Banner',
+    'skill.hero.leapHint': 'Tap anywhere on the arena to cast Savage Leap',
   },
 };
 

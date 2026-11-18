@@ -9,6 +9,7 @@ export type GameCommandInput =
   | { type: 'CLEAR_STUMP'; slotId: string }
   | { type: 'CLEAR_SMOKE'; slotId: string }
   | { type: 'MOVE_HERO'; x: number; z: number }
+  | { type: 'CAST_HERO_ULTIMATE'; x?: number; z?: number }
   | { type: 'CAST_PINECONE_RAIN'; x: number; z: number }
   | { type: 'CAST_ACORN_MAGNET' }
   | { type: 'CALL_WAVE_EARLY' }

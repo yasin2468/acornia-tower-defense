@@ -161,6 +161,11 @@ function processBattleEvents(events: SimEvent[]): void {
     } else if (ev.type === 'HERO_CLAW_SHOCK') {
       juice.triggerMicroHitStop(0.035, 0.1);
       sound.playHit(false, false, true);
+    } else if (ev.type === 'HERO_ATTACK') {
+      sound.playHit(false, false, true);
+    } else if (ev.type === 'HERO_ULTIMATE') {
+      juice.triggerMicroHitStop(0.042, 0.08);
+      sound.playExplosion(true);
     } else if (ev.type === 'HERO_LEVELED') {
       sound.playUpgrade();
       if (activeSim?.heroClass === 'auto' && (ev.level === 2 || ev.level === 4)) {
@@ -203,6 +208,12 @@ canvas.addEventListener('pointerdown', (ev) => {
     return;
   }
 
+  if (battleView.targetingSkill === 'hero_leap') {
+    activeSim.dispatch({ type: 'CAST_HERO_ULTIMATE', x: hit.x, z: hit.z });
+    battleView.targetingSkill = null;
+    return;
+  }
+
   if (hit.slotId) {
     const slot = activeSim.slots.get(hit.slotId);
     if (slot?.tower && slot.tower.smokedTimer > 0) {
@@ -214,7 +225,12 @@ canvas.addEventListener('pointerdown', (ev) => {
     return;
   }
 
-  battleView.selectedSlotId = null;
+  if (battleView.selectedSlotId !== null) {
+    battleView.selectedSlotId = null;
+    battleView.render(uiRoot, activeSim, sceneMgr);
+    return;
+  }
+
   activeSim.dispatch({ type: 'MOVE_HERO', x: hit.x, z: hit.z });
   if (battleView.tutorialPhase === 'move_hero') {
     battleView.tutorialPhase = 'done';

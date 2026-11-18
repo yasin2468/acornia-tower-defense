@@ -1108,6 +1108,46 @@ body,
   color: #ffd454;
 }
 
+.hero-skill-btn.dead {
+  filter: grayscale(0.9) brightness(0.75);
+}
+
+.hero-skill-lvl {
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(11, 18, 27, 0.88);
+  border: 1px solid rgba(255, 216, 102, 0.65);
+  font-size: 9px;
+  font-weight: 900;
+  color: #ffe27a;
+  line-height: 1.3;
+  z-index: 1;
+}
+
+.hero-skill-hp {
+  position: absolute;
+  left: 7px;
+  right: 7px;
+  bottom: 4px;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(10, 16, 24, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  overflow: hidden;
+  z-index: 1;
+}
+
+.hero-skill-hp-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #43d65f 0%, #8cf27a 100%);
+  transition: width 0.12s ease;
+}
+
 /* World-Projected Layers */
 .world-overlay {
   position: absolute;
