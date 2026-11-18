@@ -19,13 +19,14 @@ aynı anda değiştirmez. Durumlar: `planlandi` → `devam` → `dogrulaniyor` �
 | P2 | 12 bölüm çatallı ikincil yol (`secondaryPath`), görüş alanı/mesafe garantili taktik yuvalar ve boş yuvada canlı menzil halkası (`previewTowerId`) | Carbon | dogrulandi | `88fd10d` · `tests/gameplay.test.ts` (2/2 geometri & iki koridor testi) + build ✓ + tarayıcı Seviye 2 çatallı yol doğrulandı |
 | P3 | Biyom atmosferi & güneş ışığı, `ambientMotes` hava partikülleri, Kanyon patlayıcı fıçıları, Mağara rün yuvaları, Karlı Zirve buz bölgeleri | Carbon | dogrulandi | `2094ffa` · `tests/gameplay.test.ts` (3/3 fıçı/rün/buz testi) + build ✓ + Seviye 1 mor kristalsiz/polenli görsel doğrulandı |
 | P4 | Dalga 1 hazırlık fazı (`waitForFirstWave`), sonraki dalga önizleme şeridi (`#bw-wave-preview`), vurgulu `Savaşı Başlat` / erken bonus & üst `#bw-boss-bar` | Carbon | dogrulandi | `tests/gameplay.test.ts` (2/2 hazırlık & erken bonus testi, toplam 70/70 pass) + `tsc/build` ✓ + canlı QA `0` hata ✓ |
-| G1 | Tekli UV atlas birleştirme (`scripts/blender_optimize_env.py`), `InstancedMesh` yığınlama ve ağaç `THREE.LOD` optimizasyonu | Carbon | dogrulandi | `tests/drawcall.test.ts` (7/7 pass, GLB 1-mesh/1-mat doğrulaması + LOD + 72/72 tüm testler + build ✓) |
+| G1 | Tekli UV atlas birleştirme (`scripts/blender_optimize_env.py`), `InstancedMesh` yığınlama ve ağaç `THREE.LOD` optimizasyonu | Carbon | dogrulandi | `83c2dc4` · `tests/drawcall.test.ts` (7/7 pass, GLB 1-mesh/1-mat doğrulaması + LOD + 72/72 tüm testler + build ✓) |
+| O1 | Gerçek RFC 6455 WebSocket rölesi (`wsRelay.ts` + Vite `/ws`), `NetworkService`, 2P Co-op & 1v1 PvP + `SmartBotDirector` yedeği | Carbon | dogrulandi | `tests/multiplayer.test.ts` (4/4 gerçek soket testi, toplam 76/76 pass) + `tsc/build` ✓ + tarayıcıda canlı oda + PvP `#bw-multi-bar` 0 hata ✓ |
 
 ## Kuyruk (Carbon doldurur)
 
 | # | İş | Not |
 |---|---|---|
-| O1 | Çok oyunculu gerçek soket katmanı | bekliyor |
+| — | Kuyruk boş — `T1..O1` tüm görevler doğrulandı | tamamlandı |
 
 ## Devir notu
 GLM'e iş verirken satır numarasını yaz: `TASKS T2` + tek cümle hedef + kabul kriteri.

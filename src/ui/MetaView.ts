@@ -11,8 +11,9 @@ import {
   type VipDailyStatus,
   type AdService,
   type BillingService,
-  type NetworkTransportStub,
 } from '../services/CommercialServices.ts';
+import type { NetworkService } from '../services/NetworkService.ts';
+import type { MultiMode } from '../server/wsRelay.ts';
 import {
   AFK_QUICK_BOOST_HOURS,
   AFK_QUICK_BOOST_OAK,
@@ -40,20 +41,21 @@ export class MetaView {
   ironMode = false;
   showSettings = false;
   showBestiary = false;
+  multiMode: MultiMode = 'coop';
   roomCode = '';
   statusNotice = '';
 
   private readonly saveManager: SaveManager;
   private readonly adService: AdService;
   private readonly billingService: BillingService;
-  private readonly network: NetworkTransportStub;
+  private readonly network: NetworkService;
   private readonly callbacks: MetaViewCallbacks;
 
   constructor(
     saveManager: SaveManager,
     adService: AdService,
     billingService: BillingService,
-    network: NetworkTransportStub,
+    network: NetworkService,
     callbacks: MetaViewCallbacks,
   ) {
     this.saveManager = saveManager;
@@ -321,17 +323,33 @@ export class MetaView {
   }
 
   private renderMultiTab(loc: Locale): string {
+    const wsOnline = this.network.connected;
+    const isCoop = this.multiMode === 'coop';
+    const liveHint =
+      this.network.state === 'waiting_room'
+        ? tParams(loc, 'multi.waitingPeer', { code: this.network.roomCode })
+        : this.network.state === 'matching'
+          ? t(loc, 'multi.matching')
+          : '';
     return `
       <div class="card-panel" style="display:flex; flex-direction:column; gap:10px;">
-        <div style="font-size:16px; font-weight:800;">${t(loc, 'multi.title')}</div>
-        <div style="font-size:12px; color:var(--text-muted);">${t(loc, 'multi.coopName')} — ${t(loc, 'multi.coopDesc')}</div>
-        <div style="font-size:12px; color:var(--text-muted);">${t(loc, 'multi.pvpName')} — ${t(loc, 'multi.pvpDesc')}</div>
-        <div style="display:flex; gap:8px; align-items:center;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+          <div style="font-size:16px; font-weight:800;">${t(loc, 'multi.title')}</div>
+          <span class="pill-badge" style="font-size:10px; ${wsOnline ? 'border-color:#5ef28e; color:#8cf7b0;' : 'color:var(--text-muted);'}">${wsOnline ? t(loc, 'multi.wsOnline') : t(loc, 'multi.wsBotMode')}</span>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+          <button class="btn btn-sm ${isCoop ? 'btn-gold' : 'btn-dark'}" data-multi-mode="coop">${t(loc, 'multi.modeCoop')}</button>
+          <button class="btn btn-sm ${!isCoop ? 'btn-gold' : 'btn-dark'}" data-multi-mode="pvp">${t(loc, 'multi.modePvp')}</button>
+        </div>
+        <div style="font-size:12px; color:var(--text-muted);">${isCoop ? `${t(loc, 'multi.coopName')} — ${t(loc, 'multi.coopDesc')}` : `${t(loc, 'multi.pvpName')} — ${t(loc, 'multi.pvpDesc')}`}</div>
+        <div style="display:flex; gap:6px; align-items:center;">
           <input id="input-room" value="${this.roomCode}" maxlength="4" placeholder="4821"
-            style="flex:1; padding:10px 12px; border-radius:12px; border:2px solid rgba(255,255,255,0.16); background:var(--bg-deep); color:#fff; font-family:inherit; font-size:15px; font-weight:700;" />
+            style="flex:1; min-width:72px; padding:10px 12px; border-radius:12px; border:2px solid rgba(255,255,255,0.16); background:var(--bg-deep); color:#fff; font-family:inherit; font-size:15px; font-weight:700;" />
+          <button class="btn btn-primary btn-sm" id="btn-join-room">${t(loc, 'multi.joinRoom')}</button>
           <button class="btn btn-gold btn-sm" id="btn-create-room">${t(loc, 'multi.createRoom')}</button>
         </div>
         <button class="btn btn-primary" id="btn-quick-match">${t(loc, 'multi.quickMatch')}</button>
+        ${liveHint ? `<div style="font-size:12px; font-weight:700; color:var(--accent-gold);">${liveHint}</div>` : ''}
       </div>
     `;
   }
@@ -519,9 +537,26 @@ export class MetaView {
       btn.onclick = () => {
         this.activeTab = btn.dataset.tab as MetaTab;
         this.statusNotice = '';
+        if (this.activeTab === 'multi' && !this.network.connected) {
+          void this.network.connect();
+        }
         this.callbacks.onRefresh();
       };
     });
+
+    container.querySelectorAll<HTMLElement>('[data-multi-mode]').forEach((btn) => {
+      btn.onclick = () => {
+        this.multiMode = (btn.dataset.multiMode as MultiMode) ?? 'coop';
+        this.callbacks.onRefresh();
+      };
+    });
+
+    const inputRoom = container.querySelector<HTMLInputElement>('#input-room');
+    if (inputRoom) {
+      inputRoom.oninput = () => {
+        this.roomCode = inputRoom.value.replace(/\D/g, '').slice(0, 4);
+      };
+    }
 
     container.querySelectorAll<HTMLElement>('[data-level]').forEach((btn) => {
       btn.onclick = () => {
@@ -623,18 +658,34 @@ export class MetaView {
 
     const createRoom = container.querySelector<HTMLButtonElement>('#btn-create-room');
     if (createRoom) {
-      createRoom.onclick = () => {
-        this.roomCode = this.network.createRoomCode();
-        this.statusNotice = `${t(loc, 'multi.roomLabel')}: ${this.roomCode} (?room=${this.roomCode})`;
+      createRoom.onclick = async () => {
+        const code = await this.network.createRoom(this.multiMode, this.selectedLevelId);
+        this.roomCode = code;
+        this.statusNotice = `${tParams(loc, 'multi.waitingPeer', { code })} (?room=${code})`;
         this.callbacks.onRefresh();
+      };
+    }
+
+    const joinRoom = container.querySelector<HTMLButtonElement>('#btn-join-room');
+    if (joinRoom) {
+      joinRoom.onclick = async () => {
+        const code = (container.querySelector<HTMLInputElement>('#input-room')?.value ?? this.roomCode).trim();
+        this.roomCode = code;
+        if (!/^\d{4}$/.test(code)) return;
+        const ok = await this.network.joinRoom(code);
+        if (!ok) {
+          this.statusNotice = t(loc, 'multi.errNotFound');
+          this.callbacks.onRefresh();
+        }
       };
     }
 
     const quickMatch = container.querySelector<HTMLButtonElement>('#btn-quick-match');
     if (quickMatch) {
-      quickMatch.onclick = () => {
-        this.statusNotice = t(loc, 'multi.statusReady');
+      quickMatch.onclick = async () => {
+        this.statusNotice = t(loc, 'multi.matching');
         this.callbacks.onRefresh();
+        await this.network.quickMatch(this.multiMode, this.selectedLevelId, 3000);
       };
     }
 

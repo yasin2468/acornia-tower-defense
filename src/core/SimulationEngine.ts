@@ -183,6 +183,8 @@ export class SimulationEngine {
   pineconeRainCooldown = 0;
   magnetCooldown = 0;
   magnetActiveTimer = 0;
+  coopReserves: Record<'p1' | 'p2', number> = { p1: 50, p2: 50 };
+  onLocalDispatch?: (cmd: GameCommandInput, tick: number) => void;
 
   readonly cardLevels: Record<TowerId | 'boz_pence', number>;
   readonly heroClass: HeroClassId;
@@ -280,10 +282,21 @@ export class SimulationEngine {
   }
 
   dispatch(cmd: GameCommandInput, playerId = 'p1', tickOffset = 0): void {
+    const targetTick = this.tick + tickOffset;
     this.commands.enqueue({
       ...cmd,
       playerId,
-      tick: this.tick + tickOffset,
+      tick: targetTick,
+    });
+    this.onLocalDispatch?.(cmd, targetTick);
+  }
+
+  dispatchRemote(cmd: GameCommandInput, playerId = 'p2', targetTick?: number): void {
+    const execTick = targetTick !== undefined && targetTick > this.tick ? targetTick : this.tick;
+    this.commands.enqueue({
+      ...cmd,
+      playerId,
+      tick: execTick,
     });
   }
 
@@ -525,6 +538,28 @@ export class SimulationEngine {
         }
         break;
       }
+      case 'COOP_GIFT_GOLD': {
+        const amt = Math.max(0, Math.floor(cmd.amount));
+        if (amt <= 0 || this.coopReserves[cmd.fromRole] < amt) return;
+        this.coopReserves[cmd.fromRole] -= amt;
+        this.gold += amt;
+        break;
+      }
+      case 'SPAWN_PVP_MERC': {
+        const spec = ENEMIES[cmd.enemyId];
+        if (!spec) return;
+        const waveMult = 1 + Math.max(0, this.currentWaveIndex) * 0.12;
+        const lane: 0 | 1 = this.level.secondaryPath && (this.spawnLaneToggle++ % 2) === 1 ? 1 : 0;
+        this.spawnEnemy(cmd.enemyId, Math.round(spec.baseHp * waveMult), spec.speed, spec.bounty, undefined, lane);
+        break;
+      }
+      case 'FORCE_PVP_VICTORY': {
+        if (this.status === 'playing') {
+          this.status = 'won';
+          this.events.push({ type: 'GAME_WON', stars: 3 });
+        }
+        break;
+      }
     }
   }
 
@@ -578,6 +613,10 @@ export class SimulationEngine {
     this.waitingForFirstWave = false;
     this.waveCountdown = 0;
     this.spawnLaneToggle = 0;
+    if (index > 0) {
+      this.coopReserves.p1 = Math.min(100, this.coopReserves.p1 + 15);
+      this.coopReserves.p2 = Math.min(100, this.coopReserves.p2 + 15);
+    }
     if (earlyBonus > 0) this.gold += earlyBonus;
 
     this.spawnQueue = [];

@@ -3,7 +3,7 @@ import { JuiceController } from './core/JuiceController.ts';
 import { FIXED_DT, SimulationEngine, type SimEvent } from './core/SimulationEngine.ts';
 import { ENEMIES } from './data/enemies.ts';
 import { LEVELS } from './data/levels.ts';
-import { t } from './i18n/locales.ts';
+import { t, tParams } from './i18n/locales.ts';
 import { SoundEngine } from './audio/SoundEngine.ts';
 import { preloadAllModels } from './rendering/AssetLoader.ts';
 import { SceneManager } from './rendering/SceneManager.ts';
@@ -11,9 +11,9 @@ import {
   AdService,
   AnalyticsService,
   BillingService,
-  NetworkTransportStub,
   RemoteConfigService,
 } from './services/CommercialServices.ts';
+import { NetworkService } from './services/NetworkService.ts';
 import { SaveManager } from './services/SaveManager.ts';
 import { BattleView } from './ui/BattleView.ts';
 import { MetaView } from './ui/MetaView.ts';
@@ -32,7 +32,7 @@ const adService = new AdService(saveManager);
 const billingService = new BillingService(saveManager);
 const analytics = new AnalyticsService();
 const remoteConfig = new RemoteConfigService();
-const network = new NetworkTransportStub();
+const network = new NetworkService();
 const sound = new SoundEngine();
 const sceneMgr = new SceneManager(canvas);
 const juice = new JuiceController();
@@ -59,6 +59,7 @@ let victoryRecorded = false;
 let simAccumulator = 0;
 let lastFrameMs = performance.now();
 let lastRenderUiMs = 0;
+let lastStatePingMs = 0;
 
 const metaView = new MetaView(saveManager, adService, billingService, network, {
   onStartLevel: (levelId, ironMode) => startLevel(levelId, ironMode),
@@ -73,9 +74,49 @@ const battleView = new BattleView(
   {
     onRestart: () => startLevel(currentLevelId, currentIronMode),
     onExitToMap: () => exitToMap(),
+    onSendPvpMerc: (enemyId, cost) => {
+      if (!activeSim || activeSim.status !== 'playing' || activeSim.gold < cost) return;
+      activeSim.gold -= cost;
+      network.sendPvpMerc(enemyId);
+    },
   },
   isPromoMode,
+  network,
 );
+
+network.onStateChange = () => {
+  if (mode === 'meta') renderMeta();
+};
+
+network.onMatchStart = (info) => {
+  startLevel(info.levelId, false, info.seed, true);
+};
+
+network.onRemoteCommand = (cmd, playerId, tick) => {
+  if (mode === 'battle' && activeSim && network.mode === 'coop') {
+    activeSim.dispatchRemote(cmd, playerId, tick);
+  }
+};
+
+network.onPvpIncoming = (enemyId) => {
+  if (mode === 'battle' && activeSim && network.mode === 'pvp') {
+    activeSim.dispatchRemote({ type: 'SPAWN_PVP_MERC', enemyId }, 'p2');
+    const loc = saveManager.get().settings.locale;
+    battleView.showBanner(tParams(loc, 'multi.pvpIncoming', { name: t(loc, ENEMIES[enemyId].nameKey) }), 2.4);
+  }
+};
+
+network.onPeerState = (peer) => {
+  if (mode === 'battle' && activeSim && network.mode === 'pvp' && peer.status === 'lost') {
+    activeSim.dispatchRemote({ type: 'FORCE_PVP_VICTORY' }, 'p1');
+  }
+};
+
+network.onPeerLeft = () => {
+  if (mode === 'battle') {
+    battleView.showBanner(t(saveManager.get().settings.locale, 'multi.peerLeft'), 3.2);
+  }
+};
 
 function syncAudioAndCameraSettings(): void {
   const s = saveManager.get().settings;
@@ -95,22 +136,30 @@ function renderMeta(): void {
   metaView.render(uiRoot);
 }
 
-function startLevel(levelId: number, ironMode: boolean): void {
+function startLevel(levelId: number, ironMode: boolean, customSeed?: number, isMultiMatch = false): void {
+  if (!isMultiMatch && network.state !== 'idle') {
+    network.leaveRoom();
+  }
   const spec = LEVELS.find((l) => l.id === levelId) ?? LEVELS[0];
   currentLevelId = spec.id;
   currentIronMode = ironMode;
   victoryRecorded = false;
   simAccumulator = 0;
+  lastStatePingMs = 0;
   juice.reset();
 
   const save = saveManager.get();
   activeSim = new SimulationEngine(spec, {
+    seed: customSeed,
     ironMode,
     cardLevels: save.cardLevels,
     heroClass: save.heroClass,
-    extraStartGold: remoteConfig.get().startGoldDelta,
-    waitForFirstWave: !isPromoMode,
+    extraStartGold: isMultiMatch ? 0 : remoteConfig.get().startGoldDelta,
+    waitForFirstWave: !isPromoMode && !isMultiMatch,
   });
+  if (isMultiMatch && network.mode === 'coop') {
+    activeSim.onLocalDispatch = (cmd, tick) => network.sendGameCommand(cmd, tick);
+  }
 
   syncAudioAndCameraSettings();
   sceneMgr.loadLevel(spec, save.equippedHat, save.heroClass);
@@ -121,6 +170,9 @@ function startLevel(levelId: number, ironMode: boolean): void {
 }
 
 function exitToMap(): void {
+  if (network.state !== 'idle') {
+    network.leaveRoom();
+  }
   activeSim = null;
   renderMeta();
 }
@@ -282,6 +334,13 @@ function frame(nowMs: number): void {
         sceneMgr.handleSimEvents(events, activeSim);
       }
     }
+    if (network.state === 'in_match') {
+      network.stepBot(simDt * battleView.speedMultiplier, activeSim);
+      if (nowMs - lastStatePingMs >= 500 || activeSim.status !== 'playing') {
+        lastStatePingMs = nowMs;
+        network.sendStatePing(activeSim);
+      }
+    }
     battleView.updateTimers(rawDt, activeSim);
     sceneMgr.sync(
       activeSim,
@@ -342,8 +401,19 @@ async function boot(): Promise<void> {
       if (sub) sub.textContent = `${t(saveManager.get().settings.locale, 'loading.models')} ${pct}%`;
     });
 
+    const roomParam = urlParams.get('room');
     if (isPromoMode) {
       startLevel(1, false);
+    } else if (roomParam && /^\d{4}$/.test(roomParam)) {
+      metaView.activeTab = 'multi';
+      metaView.roomCode = roomParam;
+      renderMeta();
+      void network.joinRoom(roomParam).then((ok) => {
+        if (!ok) {
+          metaView.statusNotice = t(saveManager.get().settings.locale, 'multi.errNotFound');
+          renderMeta();
+        }
+      });
     } else {
       renderMeta();
     }

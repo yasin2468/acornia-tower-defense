@@ -1,6 +1,6 @@
 import { easeOutCubic, GhostHpTracker, popScale } from '../core/JuiceController.ts';
 import type { SimulationEngine } from '../core/SimulationEngine.ts';
-import { ENEMIES, resolveHeroVisualVariant } from '../data/enemies.ts';
+import { ENEMIES, resolveHeroVisualVariant, type EnemyId } from '../data/enemies.ts';
 import { TOWER_LIST, TOWERS, type TargetingPriority, type TowerId } from '../data/towers.ts';
 import { t, tParams, type Locale } from '../i18n/locales.ts';
 import type { SceneManager } from '../rendering/SceneManager.ts';
@@ -11,6 +11,7 @@ import {
   type BillingService,
   type RemoteConfigService,
 } from '../services/CommercialServices.ts';
+import type { NetworkService } from '../services/NetworkService.ts';
 import type { SaveManager } from '../services/SaveManager.ts';
 import { ICONS, PORTRAIT_URLS, UI_ICON_URLS } from './icons.ts';
 
@@ -39,6 +40,7 @@ interface FloatEl {
 export interface BattleViewCallbacks {
   onRestart: () => void;
   onExitToMap: () => void;
+  onSendPvpMerc?: (enemyId: EnemyId, cost: number) => void;
 }
 
 export class BattleView {
@@ -60,6 +62,7 @@ export class BattleView {
   private readonly billingService: BillingService;
   private readonly remoteConfig: RemoteConfigService;
   private readonly callbacks: BattleViewCallbacks;
+  private readonly network?: NetworkService;
 
   private mountedRoot: HTMLElement | null = null;
   private hpTextEl: HTMLElement | null = null;
@@ -82,6 +85,7 @@ export class BattleView {
   private bossHpTextEl: HTMLElement | null = null;
   private bossHpFillEl: HTMLElement | null = null;
   private wavePreviewEl: HTMLElement | null = null;
+  private multiBarEl: HTMLElement | null = null;
   private modalHostEl: HTMLElement | null = null;
   private hudTopEl: HTMLElement | null = null;
   private hudBottomEl: HTMLElement | null = null;
@@ -90,6 +94,7 @@ export class BattleView {
   private lastContextKey = '';
   private lastModalKey = '';
   private lastWavePreviewKey = '';
+  private lastMultiKey = '';
 
   /** Delayed white/amber "ghost damage" trail for every enemy HP bar. */
   readonly ghostHp = new GhostHpTracker(0.3, 0.45, 5.5);
@@ -107,6 +112,7 @@ export class BattleView {
     remoteConfig: RemoteConfigService,
     callbacks: BattleViewCallbacks,
     promoMode = false,
+    network?: NetworkService,
   ) {
     this.saveManager = saveManager;
     this.adService = adService;
@@ -114,6 +120,7 @@ export class BattleView {
     this.remoteConfig = remoteConfig;
     this.callbacks = callbacks;
     this.promoMode = promoMode;
+    this.network = network;
   }
 
   resetForLevel(levelId: number): void {
@@ -136,6 +143,7 @@ export class BattleView {
     this.lastContextKey = '';
     this.lastModalKey = '';
     this.lastWavePreviewKey = '';
+    this.lastMultiKey = '';
   }
 
   showBanner(text: string, seconds = 3.2): void {
@@ -204,6 +212,7 @@ export class BattleView {
         <div class="boss-hud-track"><div class="boss-hud-fill" id="bw-boss-hp-fill" style="width:100%"></div></div>
       </div>
       <div class="wave-preview-strip" id="bw-wave-preview" style="display:none;"></div>
+      <div class="multi-hud-bar" id="bw-multi-bar" style="display:none;"></div>
       <div class="banner-toast" id="bw-banner" style="display:none;"></div>
 
       <div class="hud-bottom" id="bw-hud-bottom">
@@ -255,6 +264,8 @@ export class BattleView {
     this.bossHpFillEl = container.querySelector('#bw-boss-hp-fill');
     this.wavePreviewEl = container.querySelector('#bw-wave-preview');
     this.lastWavePreviewKey = '';
+    this.multiBarEl = container.querySelector('#bw-multi-bar');
+    this.lastMultiKey = '';
     this.rainBtnEl = container.querySelector('#bw-skill-rain');
     this.rainCdEl = container.querySelector('#bw-rain-cd');
     this.magnetBtnEl = container.querySelector('#bw-skill-magnet');
@@ -397,6 +408,46 @@ export class BattleView {
       }
     }
 
+    if (this.multiBarEl) {
+      const inMulti = !hide && this.network?.state === 'in_match' && sim.status === 'playing';
+      this.multiBarEl.style.display = inMulti ? 'flex' : 'none';
+      if (inMulti && this.network) {
+        const net = this.network;
+        const coopLeft = sim.coopReserves[net.role];
+        const mKey =
+          net.mode === 'coop'
+            ? `coop|${net.roomCode}|${net.role}|${coopLeft}|${loc}`
+            : `pvp|${net.roomCode}|${net.peerBaseHp}|${sim.gold >= 95 ? 3 : sim.gold >= 60 ? 2 : sim.gold >= 35 ? 1 : 0}|${loc}`;
+        if (mKey !== this.lastMultiKey) {
+          this.lastMultiKey = mKey;
+          if (net.mode === 'coop') {
+            this.multiBarEl.innerHTML = `
+              <span>2P CO-OP #${net.roomCode} (${net.role.toUpperCase()})</span>
+              <button class="btn btn-gold btn-sm" id="bw-coop-gift" ${coopLeft >= 25 ? '' : 'disabled'}>${tParams(loc, 'multi.coopGift', { left: coopLeft })}</button>
+            `;
+            const giftBtn = this.multiBarEl.querySelector<HTMLButtonElement>('#bw-coop-gift');
+            if (giftBtn) {
+              giftBtn.onclick = () => sim.dispatch({ type: 'COOP_GIFT_GOLD', fromRole: net.role, amount: 25 }, net.role);
+            }
+          } else {
+            this.multiBarEl.innerHTML = `
+              <span>${tParams(loc, 'multi.rivalHp', { hp: net.peerBaseHp, max: net.peerMaxBaseHp })}</span>
+              <button class="btn btn-dark btn-sm" data-pvp-merc="scout_bot" data-merc-cost="35" ${sim.gold >= 35 ? '' : 'disabled'}>${t(loc, 'multi.pvpScout')}</button>
+              <button class="btn btn-dark btn-sm" data-pvp-merc="shield_loader" data-merc-cost="60" ${sim.gold >= 60 ? '' : 'disabled'}>${t(loc, 'multi.pvpShield')}</button>
+              <button class="btn btn-gold btn-sm" data-pvp-merc="chomp_brute" data-merc-cost="95" ${sim.gold >= 95 ? '' : 'disabled'}>${t(loc, 'multi.pvpBrute')}</button>
+            `;
+            this.multiBarEl.querySelectorAll<HTMLButtonElement>('[data-pvp-merc]').forEach((btn) => {
+              btn.onclick = () => {
+                const enemyId = btn.dataset.pvpMerc as EnemyId;
+                const cost = Number(btn.dataset.mercCost);
+                this.callbacks.onSendPvpMerc?.(enemyId, cost);
+              };
+            });
+          }
+        }
+      }
+    }
+
     if (this.bannerEl) {
       const showBanner = this.bannerTimer > 0 && Boolean(this.bannerText);
       this.bannerEl.style.display = showBanner ? 'block' : 'none';
@@ -412,7 +463,8 @@ export class BattleView {
           this.earlyBtnEl.classList.add('pulse-cta');
         } else {
           const bonus = sim.getEarlyWaveBonus();
-          this.earlyBtnEl.textContent = `${tParams(loc, 'hud.earlyWaveBonus', { gold: bonus })} (${Math.ceil(sim.waveCountdown)}s)`;
+          const label = bonus > 0 ? tParams(loc, 'hud.earlyWaveBonus', { gold: bonus }) : t(loc, 'hud.earlyWave');
+          this.earlyBtnEl.textContent = `${label} (${Math.ceil(sim.waveCountdown)}s)`;
           this.earlyBtnEl.classList.remove('pulse-cta');
         }
       }

@@ -1,3 +1,4 @@
+import type { EnemyId } from '../data/enemies.ts';
 import type { EvolutionBranchId, TargetingPriority, TowerId } from '../data/towers.ts';
 
 export type GameCommandInput =
@@ -14,7 +15,10 @@ export type GameCommandInput =
   | { type: 'CAST_PINECONE_RAIN'; x: number; z: number }
   | { type: 'CAST_ACORN_MAGNET' }
   | { type: 'CALL_WAVE_EARLY' }
-  | { type: 'REVIVE_BASE' };
+  | { type: 'REVIVE_BASE' }
+  | { type: 'COOP_GIFT_GOLD'; fromRole: 'p1' | 'p2'; amount: number }
+  | { type: 'SPAWN_PVP_MERC'; enemyId: EnemyId }
+  | { type: 'FORCE_PVP_VICTORY' };
 
 export type GameCommand = GameCommandInput & { playerId: string; tick: number };
 
