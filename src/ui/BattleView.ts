@@ -572,9 +572,13 @@ export class BattleView {
         `;
       }).join('');
 
+      const badgeHtml = slot.runeSlot
+        ? `<div class="rune-slot-badge">${t(loc, 'hud.runeSlotBadge')}</div>`
+        : '';
       parts.push(`
         <div class="radial-ring" style="left:${clampedX}px; top:${clampedY}px;">
           <div class="radial-halo"></div>
+          ${badgeHtml}
           ${rings}
         </div>
       `);
@@ -639,6 +643,7 @@ export class BattleView {
               <button class="btn btn-sm" id="btn-cycle-prio" style="padding:2px 7px; font-size:10px;">${t(loc, `priority.${tw.priority}`)}</button>
             </div>
             <div style="font-size:10.5px; font-weight:800; color:var(--accent-green);">${statLine}</div>
+            ${slot.runeSlot ? `<div class="rune-slot-inline">${t(loc, 'hud.runeSlotBadge')}</div>` : ''}
           </div>
         </div>
         ${actionsHtml}

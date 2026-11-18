@@ -158,6 +158,9 @@ function processBattleEvents(events: SimEvent[]): void {
     } else if (ev.type === 'PINECONE_RAIN') {
       juice.triggerMicroHitStop(0.04, 0.08);
       sound.playExplosion(true);
+    } else if (ev.type === 'BARREL_EXPLODED') {
+      juice.triggerMicroHitStop(0.04, 0.08);
+      sound.playExplosion(true);
     } else if (ev.type === 'HERO_CLAW_SHOCK') {
       juice.triggerMicroHitStop(0.035, 0.1);
       sound.playHit(false, false, true);
@@ -211,6 +214,11 @@ canvas.addEventListener('pointerdown', (ev) => {
   if (battleView.targetingSkill === 'hero_leap') {
     activeSim.dispatch({ type: 'CAST_HERO_ULTIMATE', x: hit.x, z: hit.z });
     battleView.targetingSkill = null;
+    return;
+  }
+
+  if (hit.barrelId) {
+    activeSim.dispatch({ type: 'DETONATE_BARREL', barrelId: hit.barrelId });
     return;
   }
 

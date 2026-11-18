@@ -25,6 +25,7 @@ export type SimEvent =
   | { type: 'ENEMY_KILLED'; enemyId: number; x: number; z: number; isBoss: boolean; bounty: number }
   | { type: 'BOSS_PHASE_TWO'; enemyId: number; bossId?: EnemyId; smokedSlotId?: string; x: number; z: number }
   | { type: 'PINECONE_RAIN'; x: number; z: number; hits: number }
+  | { type: 'BARREL_EXPLODED'; barrelId: string; x: number; z: number; hits: number }
   | { type: 'HERO_ATTACK'; x: number; z: number; targetX: number; targetZ: number }
   | { type: 'HERO_CLAW_SHOCK'; x: number; z: number; hits: number }
   | { type: 'HERO_ULTIMATE'; variant: 'classic' | 'viking' | 'royal'; x: number; z: number; hits: number }
@@ -56,6 +57,7 @@ export interface SlotState {
   z: number;
   stumpLocked: boolean;
   stumpClearCost: number;
+  runeSlot: boolean;
   tower: TowerInstance | null;
 }
 
@@ -169,6 +171,7 @@ export class SimulationEngine {
   reviveUsed = false;
 
   slots: Map<string, SlotState> = new Map();
+  barrels: Map<string, { id: string; x: number; z: number; exploded: boolean }> = new Map();
   enemies: EnemyInstance[] = [];
   projectiles: ProjectileInstance[] = [];
   resinPools: ResinPool[] = [];
@@ -215,8 +218,12 @@ export class SimulationEngine {
         z: s.z,
         stumpLocked: Boolean(s.lockedByStump),
         stumpClearCost: s.stumpClearCost ?? 40,
+        runeSlot: Boolean(s.runeSlot),
         tower: null,
       });
+    }
+    for (const b of level.barrels ?? []) {
+      this.barrels.set(b.id, { id: b.id, x: b.x, z: b.z, exploded: false });
     }
 
     const heroMult = cardLevelMultiplier(this.cardLevels.boz_pence);
@@ -384,6 +391,22 @@ export class SimulationEngine {
           tower.smokedTimer = 0;
           this.events.push({ type: 'SMOKE_CLEARED', slotId: tower.slotId });
         }
+        break;
+      }
+      case 'DETONATE_BARREL': {
+        const barrel = this.barrels.get(cmd.barrelId);
+        if (!barrel || barrel.exploded) return;
+        barrel.exploded = true;
+        let hits = 0;
+        for (const e of [...this.enemies]) {
+          if (e.hp <= 0) continue;
+          if (Math.hypot(e.x - barrel.x, e.z - barrel.z) <= 3.2) {
+            hits += 1;
+            e.stunTimer = Math.max(e.stunTimer, 1.1);
+            this.damageEnemy(e, 115, 0.35, false);
+          }
+        }
+        this.events.push({ type: 'BARREL_EXPLODED', barrelId: barrel.id, x: barrel.x, z: barrel.z, hits });
         break;
       }
       case 'MOVE_HERO': {
@@ -784,6 +807,13 @@ export class SimulationEngine {
       }
 
       let effectiveSpeed = e.speed * (1 - e.slowPct);
+      if (
+        !e.isFlying &&
+        e.slowTimer <= 0 &&
+        this.level.iceZones?.some((iz) => Math.hypot(e.x - iz.x, e.z - iz.z) <= iz.radius)
+      ) {
+        effectiveSpeed *= 1.25;
+      }
       if (spec.dashInterval && spec.dashDuration && spec.dashMult && e.slowTimer <= 0) {
         if ((e.age % spec.dashInterval) < spec.dashDuration) {
           effectiveSpeed *= spec.dashMult;
@@ -834,10 +864,16 @@ export class SimulationEngine {
 
   getTowerStats(tower: TowerInstance): TowerTierStats {
     const spec = TOWERS[tower.towerId];
-    if (tower.tier === 1) return spec.tier1;
-    if (tower.tier === 2) return spec.tier2;
-    const branch = spec.evolutions.find((e) => e.id === tower.branchId) ?? spec.evolutions[0];
-    return branch.stats;
+    const base =
+      tower.tier === 1
+        ? spec.tier1
+        : tower.tier === 2
+          ? spec.tier2
+          : (spec.evolutions.find((e) => e.id === tower.branchId) ?? spec.evolutions[0]).stats;
+    if (this.slots.get(tower.slotId)?.runeSlot) {
+      return { ...base, range: Number((base.range * 1.15).toFixed(2)) };
+    }
+    return base;
   }
 
   selectTarget(tower: TowerInstance): EnemyInstance | null {
@@ -905,7 +941,8 @@ export class SimulationEngine {
 
       const cardMult = cardLevelMultiplier(this.cardLevels[tower.towerId]);
       const globalBonus = 1 + this.towerDamageBonusPct;
-      let dmg = stats.damage * cardMult * globalBonus;
+      const runeDmgBonus = slot.runeSlot ? 1.18 : 1.0;
+      let dmg = stats.damage * cardMult * globalBonus * runeDmgBonus;
       let isCrit = false;
 
       if (stats.critChance && this.rng.next() < stats.critChance) {

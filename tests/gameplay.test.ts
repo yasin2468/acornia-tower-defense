@@ -172,3 +172,80 @@ describe('Paket 2 — 12 bölüm yol/yuva geometrisi ve çatallı ikincil yollar
     );
   });
 });
+
+describe('Paket 3 — Patlayıcı kanyon fıçısı, rün yuvası bonusu ve buz bölgesi hızlanması', () => {
+  it('Kanyon patlayıcı fıçısı (Seviye 4) yakındaki düşmanı yakar, sersemletir ve tek kullanımlıktır', () => {
+    const level4 = LEVELS[3];
+    const barrel = level4.barrels![0];
+    const sim = new SimulationEngine(level4, { seed: 301 });
+    const enemy = sim.spawnEnemy('shield_loader', 240, 0.01, 10, {
+      x: barrel.x + 1.0,
+      z: barrel.z,
+      wpIndex: 2,
+      progress: 5,
+    });
+
+    sim.dispatch({ type: 'DETONATE_BARREL', barrelId: barrel.id }, 'p1', 0);
+    sim.step(FIXED_DT);
+    const evs = sim.drainEvents();
+    const expEv = evs.find((e) => e.type === 'BARREL_EXPLODED');
+    assert.ok(expEv && expEv.type === 'BARREL_EXPLODED' && expEv.hits === 1);
+    assert.ok(enemy.hp < 240, 'patlayıcı fıçı hasar vurmalı');
+    assert.ok(enemy.stunTimer >= 1.0, 'patlayıcı fıçı sersemletmeli');
+    assert.equal(sim.barrels.get(barrel.id)!.exploded, true);
+
+    const hpAfterFirst = enemy.hp;
+    sim.dispatch({ type: 'DETONATE_BARREL', barrelId: barrel.id }, 'p1', 1);
+    sim.step(FIXED_DT);
+    assert.equal(enemy.hp, hpAfterFirst, 'aynı fıçı ikinci kez patlamamalı');
+  });
+
+  it('Rün yuvası (Seviye 7 slot_3) kule menzilini +%15 ve atış hasarını +%18 artırır', () => {
+    const level7 = LEVELS[6];
+    const sim = new SimulationEngine(level7, { seed: 302 });
+    sim.gold = 400;
+    sim.dispatch({ type: 'BUILD_TOWER', slotId: 'slot_1', towerId: 'squirrel' }, 'p1', 0);
+    sim.dispatch({ type: 'BUILD_TOWER', slotId: 'slot_3', towerId: 'squirrel' }, 'p1', 0);
+    sim.step(FIXED_DT);
+
+    const normalStats = sim.getTowerStats(sim.slots.get('slot_1')!.tower!);
+    const runeStats = sim.getTowerStats(sim.slots.get('slot_3')!.tower!);
+    assert.equal(normalStats.range, TOWERS.squirrel.tier1.range);
+    assert.equal(runeStats.range, Number((TOWERS.squirrel.tier1.range * 1.15).toFixed(2)));
+
+    const s1 = sim.slots.get('slot_1')!;
+    const s3 = sim.slots.get('slot_3')!;
+    const e1 = sim.spawnEnemy('scout_bot', 500, 0.001, 5, { x: s1.x + 0.5, z: s1.z, wpIndex: 3, progress: 5 });
+    const e3 = sim.spawnEnemy('scout_bot', 500, 0.001, 5, { x: s3.x + 0.5, z: s3.z, wpIndex: 5, progress: 15 });
+    for (let i = 0; i < 60 && e1.hp === 500 && e3.hp === 500; i++) {
+      sim.step(FIXED_DT);
+    }
+    for (let i = 0; i < 20; i++) sim.step(FIXED_DT);
+    const dmgNormal = 500 - e1.hp;
+    const dmgRune = 500 - e3.hp;
+    assert.ok(dmgRune > dmgNormal, `Rün hasarı (${dmgRune}) normalden (${dmgNormal}) büyük olmalı`);
+  });
+
+  it('Buz bölgesi (Seviye 10) yavaşlatılmamış kara düşmanını +%25 hızlandırır; yavaşlamış veya uçanı etkilemez', () => {
+    const level10 = LEVELS[9];
+    const iz = level10.iceZones![0];
+    const sim = new SimulationEngine(level10, { seed: 303 });
+    sim.waveCountdown = 999;
+
+    const normalGround = sim.spawnEnemy('scout_bot', 100, 2.0, 5, { x: iz.x, z: iz.z, wpIndex: 3, progress: 0 });
+    const slowedGround = sim.spawnEnemy('scout_bot', 100, 2.0, 5, { x: iz.x, z: iz.z, wpIndex: 3, progress: 0 });
+    slowedGround.slowPct = 0.4;
+    slowedGround.slowTimer = 2.0;
+    const flying = sim.spawnEnemy('hover_drone', 100, 2.0, 5, { x: iz.x, z: iz.z, wpIndex: 3, progress: 0 });
+
+    for (let i = 0; i < 10; i++) sim.step(FIXED_DT);
+
+    const expectedBoosted = 2.0 * 1.25 * FIXED_DT * 10;
+    const expectedSlowed = 2.0 * 0.6 * FIXED_DT * 10;
+    const expectedFlying = 2.0 * FIXED_DT * 10;
+
+    assert.ok(Math.abs(normalGround.progress - expectedBoosted) < 1e-4, `buzlu hız=${normalGround.progress.toFixed(4)}`);
+    assert.ok(Math.abs(slowedGround.progress - expectedSlowed) < 1e-4, `yavaş hız=${slowedGround.progress.toFixed(4)}`);
+    assert.ok(Math.abs(flying.progress - expectedFlying) < 1e-4, `uçan hız=${flying.progress.toFixed(4)}`);
+  });
+});

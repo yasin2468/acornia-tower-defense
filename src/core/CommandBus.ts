@@ -8,6 +8,7 @@ export type GameCommandInput =
   | { type: 'SET_TARGETING'; slotId: string; priority: TargetingPriority }
   | { type: 'CLEAR_STUMP'; slotId: string }
   | { type: 'CLEAR_SMOKE'; slotId: string }
+  | { type: 'DETONATE_BARREL'; barrelId: string }
   | { type: 'MOVE_HERO'; x: number; z: number }
   | { type: 'CAST_HERO_ULTIMATE'; x?: number; z?: number }
   | { type: 'CAST_PINECONE_RAIN'; x: number; z: number }

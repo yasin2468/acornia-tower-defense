@@ -297,12 +297,33 @@ function buildMeadowFoliageTufts(curves: THREE.CatmullRomCurve3[], level: LevelS
   instMesh.castShadow = true;
   instMesh.receiveShadow = true;
 
-  const palette = [
-    new THREE.Color('#527d52'),
-    new THREE.Color('#5f8f5b'),
-    new THREE.Color('#707f8d'),
-    new THREE.Color('#d9c89a'),
-  ];
+  const biomeTufts: Record<LevelSpec['biome'], THREE.Color[]> = {
+    forest: [
+      new THREE.Color('#527d52'),
+      new THREE.Color('#5f8f5b'),
+      new THREE.Color('#707f8d'),
+      new THREE.Color('#d9c89a'),
+    ],
+    canyon: [
+      new THREE.Color('#b86339'),
+      new THREE.Color('#cf8448'),
+      new THREE.Color('#8a624a'),
+      new THREE.Color('#d99a4e'),
+    ],
+    cavern: [
+      new THREE.Color('#3c4566'),
+      new THREE.Color('#4a567a'),
+      new THREE.Color('#3aa8b8'),
+      new THREE.Color('#68749c'),
+    ],
+    snow: [
+      new THREE.Color('#eaf4fc'),
+      new THREE.Color('#d5e6f5'),
+      new THREE.Color('#8fa8c2'),
+      new THREE.Color('#ffffff'),
+    ],
+  };
+  const palette = biomeTufts[level.biome];
   const dummy = new THREE.Object3D();
   let placed = 0;
   let s = 918273;
@@ -486,6 +507,86 @@ function rebuildTrail(tr: TrailItem): void {
   (geo.getAttribute('color') as THREE.BufferAttribute).needsUpdate = true;
 }
 
+interface AmbientMotePool {
+  mesh: THREE.InstancedMesh;
+  basePos: Float32Array;
+  phases: Float32Array;
+  mode: 'float' | 'fall';
+}
+
+function buildAmbientMotes(biome: LevelSpec['biome']): AmbientMotePool {
+  const cfg: Record<LevelSpec['biome'], { color: string; size: number; mode: 'float' | 'fall' }> = {
+    forest: { color: '#ffe87a', size: 0.055, mode: 'float' },
+    canyon: { color: '#ff8a3d', size: 0.085, mode: 'fall' },
+    cavern: { color: '#6df7ff', size: 0.06, mode: 'float' },
+    snow: { color: '#ffffff', size: 0.07, mode: 'fall' },
+  };
+  const c = cfg[biome];
+  const count = 55;
+  const geo = new THREE.DodecahedronGeometry(c.size, 0);
+  const mat = new THREE.MeshBasicMaterial({ color: c.color, transparent: true, opacity: 0.78 });
+  const mesh = new THREE.InstancedMesh(geo, mat, count);
+  mesh.frustumCulled = false;
+
+  const basePos = new Float32Array(count * 3);
+  const phases = new Float32Array(count);
+  const dummy = new THREE.Object3D();
+  let s = 48271 + biome.length * 1013;
+  const rnd = () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+  for (let i = 0; i < count; i++) {
+    const x = (rnd() - 0.5) * 10.4;
+    const y = 0.45 + rnd() * 3.4;
+    const z = -8.5 + rnd() * 18.0;
+    basePos[i * 3] = x;
+    basePos[i * 3 + 1] = y;
+    basePos[i * 3 + 2] = z;
+    phases[i] = rnd() * Math.PI * 2;
+    dummy.position.set(x, y, z);
+    dummy.scale.setScalar(0.8 + rnd() * 0.6);
+    dummy.updateMatrix();
+    mesh.setMatrixAt(i, dummy.matrix);
+  }
+  mesh.instanceMatrix.needsUpdate = true;
+  return { mesh, basePos, phases, mode: c.mode };
+}
+
+function createExplosiveBarrelProp(): THREE.Group {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.32, 0.35, 0.72, 12),
+    new THREE.MeshStandardMaterial({ color: '#7a4626', roughness: 0.8 }),
+  );
+  body.position.y = 0.36;
+  body.castShadow = true;
+  body.receiveShadow = true;
+  g.add(body);
+
+  const hoopMat = new THREE.MeshStandardMaterial({ color: '#374151', metalness: 0.6, roughness: 0.38 });
+  for (const hy of [0.18, 0.54]) {
+    const hoop = new THREE.Mesh(new THREE.CylinderGeometry(0.355, 0.355, 0.065, 12), hoopMat);
+    hoop.position.y = hy;
+    g.add(hoop);
+  }
+
+  const seal = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.25, 0.25, 0.055, 12),
+    new THREE.MeshStandardMaterial({ color: '#ff8a2b', emissive: '#ff4d00', emissiveIntensity: 0.8, roughness: 0.3 }),
+  );
+  seal.position.y = 0.73;
+  g.add(seal);
+
+  const spark = new THREE.Mesh(
+    new THREE.OctahedronGeometry(0.085, 0),
+    new THREE.MeshStandardMaterial({ color: '#ffe570', emissive: '#ffaa00', emissiveIntensity: 1.15 }),
+  );
+  spark.position.y = 0.87;
+  g.add(spark);
+  return g;
+}
+
 export class SceneManager {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene: THREE.Scene;
@@ -505,6 +606,8 @@ export class SceneManager {
   private sunLight: THREE.DirectionalLight;
 
   private slotMeshes = new Map<string, { stump?: THREE.Group; smoke?: THREE.Group; hitArea: THREE.Mesh }>();
+  private barrelMeshes = new Map<string, { group: THREE.Group; hitArea: THREE.Mesh }>();
+  private ambientMotes: AmbientMotePool | null = null;
   private towerRigs = new Map<string, { key: string; rig: TowerRig }>();
   private enemyRigs = new Map<number, EnemyRig>();
   private projectileMeshes = new Map<
@@ -954,12 +1057,62 @@ export class SceneManager {
 
     const biomeTheme: Record<
       LevelSpec['biome'],
-      { bg: string; fog: string; hemiSky: string; hemiGround: string; border: string; cliffTint: string; canopyTint: string }
+      {
+        bg: string;
+        fog: string;
+        hemiSky: string;
+        hemiGround: string;
+        sunColor: string;
+        sunIntensity: number;
+        border: string;
+        cliffTint: string;
+        canopyTint: string;
+      }
     > = {
-      forest: { bg: '#6d8196', fog: '#7d90a4', hemiSky: '#c2dbff', hemiGround: '#56627a', border: '#b59d78', cliffTint: '#ffffff', canopyTint: '#ffffff' },
-      canyon: { bg: '#8a6852', fog: '#9c7860', hemiSky: '#ffe3bd', hemiGround: '#6e4c36', border: '#a87c4f', cliffTint: '#f2b885', canopyTint: '#e8a84a' },
-      cavern: { bg: '#2f3452', fog: '#3a4063', hemiSky: '#98c7ff', hemiGround: '#2f2d4f', border: '#6c7999', cliffTint: '#9fa8cc', canopyTint: '#72b8b4' },
-      snow: { bg: '#9cb5cf', fog: '#aec4db', hemiSky: '#eef7ff', hemiGround: '#7a94ad', border: '#9ab0c7', cliffTint: '#d6e4f2', canopyTint: '#d4f2f7' },
+      forest: {
+        bg: '#6d8196',
+        fog: '#7d90a4',
+        hemiSky: '#c2dbff',
+        hemiGround: '#56627a',
+        sunColor: '#ffe8c2',
+        sunIntensity: 1.55,
+        border: '#b59d78',
+        cliffTint: '#ffffff',
+        canopyTint: '#ffffff',
+      },
+      canyon: {
+        bg: '#8a6852',
+        fog: '#9c7860',
+        hemiSky: '#ffe3bd',
+        hemiGround: '#6e4c36',
+        sunColor: '#ffbf86',
+        sunIntensity: 1.6,
+        border: '#a87c4f',
+        cliffTint: '#f2b885',
+        canopyTint: '#e8a84a',
+      },
+      cavern: {
+        bg: '#2f3452',
+        fog: '#3a4063',
+        hemiSky: '#98c7ff',
+        hemiGround: '#2f2d4f',
+        sunColor: '#9cc4ff',
+        sunIntensity: 0.95,
+        border: '#6c7999',
+        cliffTint: '#9fa8cc',
+        canopyTint: '#72b8b4',
+      },
+      snow: {
+        bg: '#9cb5cf',
+        fog: '#aec4db',
+        hemiSky: '#eef7ff',
+        hemiGround: '#7a94ad',
+        sunColor: '#eef6ff',
+        sunIntensity: 1.45,
+        border: '#9ab0c7',
+        cliffTint: '#d6e4f2',
+        canopyTint: '#d4f2f7',
+      },
     };
     const theme = biomeTheme[level.biome];
     this.scene.background = new THREE.Color(theme.bg);
@@ -968,6 +1121,8 @@ export class SceneManager {
     }
     this.hemiLight.color.set(theme.hemiSky);
     this.hemiLight.groundColor.set(theme.hemiGround);
+    this.sunLight.color.set(theme.sunColor);
+    this.sunLight.intensity = theme.sunIntensity;
 
     let meadowTex = this.meadowTexCache.get(level.biome);
     if (!meadowTex) {
@@ -1011,6 +1166,33 @@ export class SceneManager {
       this.levelGroup.add(buildRoadCurbstones(c));
     }
 
+    // Slippery Ice Zones on frozen mountain passes (Snow biome)
+    for (const iz of level.iceZones ?? []) {
+      const iceDisk = new THREE.Mesh(
+        new THREE.CircleGeometry(iz.radius, 28),
+        new THREE.MeshStandardMaterial({
+          color: '#c2eeff',
+          emissive: '#58cbff',
+          emissiveIntensity: 0.22,
+          transparent: true,
+          opacity: 0.42,
+          roughness: 0.14,
+          metalness: 0.12,
+        }),
+      );
+      iceDisk.rotation.x = -Math.PI / 2;
+      iceDisk.position.set(iz.x, 0.042, iz.z);
+      this.levelGroup.add(iceDisk);
+
+      const iceRim = new THREE.Mesh(
+        new THREE.RingGeometry(Math.max(0.2, iz.radius - 0.08), iz.radius, 28),
+        new THREE.MeshBasicMaterial({ color: '#e6f9ff', side: THREE.DoubleSide, transparent: true, opacity: 0.65 }),
+      );
+      iceRim.rotation.x = -Math.PI / 2;
+      iceRim.position.set(iz.x, 0.046, iz.z);
+      this.levelGroup.add(iceRim);
+    }
+
     this.levelGroup.add(buildMeadowFoliageTufts(curves, level));
 
     // Sunlit Cream-Sandstone Castle Fortress at end of path
@@ -1035,6 +1217,7 @@ export class SceneManager {
       const cliff = createCliffProp(sc);
       cliff.position.set(cx, 0, cz);
       cliff.rotation.y = rot;
+      if (level.biome === 'canyon') cliff.scale.y = 1.28;
       if (theme.cliffTint !== '#ffffff') {
         cliff.traverse((obj) => {
           const mat = (obj as THREE.Mesh).material;
@@ -1046,34 +1229,73 @@ export class SceneManager {
       this.levelGroup.add(cliff);
     }
 
-    // Glowing Crystal Clusters (extra lush in Crystal Cavern)
-    const crystalCoords: Array<[number, number, number, number]> = [
-      [-4.2, 5.2, level.biome === 'cavern' ? 1.25 : 0.95, 0.2],
-      [4.3, 3.8, level.biome === 'cavern' ? 1.2 : 0.9, -0.7],
-      [-4.4, -5.6, level.biome === 'cavern' ? 1.25 : 0.95, 1.1],
-      [4.3, -6.0, level.biome === 'cavern' ? 1.2 : 0.92, -0.4],
-      [-2.8, -8.8, 0.85, 0.5],
-      [2.8, -8.8, 0.85, -0.5],
-      [4.1, -1.5, 0.85, 0.9],
-      ...(level.biome === 'cavern'
-        ? ([
-            [-4.1, 0.5, 1.1, 0.6],
-            [4.2, 7.0, 1.05, -0.8],
-          ] as Array<[number, number, number, number]>)
-        : []),
-    ];
+    // Crystals ONLY in Crystal Cavern (12 clusters) and Frosted Peaks (ice-blue clusters)
+    const crystalCoords: Array<[number, number, number, number]> =
+      level.biome === 'cavern'
+        ? [
+            [-4.2, 5.2, 1.28, 0.2],
+            [4.3, 3.8, 1.22, -0.7],
+            [-4.4, -5.6, 1.26, 1.1],
+            [4.3, -6.0, 1.22, -0.4],
+            [-2.8, -8.8, 1.0, 0.5],
+            [2.8, -8.8, 1.0, -0.5],
+            [4.1, -1.5, 1.15, 0.9],
+            [-4.1, 0.5, 1.18, 0.6],
+            [4.2, 7.0, 1.15, -0.8],
+            [-4.3, 7.4, 1.12, 0.4],
+            [-4.1, -2.9, 1.1, -0.3],
+            [4.4, 1.1, 1.08, 1.2],
+          ]
+        : level.biome === 'snow'
+          ? [
+              [-4.2, 5.2, 0.92, 0.2],
+              [4.3, 3.8, 0.9, -0.7],
+              [-4.4, -5.6, 0.94, 1.1],
+              [4.3, -6.0, 0.9, -0.4],
+              [-2.8, -8.8, 0.85, 0.5],
+              [2.8, -8.8, 0.85, -0.5],
+            ]
+          : [];
     for (const [cx, cz, sc, rot] of crystalCoords) {
       const crys = createCrystalProp(sc);
       crys.position.set(cx, 0, cz);
       crys.rotation.y = rot;
+      if (level.biome === 'snow') {
+        crys.traverse((obj) => {
+          const mat = (obj as THREE.Mesh).material;
+          if (mat instanceof THREE.MeshStandardMaterial) {
+            mat.color.lerp(new THREE.Color('#8fe3ff'), 0.68);
+            mat.emissive.set('#38bdf8');
+          }
+        });
+      }
       this.levelGroup.add(crys);
     }
 
-    // Stone pads & oak stumps
+    // Stone pads, rune pad rings, oak stumps
     for (const s of level.slots) {
       const pad = createStoneSlotPad();
       pad.position.set(s.x, 0, s.z);
       this.levelGroup.add(pad);
+
+      if (s.runeSlot) {
+        const runeRing = new THREE.Mesh(
+          new THREE.RingGeometry(0.58, 0.76, 24),
+          new THREE.MeshBasicMaterial({ color: '#4ff2ff', side: THREE.DoubleSide, transparent: true, opacity: 0.85 }),
+        );
+        runeRing.rotation.x = -Math.PI / 2;
+        runeRing.position.set(s.x, 0.055, s.z);
+        this.levelGroup.add(runeRing);
+        for (let k = 0; k < 4; k++) {
+          const a = (k * Math.PI) / 2 + Math.PI / 4;
+          const gem = new THREE.Mesh(
+            new THREE.OctahedronGeometry(0.085, 0),
+            new THREE.MeshStandardMaterial({ color: '#7ff8ff', emissive: '#22d3ee', emissiveIntensity: 0.95, roughness: 0.2 }),
+          );
+          gem.position.set(s.x + Math.cos(a) * 0.68, 0.08, s.z + Math.sin(a) * 0.68);
+          this.levelGroup.add(gem);
+        }
+      }
 
       const hitArea = new THREE.Mesh(
         new THREE.CylinderGeometry(0.94, 0.94, 0.45, 12),
@@ -1106,6 +1328,23 @@ export class SceneManager {
       this.slotMeshes.set(s.id, { stump, smoke, hitArea });
     }
 
+    // Explosive Resin Barrels (Canyon biome hazard)
+    for (const b of level.barrels ?? []) {
+      const bGroup = createExplosiveBarrelProp();
+      bGroup.position.set(b.x, 0, b.z);
+      this.levelGroup.add(bGroup);
+
+      const bHit = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.74, 0.74, 0.95, 10),
+        new THREE.MeshBasicMaterial({ visible: false }),
+      );
+      bHit.position.set(b.x, 0.45, b.z);
+      bHit.userData = { barrelId: b.id };
+      this.levelGroup.add(bHit);
+
+      this.barrelMeshes.set(b.id, { group: bGroup, hitArea: bHit });
+    }
+
     // Warm Amber Lanterns casting golden pools onto slate valley floor
     for (const lan of level.lanterns) {
       const { group } = createLanternProp();
@@ -1114,54 +1353,75 @@ export class SceneManager {
       this.levelGroup.add(group);
     }
 
-    // Smooth Oak & Pine woodland trees (frost pine in snow, amber autumn foliage in canyon)
-    const pineAll = level.biome === 'snow';
-    const treeCoords: Array<[number, number, number, 'oak' | 'pine']> = [
-      [-4.6, 8.2, 1.0, pineAll ? 'pine' : 'oak'],
-      [4.7, 7.8, 0.95, 'pine'],
-      [-4.9, 3.0, 1.0, 'pine'],
-      [4.8, 2.7, 0.92, pineAll ? 'pine' : 'oak'],
-      [-4.8, -3.6, 1.0, pineAll ? 'pine' : 'oak'],
-      [4.8, -4.5, 0.98, 'pine'],
-      [-4.2, -8.2, 1.05, 'pine'],
-      [4.2, -8.2, 1.02, pineAll ? 'pine' : 'oak'],
-    ];
-    for (let i = 0; i < treeCoords.length; i++) {
-      const [tx, tz, sc, variant] = treeCoords[i];
-      const tree = createTreeProp(sc, variant);
-      tree.position.set(tx, 0, tz);
-      tree.rotation.y = i * 0.9;
-      if (theme.canopyTint !== '#ffffff') {
-        tree.traverse((obj) => {
-          const mat = (obj as THREE.Mesh).material;
-          if (mat instanceof THREE.MeshStandardMaterial) {
-            mat.color.lerp(new THREE.Color(theme.canopyTint), level.biome === 'snow' ? 0.55 : 0.45);
-          }
-        });
+    // Woodland trees & fences (omitted underground in Crystal Cavern)
+    if (level.biome !== 'cavern') {
+      const pineAll = level.biome === 'snow';
+      const baseTrees: Array<[number, number, number, 'oak' | 'pine']> =
+        level.biome === 'canyon'
+          ? [
+              [-4.7, 7.6, 0.9, 'pine'],
+              [4.7, 6.2, 0.85, 'oak'],
+              [-4.8, -3.6, 0.92, 'pine'],
+              [4.6, -7.8, 0.95, 'pine'],
+            ]
+          : [
+              [-4.6, 8.2, 1.0, pineAll ? 'pine' : 'oak'],
+              [4.7, 7.8, 0.95, 'pine'],
+              [-4.9, 3.0, 1.0, 'pine'],
+              [4.8, 2.7, 0.92, pineAll ? 'pine' : 'oak'],
+              [-4.8, -3.6, 1.0, pineAll ? 'pine' : 'oak'],
+              [4.8, -4.5, 0.98, 'pine'],
+              [-4.2, -8.2, 1.05, 'pine'],
+              [4.2, -8.2, 1.02, pineAll ? 'pine' : 'oak'],
+              ...(level.biome === 'forest'
+                ? ([
+                    [-4.6, 0.4, 0.96, 'oak'],
+                    [4.7, -0.8, 0.98, 'pine'],
+                    [-4.5, -6.2, 0.94, 'oak'],
+                    [4.5, 5.2, 0.96, 'oak'],
+                  ] as Array<[number, number, number, 'oak' | 'pine']>)
+                : []),
+            ];
+      for (let i = 0; i < baseTrees.length; i++) {
+        const [tx, tz, sc, variant] = baseTrees[i];
+        const tree = createTreeProp(sc, variant);
+        tree.position.set(tx, 0, tz);
+        tree.rotation.y = i * 0.9;
+        if (theme.canopyTint !== '#ffffff') {
+          tree.traverse((obj) => {
+            const mat = (obj as THREE.Mesh).material;
+            if (mat instanceof THREE.MeshStandardMaterial) {
+              mat.color.lerp(new THREE.Color(theme.canopyTint), level.biome === 'snow' ? 0.55 : 0.45);
+            }
+          });
+        }
+        this.levelGroup.add(tree);
+        this.swayTrees.push({ group: tree, phase: i * 1.1 });
       }
-      this.levelGroup.add(tree);
-      this.swayTrees.push({ group: tree, phase: i * 1.1 });
+
+      const fencePositions: Array<[number, number, number]> = [
+        [-1.75, 8.2, 0.15],
+        [1.75, 8.2, -0.15],
+        [4.25, 0.1, 1.55],
+        [-4.25, 1.2, 1.55],
+        [2.25, -7.2, -0.35],
+        [-2.1, -7.8, 0.35],
+      ];
+      const pathSamplesForFence = curves.flatMap((c) => c.getSpacedPoints(50));
+      const activeFences = level.biome === 'canyon' ? fencePositions.slice(0, 3) : fencePositions;
+      for (const [fx, fz, rot] of activeFences) {
+        const tooCloseToSlot = level.slots.some((sl) => Math.hypot(sl.x - fx, sl.z - fz) < 1.55);
+        const tooCloseToRoad = pathSamplesForFence.some((pt) => Math.hypot(pt.x - fx, pt.z - fz) < 1.22);
+        if (tooCloseToSlot || tooCloseToRoad) continue;
+        const fence = createFenceProp();
+        fence.position.set(fx, 0, fz);
+        fence.rotation.y = rot;
+        this.levelGroup.add(fence);
+      }
     }
 
-    // Rustic Honey-Oak Wooden Fences hugging winding road bends (strictly clear of all pads & path)
-    const fencePositions: Array<[number, number, number]> = [
-      [-1.75, 8.2, 0.15],
-      [1.75, 8.2, -0.15],
-      [4.25, 0.1, 1.55],
-      [-4.25, 1.2, 1.55],
-      [2.25, -7.2, -0.35],
-      [-2.1, -7.8, 0.35],
-    ];
-    const pathSamplesForFence = curves.flatMap((c) => c.getSpacedPoints(50));
-    for (const [fx, fz, rot] of fencePositions) {
-      const tooCloseToSlot = level.slots.some((sl) => Math.hypot(sl.x - fx, sl.z - fz) < 1.55);
-      const tooCloseToRoad = pathSamplesForFence.some((pt) => Math.hypot(pt.x - fx, pt.z - fz) < 1.22);
-      if (tooCloseToSlot || tooCloseToRoad) continue;
-      const fence = createFenceProp();
-      fence.position.set(fx, 0, fz);
-      fence.rotation.y = rot;
-      this.levelGroup.add(fence);
-    }
+    this.ambientMotes = buildAmbientMotes(level.biome);
+    this.levelGroup.add(this.ambientMotes.mesh);
 
     const heroVariant = resolveHeroVisualVariant(heroClass, 1);
     this.heroVisualKey = `${heroVariant}_${equippedHat}`;
@@ -1181,6 +1441,8 @@ export class SceneManager {
     this.levelGroup.clear();
     this.dynamicGroup.clear();
     this.slotMeshes.clear();
+    this.barrelMeshes.clear();
+    this.ambientMotes = null;
     this.towerRigs.clear();
     this.enemyRigs.clear();
     this.projectileMeshes.clear();
@@ -1275,6 +1537,17 @@ export class SceneManager {
       }
     }
 
+    for (const [bId, bv] of this.barrelMeshes.entries()) {
+      const bState = sim.barrels.get(bId);
+      const alive = Boolean(bState && !bState.exploded);
+      bv.group.visible = alive;
+      bv.hitArea.visible = alive;
+      if (alive) {
+        const spark = bv.group.children[bv.group.children.length - 1];
+        if (spark) spark.rotation.y = this.animTime * 4.5;
+      }
+    }
+
     const selectedSlot = selectedSlotId ? sim.slots.get(selectedSlotId) : null;
     const selectedTower = selectedSlot?.tower ?? null;
     const rangeRingMat = this.rangeRing.material as THREE.MeshBasicMaterial;
@@ -1348,7 +1621,8 @@ export class SceneManager {
         this.enemyRigs.set(e.uid, rig);
       }
       const feel = this.getEnemyFeel(e.uid, rig);
-      const nextWp = sim.level.path[e.wpIndex];
+      const activePath = e.lane === 1 && sim.level.secondaryPath ? sim.level.secondaryPath : sim.level.path;
+      const nextWp = activePath[e.wpIndex];
       if (nextWp) {
         rig.body.rotation.y = Math.atan2(nextWp.x - e.x, nextWp.z - e.z);
       }
@@ -1816,6 +2090,20 @@ export class SceneManager {
         this.spawnParticles(ev.x, 0.5, ev.z, '#6b4a2e', 8, 1.2);
         this.cameraCtrl.addTrauma(0.56);
         this.cameraCtrl.addZoomPunch(1.8);
+      } else if (ev.type === 'BARREL_EXPLODED') {
+        const bv = this.barrelMeshes.get(ev.barrelId);
+        if (bv) {
+          bv.group.visible = false;
+          bv.hitArea.visible = false;
+        }
+        this.spawnShockRing(ev.x, ev.z, '#ffffff', 2.0, 0.18);
+        this.spawnShockRing(ev.x, ev.z, '#ff7b2b', 3.6, 0.45);
+        this.spawnScorch(ev.x, ev.z, 2.1);
+        this.spawnSparks(ev.x, 0.5, ev.z, 0, 0, 0, '#ffd059', 26, 10);
+        this.spawnParticles(ev.x, 0.7, ev.z, '#ff6d2e', 18, 1.45);
+        this.spawnParticles(ev.x, 0.5, ev.z, '#4d3221', 8, 1.2);
+        this.cameraCtrl.addTrauma(0.6);
+        this.cameraCtrl.addZoomPunch(1.8);
       } else if (ev.type === 'HERO_RALLY') {
         this.rallyShowTimer = 2.2;
         this.spawnShockRing(ev.x, ev.z, '#ffda6b', 0.85, 0.25);
@@ -1863,6 +2151,30 @@ export class SceneManager {
   }
 
   private updateEffects(dt: number): void {
+    if (this.ambientMotes) {
+      const { mesh, basePos, phases, mode } = this.ambientMotes;
+      const count = phases.length;
+      const dummy = new THREE.Object3D();
+      for (let i = 0; i < count; i++) {
+        const ph = phases[i];
+        const bx = basePos[i * 3];
+        const by = basePos[i * 3 + 1];
+        const bz = basePos[i * 3 + 2];
+        const t = this.animTime + ph;
+        const x = bx + Math.sin(t * 0.85 + ph) * 0.28;
+        const y =
+          mode === 'float'
+            ? by + Math.sin(t * 1.4) * 0.25
+            : 0.25 + ((by + 3.6 - ((this.animTime * 0.65 + ph * 0.5) % 3.6)) % 3.6);
+        const z = bz + Math.cos(t * 0.72 + ph) * 0.24;
+        dummy.position.set(x, y, z);
+        if (mode === 'fall') dummy.rotation.set(t * 0.9, t * 1.1, ph);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(i, dummy.matrix);
+      }
+      mesh.instanceMatrix.needsUpdate = true;
+    }
+
     for (const pool of [this.particles, this.coins]) {
       for (const p of pool) {
         if (!p.active) continue;
@@ -2043,7 +2355,7 @@ export class SceneManager {
     }
   }
 
-  pickWorld(clientX: number, clientY: number): { slotId: string | null; x: number; z: number } | null {
+  pickWorld(clientX: number, clientY: number): { slotId: string | null; barrelId: string | null; x: number; z: number } | null {
     const rect = this.canvas.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return null;
     const ndc = new THREE.Vector2(
@@ -2052,17 +2364,29 @@ export class SceneManager {
     );
     this.raycaster.setFromCamera(ndc, this.cameraCtrl.camera);
 
+    const barrelHitsTargets: THREE.Object3D[] = [];
+    for (const bv of this.barrelMeshes.values()) {
+      if (bv.hitArea.visible) barrelHitsTargets.push(bv.hitArea);
+    }
+    if (barrelHitsTargets.length > 0) {
+      const bHits = this.raycaster.intersectObjects(barrelHitsTargets, false);
+      if (bHits.length > 0) {
+        const barrelId = (bHits[0].object.userData as { barrelId?: string }).barrelId ?? null;
+        return { slotId: null, barrelId, x: bHits[0].point.x, z: bHits[0].point.z };
+      }
+    }
+
     const hitAreas: THREE.Object3D[] = [];
     for (const v of this.slotMeshes.values()) hitAreas.push(v.hitArea);
     const slotHits = this.raycaster.intersectObjects(hitAreas, false);
     if (slotHits.length > 0) {
       const slotId = (slotHits[0].object.userData as { slotId?: string }).slotId ?? null;
-      return { slotId, x: slotHits[0].point.x, z: slotHits[0].point.z };
+      return { slotId, barrelId: null, x: slotHits[0].point.x, z: slotHits[0].point.z };
     }
 
     const pt = new THREE.Vector3();
     if (this.raycaster.ray.intersectPlane(this.groundPlane, pt)) {
-      return { slotId: null, x: pt.x, z: pt.z };
+      return { slotId: null, barrelId: null, x: pt.x, z: pt.z };
     }
     return null;
   }

@@ -45,6 +45,8 @@ export interface LevelSpec {
   slots: SlotSpec[];
   lanterns: Vec2[];
   heroStart: Vec2;
+  barrels?: Array<{ id: string; x: number; z: number }>;
+  iceZones?: Array<{ x: number; z: number; radius: number }>;
   waves: WaveSpec[];
 }
 
@@ -406,6 +408,10 @@ export const LEVELS: LevelSpec[] = [
       { x: 3.6, z: -6.9 },
     ],
     heroStart: { x: -0.15, z: -4.9 },
+    barrels: [
+      { id: 'barrel_1', x: -0.4, z: 5.5 },
+      { id: 'barrel_2', x: 0.6, z: -3.2 },
+    ],
     waves: [
       { waveNumber: 1, clearBonus: 28, groups: [{ enemyId: 'scout_bot', count: 17, spacing: 0.85, hpOverride: 82 }] },
       {
@@ -501,6 +507,10 @@ export const LEVELS: LevelSpec[] = [
       { x: 3.2, z: -7.2 },
     ],
     heroStart: { x: -2.7, z: -4.9 },
+    barrels: [
+      { id: 'barrel_1', x: -0.5, z: 5.7 },
+      { id: 'barrel_2', x: 2.1, z: -3.9 },
+    ],
     waves: [
       { waveNumber: 1, clearBonus: 21, groups: [{ enemyId: 'turbo_hopper', count: 13, spacing: 1.0, hpOverride: 74, bountyOverride: 6 }] },
       { waveNumber: 2, clearBonus: 23, groups: [{ enemyId: 'swarm_saw', count: 18, spacing: 0.34, hpOverride: 30, bountyOverride: 3 }, { enemyId: 'hover_drone', count: 8, spacing: 0.78, hpOverride: 72, bountyOverride: 7 }] },
@@ -564,6 +574,10 @@ export const LEVELS: LevelSpec[] = [
       { x: 4.2, z: -0.8 },
     ],
     heroStart: { x: 0.0, z: -4.4 },
+    barrels: [
+      { id: 'barrel_1', x: -1.9, z: -2.4 },
+      { id: 'barrel_2', x: 1.9, z: -2.4 },
+    ],
     waves: [
       { waveNumber: 1, clearBonus: 28, groups: [{ enemyId: 'scout_bot', count: 13, spacing: 0.85, hpOverride: 61, bountyOverride: 5 }, { enemyId: 'turbo_hopper', count: 8, spacing: 0.85, hpOverride: 70, bountyOverride: 6 }] },
       { waveNumber: 2, clearBonus: 30, groups: [{ enemyId: 'chomp_brute', count: 5, spacing: 1.65, hpOverride: 194, bountyOverride: 14 }, { enemyId: 'swarm_saw', count: 15, spacing: 0.34, hpOverride: 41, bountyOverride: 3 }] },
@@ -601,8 +615,8 @@ export const LEVELS: LevelSpec[] = [
     slots: [
       { id: 'slot_1', x: -1.3, z: 4.3 },
       { id: 'slot_2', x: 1.4, z: 3.8 },
-      { id: 'slot_3', x: -1.2, z: -0.8 },
-      { id: 'slot_4', x: 1.3, z: -0.6 },
+      { id: 'slot_3', x: -1.2, z: -0.8, runeSlot: true },
+      { id: 'slot_4', x: 1.3, z: -0.6, runeSlot: true },
       { id: 'slot_5', x: 0.1, z: -4.9 },
       { id: 'slot_6', x: 2.2, z: 5.8 },
       { id: 'slot_7', x: 2.3, z: -5.3, lockedByStump: true, stumpClearCost: 45 },
@@ -658,8 +672,8 @@ export const LEVELS: LevelSpec[] = [
     ],
     slots: [
       { id: 'slot_1', x: 0.0, z: 4.2 },
-      { id: 'slot_2', x: 0.0, z: 1.6 },
-      { id: 'slot_3', x: 0.0, z: -1.0 },
+      { id: 'slot_2', x: 0.0, z: 1.6, runeSlot: true },
+      { id: 'slot_3', x: 0.0, z: -1.0, runeSlot: true },
       { id: 'slot_4', x: 0.0, z: -3.2 },
       { id: 'slot_5', x: -3.4, z: 6.6 },
       { id: 'slot_6', x: 3.4, z: 6.6 },
@@ -719,8 +733,8 @@ export const LEVELS: LevelSpec[] = [
     slots: [
       { id: 'slot_1', x: 0.0, z: 6.4 },
       { id: 'slot_2', x: 0.0, z: 3.2 },
-      { id: 'slot_3', x: -1.2, z: 0.2 },
-      { id: 'slot_4', x: 1.2, z: 0.2 },
+      { id: 'slot_3', x: -1.2, z: 0.2, runeSlot: true },
+      { id: 'slot_4', x: 1.2, z: 0.2, runeSlot: true },
       { id: 'slot_5', x: -0.9, z: -1.7 },
       { id: 'slot_6', x: 0.9, z: -1.7 },
       { id: 'slot_7', x: -1.4, z: 5.2, lockedByStump: true, stumpClearCost: 50 },
@@ -783,6 +797,10 @@ export const LEVELS: LevelSpec[] = [
       { x: 3.1, z: -7.2 },
     ],
     heroStart: { x: -2.65, z: -4.6 },
+    iceZones: [
+      { x: 2.8, z: 1.7, radius: 2.3 },
+      { x: -2.65, z: -4.6, radius: 2.1 },
+    ],
     waves: [
       { waveNumber: 1, clearBonus: 36, groups: [{ enemyId: 'turbo_hopper', count: 16, spacing: 0.6, hpOverride: 81, bountyOverride: 7 }, { enemyId: 'chomp_brute', count: 5, spacing: 1.45, hpOverride: 173, bountyOverride: 16 }] },
       { waveNumber: 2, clearBonus: 41, groups: [{ enemyId: 'hover_drone', count: 16, spacing: 0.52, hpOverride: 106, bountyOverride: 8 }, { enemyId: 'repair_drone', count: 6, spacing: 0.85, hpOverride: 130, bountyOverride: 10 }] },
@@ -842,6 +860,10 @@ export const LEVELS: LevelSpec[] = [
       { x: 4.2, z: -1.2 },
     ],
     heroStart: { x: 0.0, z: 3.6 },
+    iceZones: [
+      { x: 0.0, z: 3.6, radius: 2.4 },
+      { x: 0.0, z: -4.8, radius: 2.2 },
+    ],
     waves: [
       { waveNumber: 1, clearBonus: 42, groups: [{ enemyId: 'turbo_hopper', count: 18, spacing: 0.55, hpOverride: 83, bountyOverride: 7 }, { enemyId: 'hover_drone', count: 15, spacing: 0.58, hpOverride: 79, bountyOverride: 8 }] },
       { waveNumber: 2, clearBonus: 48, groups: [{ enemyId: 'chomp_brute', count: 8, spacing: 1.15, hpOverride: 260, bountyOverride: 16 }, { enemyId: 'repair_drone', count: 7, spacing: 0.78, hpOverride: 135, bountyOverride: 10 }] },
@@ -890,8 +912,8 @@ export const LEVELS: LevelSpec[] = [
     ],
     slots: [
       { id: 'slot_1', x: 0.0, z: 6.5 },
-      { id: 'slot_2', x: 0.0, z: 3.6 },
-      { id: 'slot_3', x: 0.0, z: 0.9 },
+      { id: 'slot_2', x: 0.0, z: 3.6, runeSlot: true },
+      { id: 'slot_3', x: 0.0, z: 0.9, runeSlot: true },
       { id: 'slot_4', x: 0.0, z: -1.8 },
       { id: 'slot_5', x: -1.5, z: 4.8 },
       { id: 'slot_6', x: 1.5, z: 4.8 },
@@ -905,6 +927,14 @@ export const LEVELS: LevelSpec[] = [
       { x: 4.3, z: -1.2 },
     ],
     heroStart: { x: 0.0, z: -4.4 },
+    iceZones: [
+      { x: -3.2, z: 3.3, radius: 2.2 },
+      { x: 3.2, z: 3.3, radius: 2.2 },
+    ],
+    barrels: [
+      { id: 'barrel_1', x: -1.9, z: -2.4 },
+      { id: 'barrel_2', x: 1.9, z: -2.4 },
+    ],
     waves: [
       { waveNumber: 1, clearBonus: 42, groups: [{ enemyId: 'scout_bot', count: 16, spacing: 0.62, hpOverride: 69, bountyOverride: 6 }, { enemyId: 'turbo_hopper', count: 16, spacing: 0.56, hpOverride: 97, bountyOverride: 8 }] },
       { waveNumber: 2, clearBonus: 47, groups: [{ enemyId: 'chomp_brute', count: 8, spacing: 1.05, hpOverride: 224, bountyOverride: 16 }, { enemyId: 'swarm_saw', count: 27, spacing: 0.2, hpOverride: 46, bountyOverride: 4 }] },
