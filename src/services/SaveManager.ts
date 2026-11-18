@@ -39,6 +39,14 @@ export interface SaveState {
 
 const STORAGE_KEY = 'palamut_kalesi_save_v1';
 
+export const SAVE_VERSION = 2;
+
+export interface SaveLoadResult {
+  state: SaveState;
+  saveRecovered: boolean;
+  migrated: boolean;
+}
+
 export function todayKey(nowMs = Date.now()): string {
   return new Date(nowMs).toISOString().slice(0, 10);
 }
@@ -55,7 +63,7 @@ export function computeSaveChecksum(data: Omit<SaveState, 'checksum'>): number {
 
 export function createInitialSave(nowMs = Date.now()): SaveState {
   return {
-    version: 1,
+    version: SAVE_VERSION,
     oakCoins: 240,
     emeraldGems: 80,
     skipTickets: 1,
@@ -96,29 +104,53 @@ export function createInitialSave(nowMs = Date.now()): SaveState {
   };
 }
 
+export function migrateSave(parsed: Partial<SaveState>, nowMs = Date.now()): { state: SaveState; migrated: boolean } {
+  const prevVersion = typeof parsed.version === 'number' ? parsed.version : 1;
+  const state: SaveState = { ...createInitialSave(nowMs), ...parsed, version: SAVE_VERSION };
+  return { state, migrated: prevVersion < SAVE_VERSION };
+}
+
 export class SaveManager {
   private state: SaveState;
+  readonly saveRecovered: boolean;
 
   constructor(nowMs = Date.now()) {
-    this.state = this.load(nowMs);
+    const result = this.load(nowMs);
+    this.state = result.state;
+    this.saveRecovered = result.saveRecovered;
+    if (result.migrated || result.saveRecovered) {
+      this.save();
+    }
     this.rollDailyCounters(nowMs);
   }
 
-  private load(nowMs: number): SaveState {
+  private load(nowMs: number): SaveLoadResult {
     if (typeof localStorage === 'undefined') {
-      return createInitialSave(nowMs);
+      return { state: createInitialSave(nowMs), saveRecovered: false, migrated: false };
     }
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return createInitialSave(nowMs);
-      const parsed = JSON.parse(raw) as SaveState;
-      const { checksum, ...rest } = parsed;
-      if (typeof checksum === 'number' && computeSaveChecksum(rest) !== checksum) {
-        return createInitialSave(nowMs);
+      if (!raw) return { state: createInitialSave(nowMs), saveRecovered: false, migrated: false };
+      const parsed: unknown = JSON.parse(raw);
+      if (parsed === null || typeof parsed !== 'object') {
+        return { state: createInitialSave(nowMs), saveRecovered: false, migrated: false };
       }
-      return { ...createInitialSave(nowMs), ...rest };
+      const { checksum, ...rest } = parsed as SaveState;
+      const prevVersion = typeof rest.version === 'number' ? rest.version : 1;
+      const checksumOk = typeof checksum === 'number' && computeSaveChecksum(rest) === checksum;
+      const { state, migrated } = migrateSave(rest as Partial<SaveState>, nowMs);
+      if (!checksumOk) {
+        console.warn(
+          `[SaveManager] Save checksum bozuk — JSON okunabildiği için veriler KURTARILDI (sıfırlama yapılmadı), uyarı: saveRecovered`,
+        );
+        return { state, saveRecovered: true, migrated };
+      }
+      if (migrated) {
+        console.info(`[SaveManager] Save şeması v${prevVersion} -> v${SAVE_VERSION} olarak migrate edildi.`);
+      }
+      return { state, saveRecovered: false, migrated };
     } catch {
-      return createInitialSave(nowMs);
+      return { state: createInitialSave(nowMs), saveRecovered: false, migrated: false };
     }
   }
 

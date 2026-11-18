@@ -90,10 +90,10 @@ export const TOWERS: Record<TowerId, TowerSpec> = {
         descKey: 'evo.squirrel_sniper.desc',
         stats: {
           cost: 120,
-          damage: 48,
+          damage: 40,
           fireRate: 1.8,
           range: 11.0,
-          critChance: 0.3,
+          critChance: 0.25,
           critMultiplier: 2.5,
         },
       },

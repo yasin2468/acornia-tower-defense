@@ -286,7 +286,7 @@ export class BattleView {
       this.hudBottomEl.style.display = hide ? 'none' : 'flex';
     }
     if (this.promoHudBtnEl) {
-      this.promoHudBtnEl.textContent = this.promoHideHud ? 'HUD Aç' : 'HUD Gizle';
+      this.promoHudBtnEl.textContent = this.promoHideHud ? t(loc, 'promo.hudShow') : t(loc, 'promo.hudHide');
     }
 
     if (this.hpTextEl) this.hpTextEl.textContent = `${Math.ceil(sim.baseHp)}/${sim.maxBaseHp}`;
@@ -532,7 +532,7 @@ export class BattleView {
       statLine = `${t(loc, 'hud.damage')} ${curStats.damage}→${spec.tier2.damage} · ${t(loc, 'hud.rate')} ${curStats.fireRate}→${spec.tier2.fireRate}`;
       actionsHtml = `
         <button class="tower-round-action sell" id="btn-tower-sell">
-          <span style="font-size:9px; opacity:0.85;">SAT</span>
+          <span style="font-size:9px; opacity:0.85;">${t(loc, 'hud.sellShort')}</span>
           <span>+${refund}</span>
         </button>
         <button class="tower-round-action upgrade" id="btn-tower-upgrade" ${sim.gold >= spec.tier2.cost ? '' : 'disabled'}>
@@ -555,13 +555,13 @@ export class BattleView {
             .join('')}
         </div>
         <button class="tower-round-action sell bottom" id="btn-tower-sell">
-          <span>SAT +${refund}</span>
+          <span>${t(loc, 'hud.sellShort')} +${refund}</span>
         </button>
       `;
     } else {
       actionsHtml = `
         <button class="tower-round-action sell" id="btn-tower-sell">
-          <span style="font-size:9px; opacity:0.85;">SAT</span>
+          <span style="font-size:9px; opacity:0.85;">${t(loc, 'hud.sellShort')}</span>
           <span>+${refund}</span>
         </button>
       `;
@@ -652,10 +652,10 @@ export class BattleView {
       <div class="promo-bar">
         <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; font-weight:800; color:var(--accent-gold);">
           <span>${t(loc, 'promo.title')}</span>
-          <button class="btn btn-sm" id="btn-promo-hud">${this.promoHideHud ? 'HUD Aç' : 'HUD Gizle'}</button>
+          <button class="btn btn-sm" id="btn-promo-hud">${this.promoHideHud ? t(loc, 'promo.hudShow') : t(loc, 'promo.hudHide')}</button>
         </div>
         <div style="display:flex; gap:6px;">
-          <button class="btn btn-sm" id="btn-promo-swarm">+30 Testere Sürüsü</button>
+          <button class="btn btn-sm" id="btn-promo-swarm">${t(loc, 'promo.swarmBtn')}</button>
           <button class="btn btn-sm" id="btn-promo-boss">+1 Boss</button>
         </div>
       </div>
@@ -682,7 +682,7 @@ export class BattleView {
         <div class="modal-backdrop">
           <div class="modal-card">
             <div style="font-size:20px; font-weight:800; color:var(--accent-gold);">${t(loc, 'hud.victory')} · ${'★'.repeat(stars)}</div>
-            <div style="font-size:13px; color:var(--text-muted);">+120 Palamut · +15 Zümrüt</div>
+            <div style="font-size:13px; color:var(--text-muted);">+120 ${t(loc, 'cur.oak')} · +15 ${t(loc, 'cur.gem')}</div>
             <button class="btn btn-gold" id="btn-double-reward">${t(loc, 'hud.doubleReward')}</button>
             <button class="btn btn-primary" id="btn-exit-map">${t(loc, 'hud.exitMap')}</button>
           </div>

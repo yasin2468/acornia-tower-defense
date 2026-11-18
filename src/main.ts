@@ -266,34 +266,57 @@ function frame(nowMs: number): void {
 }
 
 function renderLoadingSplash(pct: number): void {
+  const loc = saveManager.get().settings.locale;
   uiRoot.innerHTML = `
     <div class="loading-splash">
-      <img class="loading-emblem" src="${UI_ICON_URLS.castleShield}" alt="Palamut Kalesi" />
-      <div class="loading-title">PALAMUT KALESİ</div>
+      <img class="loading-emblem" src="${UI_ICON_URLS.castleShield}" alt="${t(loc, 'app.title')}" />
+      <div class="loading-title">${t(loc, 'loading.title')}</div>
       <div class="loading-track">
         <div class="loading-fill" style="width:${pct}%"></div>
       </div>
-      <div class="loading-sub">3D Modeller Yükleniyor... ${pct}%</div>
+      <div class="loading-sub">${t(loc, 'loading.models')} ${pct}%</div>
     </div>
   `;
 }
 
-async function boot(): Promise<void> {
-  renderLoadingSplash(5);
-  await preloadAllModels((loaded, total) => {
-    const pct = Math.max(8, Math.round((loaded / total) * 100));
-    const fill = uiRoot.querySelector<HTMLElement>('.loading-fill');
-    const sub = uiRoot.querySelector<HTMLElement>('.loading-sub');
-    if (fill) fill.style.width = `${pct}%`;
-    if (sub) sub.textContent = `3D Modeller Yükleniyor... ${pct}%`;
+function renderBootError(err: unknown): void {
+  const loc = saveManager.get().settings.locale;
+  const errName = err instanceof Error ? err.name : 'UnknownError';
+  uiRoot.innerHTML = `
+    <div class="loading-splash">
+      <img class="loading-emblem" src="${UI_ICON_URLS.castleShield}" alt="${t(loc, 'app.title')}" />
+      <div class="loading-title">${t(loc, 'boot.errorTitle')}</div>
+      <div class="loading-sub">${t(loc, 'boot.errorMessage')} (${errName})</div>
+      <button class="btn btn-primary" id="btn-boot-retry">${t(loc, 'boot.retry')}</button>
+    </div>
+  `;
+  uiRoot.querySelector<HTMLButtonElement>('#btn-boot-retry')?.addEventListener('click', () => {
+    void boot();
   });
+}
 
-  if (isPromoMode) {
-    startLevel(1, false);
-  } else {
-    renderMeta();
+async function boot(): Promise<void> {
+  try {
+    renderLoadingSplash(5);
+    await preloadAllModels((loaded, total) => {
+      const pct = Math.max(8, Math.round((loaded / total) * 100));
+      const fill = uiRoot.querySelector<HTMLElement>('.loading-fill');
+      const sub = uiRoot.querySelector<HTMLElement>('.loading-sub');
+      if (fill) fill.style.width = `${pct}%`;
+      if (sub) sub.textContent = `${t(saveManager.get().settings.locale, 'loading.models')} ${pct}%`;
+    });
+
+    if (isPromoMode) {
+      startLevel(1, false);
+    } else {
+      renderMeta();
+    }
+    requestAnimationFrame(frame);
+  } catch (err) {
+    const errName = err instanceof Error ? err.name : 'UnknownError';
+    console.error(`[PalamutKalesi] boot hatası: ${errName}`, err);
+    renderBootError(err);
   }
-  requestAnimationFrame(frame);
 }
 
 void boot();

@@ -112,7 +112,13 @@ export async function preloadAllModels(
       loaded += 1;
       onProgress?.(loaded, total);
     }),
-  ).then(() => undefined);
+  ).then(
+    () => undefined,
+    (err: unknown) => {
+      preloadPromise = null;
+      throw err;
+    },
+  );
 
   return preloadPromise;
 }

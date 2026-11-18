@@ -14,9 +14,16 @@ aynı anda değiştirmez. Durumlar: `planlandi` → `devam` → `dogrulaniyor` �
 
 | # | İş | Not |
 |---|---|---|
-| O1 | `NetworkTransportStub` → gerçek oda/soket katmanı (çok oyunculu) | onay bekliyor |
-| O2 | `AdService`/`BillingService` Phase 1 simülasyon → AdMob/RevenueCat | onay bekliyor |
-| O3 | 12 seviye üstü içerik / boss dengelemesi | onay bekliyor |
+| D1 | Dalga HP eğrisini 1.12–1.18 banda normalize et, L4 regresyonunu kapat | GLM-5.3 |
+| D2 | Altın/HP erozyonu: L12'de oran ≥ 0.014 | GLM-5.3 |
+| D3 | Sniper evrimi marjinal verimi ≤ 0.5 DPS/altın | GLM-5.3 |
+| D4 | Boss TTK dengesi (tek T1 kule öldüremesin, 3 kule öldürebilsin) | GLM-5.3 |
+| K1 | `boot()` hata yakalama + düşürücü yükleme mesajı | GLM-5.3 |
+| K2 | Ölen düşman materyal/geometri dispose | GLM-5.3 |
+| K3 | SaveManager sürüm migration + sessiz sıfırlama kaldır | GLM-5.3 |
+| K4 | 20+ gömülü TR metni i18n anahtarına taşı (parite korunur) | GLM-5.3 |
+| G1 | 674 çizim çağrısı: LOD/birleştirme (ayrı iş, varlık hattı) | bekliyor |
+| O1 | Çok oyunculu gerçek soket katmanı | bekliyor |
 
 ## Devir notu
 GLM'e iş verirken satır numarasını yaz: `TASKS T2` + tek cümle hedef + kabul kriteri.

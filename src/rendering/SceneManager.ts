@@ -1907,6 +1907,18 @@ export class SceneManager {
       db.elapsed += dt;
       if (db.life <= 0) {
         this.dynamicGroup.remove(db.group);
+        const disposedMats = new Set<THREE.Material>();
+        db.group.traverse((obj) => {
+          if (!(obj as THREE.Mesh).isMesh) return;
+          const mat = (obj as THREE.Mesh).material;
+          const mats = Array.isArray(mat) ? mat : [mat];
+          for (const m of mats) {
+            if (m && !disposedMats.has(m)) {
+              disposedMats.add(m);
+              m.dispose();
+            }
+          }
+        });
       } else {
         // Death pop: one stark white flash frame pair, then tumble + shrink
         const fs = hitFlashStrength(db.elapsed, HIT_FLASH_DURATION * 1.2);

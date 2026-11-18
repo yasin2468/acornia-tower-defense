@@ -284,7 +284,7 @@ export class MetaView {
                 <span class="b-tag">${biomeLabel}</span>
               </span>
             </div>
-            <div class="bestiary-stats">HP ${e.baseHp} · Hız ${e.speed} · Zırh %${Math.round(e.armor * 100)}</div>
+            <div class="bestiary-stats">${t(loc, 'bestiary.hp')} ${e.baseHp} · ${t(loc, 'bestiary.speed')} ${e.speed} · ${t(loc, 'bestiary.armor')} %${Math.round(e.armor * 100)}</div>
             <div class="bestiary-desc">${t(loc, e.descKey)}</div>
           </div>
         </div>
@@ -425,16 +425,16 @@ export class MetaView {
       <div style="font-size:15px; font-weight:900; color:#ffe17a;">${t(loc, 'shop.chests')}</div>
       <div class="chest-grid">
         <div class="chest-card">
-          <img src="${UI_ICON_URLS.chestFree}" alt="Orman Sandığı" />
+          <img src="${UI_ICON_URLS.chestFree}" alt="${t(loc, 'shop.freeChest')}" />
           <div style="font-size:12.5px; font-weight:800;">${t(loc, 'shop.freeChest')}</div>
-          <div style="font-size:11px; color:var(--text-muted);">${2 - save.dailyFreeChestsUsed}/2 Kalan</div>
-          <button class="btn btn-primary btn-sm" style="width:100%;" id="btn-chest-free" ${save.dailyFreeChestsUsed >= 2 ? 'disabled' : ''}>AÇ (Reklam)</button>
+          <div style="font-size:11px; color:var(--text-muted);">${2 - save.dailyFreeChestsUsed}/2 ${t(loc, 'shop.chestsRemaining')}</div>
+          <button class="btn btn-primary btn-sm" style="width:100%;" id="btn-chest-free" ${save.dailyFreeChestsUsed >= 2 ? 'disabled' : ''}>${t(loc, 'shop.openChest')}</button>
         </div>
         <div class="chest-card epic">
-          <img src="${UI_ICON_URLS.chestEpic}" alt="Epik Sandık" />
+          <img src="${UI_ICON_URLS.chestEpic}" alt="${t(loc, 'shop.epicChest')}" />
           <div style="font-size:12.5px; font-weight:800;">${t(loc, 'shop.epicChest')}</div>
-          <div style="font-size:11px; color:var(--accent-cyan);">+10 Epik Kart</div>
-          <button class="btn btn-gold btn-sm" style="width:100%;" id="btn-chest-epic" ${save.emeraldGems >= 120 ? '' : 'disabled'}>120 Zümrüt</button>
+          <div style="font-size:11px; color:var(--accent-cyan);">${t(loc, 'shop.epicChestContents')}</div>
+          <button class="btn btn-gold btn-sm" style="width:100%;" id="btn-chest-epic" ${save.emeraldGems >= 120 ? '' : 'disabled'}>120 ${t(loc, 'cur.gem')}</button>
         </div>
       </div>
     `;
@@ -554,7 +554,7 @@ export class MetaView {
         await this.adService.showRewarded('daily_chest');
         this.saveManager.update((d) => { d.dailyFreeChestsUsed += 1; });
         const rw = openForestChest(this.saveManager, 'common');
-        this.statusNotice = `+${rw.oakCoins} Palamut, +${rw.gems} Zümrüt`;
+        this.statusNotice = `+${rw.oakCoins} ${t(loc, 'cur.oak')}, +${rw.gems} ${t(loc, 'cur.gem')}`;
         this.callbacks.onRefresh();
       };
     }
@@ -565,7 +565,7 @@ export class MetaView {
         if (this.saveManager.get().emeraldGems < 120) return;
         this.saveManager.update((d) => { d.emeraldGems -= 120; });
         const rw = openForestChest(this.saveManager, 'epic');
-        this.statusNotice = `+${rw.oakCoins} Palamut, +10 Kart`;
+        this.statusNotice = `+${rw.oakCoins} ${t(loc, 'cur.oak')}, ${t(loc, 'cards.plusTen')}`;
         this.callbacks.onRefresh();
       };
     }
@@ -582,7 +582,7 @@ export class MetaView {
     const quickMatch = container.querySelector<HTMLButtonElement>('#btn-quick-match');
     if (quickMatch) {
       quickMatch.onclick = () => {
-        this.statusNotice = 'SmartBotDirector hazır — Faz 2 Co-op & Faz 3 PvP senkronizasyonu bağlı.';
+        this.statusNotice = t(loc, 'multi.statusReady');
         this.callbacks.onRefresh();
       };
     }
