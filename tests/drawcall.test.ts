@@ -1,7 +1,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import * as THREE from 'three';
 import { countDrawCalls } from '../src/rendering/DrawCallCounter.ts';
+import { createPropLOD } from '../src/rendering/ModelFactory.ts';
 
 describe('DrawCallCounter (C1, G1 olcum ayagi)', () => {
   it('sentetik sahne: 3 mesh ayni materyal + 1 InstancedMesh dogru sayilir', () => {
@@ -83,5 +86,50 @@ describe('DrawCallCounter (C1, G1 olcum ayagi)', () => {
     assert.equal(stats.meshes, 1);
     assert.equal(stats.materials, 2);
     assert.equal(stats.estimatedDrawCalls, 2);
+  });
+
+  it('G1: env_castle ve cevre GLB modelleri tek difuz mesh + tek materyal olarak paketlenmistir', () => {
+    const singleAtlasModels = [
+      'env_castle.glb',
+      'env_slot_pad.glb',
+      'env_cliff_segment.glb',
+      'env_tree_oak.glb',
+      'env_tree_pine.glb',
+      'env_fence.glb',
+      'env_lantern.glb',
+      'env_stump.glb',
+    ];
+    for (const file of singleAtlasModels) {
+      const buf = fs.readFileSync(path.resolve('public/models', file));
+      const chunkLen = buf.readUInt32LE(12);
+      const gltf = JSON.parse(buf.subarray(20, 20 + chunkLen).toString('utf8'));
+      assert.equal(gltf.meshes.length, 1, `${file} 1 mesh olmali`);
+      assert.equal(gltf.materials.length, 1, `${file} 1 materyal olmali`);
+    }
+
+    const crysBuf = fs.readFileSync(path.resolve('public/models', 'env_crystal.glb'));
+    const crysJson = JSON.parse(crysBuf.subarray(20, 20 + crysBuf.readUInt32LE(12)).toString('utf8'));
+    assert.equal(crysJson.meshes.length, 2, 'env_crystal.glb kaya + glow olarak 2 mesh olmali');
+    assert.equal(crysJson.materials.length, 2, 'env_crystal.glb 2 materyal olmali');
+  });
+
+  it('G1: createPropLOD uzak mesafede vekil seviyeye gecer ve countDrawCalls yalnizca aktif seviyeyi sayar', () => {
+    const high = new THREE.Group();
+    high.add(new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), new THREE.MeshStandardMaterial()));
+    const lod = createPropLOD(high, '#5aa650', 0.85, 2.4, 22);
+    lod.position.set(0, 0, 0);
+
+    const cam = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+    cam.position.set(0, 2, 10);
+    cam.updateMatrixWorld(true);
+    lod.update(cam);
+    assert.equal(lod.getCurrentLevel(), 0);
+    assert.equal(countDrawCalls(lod).estimatedDrawCalls, 1);
+
+    cam.position.set(0, 2, 30);
+    cam.updateMatrixWorld(true);
+    lod.update(cam);
+    assert.equal(lod.getCurrentLevel(), 1);
+    assert.equal(countDrawCalls(lod).estimatedDrawCalls, 1);
   });
 });

@@ -177,3 +177,36 @@ export function instantiateModel(
     materials,
   };
 }
+
+export interface StaticPrimitive {
+  name: string;
+  geometry: THREE.BufferGeometry;
+  material: THREE.Material;
+  castShadow: boolean;
+  receiveShadow: boolean;
+}
+
+export function extractStaticPrimitives(name: ModelName): StaticPrimitive[] {
+  const gltf = cache.get(name);
+  if (!gltf) return [];
+  gltf.scene.updateMatrixWorld(true);
+  const out: StaticPrimitive[] = [];
+  gltf.scene.traverse((obj) => {
+    if (!(obj as THREE.Mesh).isMesh) return;
+    const mesh = obj as THREE.Mesh;
+    const mat = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+    if (!mat) return;
+    const geo = mesh.geometry.clone();
+    geo.applyMatrix4(mesh.matrixWorld);
+    const lower = mesh.name.toLowerCase();
+    const noShadow = lower.includes('shadow') || lower.includes('glow') || lower.includes('aura');
+    out.push({
+      name: mesh.name,
+      geometry: geo,
+      material: mat,
+      castShadow: !noShadow,
+      receiveShadow: !lower.includes('glow') && !lower.includes('aura'),
+    });
+  });
+  return out;
+}

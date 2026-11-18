@@ -52,6 +52,28 @@ export function createFenceProp(): THREE.Group {
   return inst ? inst.scene : fallbackBox('#a87447', 0.35);
 }
 
+export function createPropLOD(
+  highDetail: THREE.Object3D,
+  proxyColor: string,
+  radius: number,
+  height: number,
+  distance = 22,
+): THREE.LOD {
+  const lod = new THREE.LOD();
+  highDetail.visible = true;
+  lod.addLevel(highDetail, 0);
+
+  const proxyGeo = new THREE.ConeGeometry(radius, height, 7);
+  proxyGeo.translate(0, height * 0.5, 0);
+  const proxyMat = new THREE.MeshStandardMaterial({ color: proxyColor, roughness: 0.9, metalness: 0.0 });
+  const lowProxy = new THREE.Mesh(proxyGeo, proxyMat);
+  lowProxy.castShadow = true;
+  lowProxy.receiveShadow = true;
+  lowProxy.visible = false;
+  lod.addLevel(lowProxy, distance);
+  return lod;
+}
+
 export interface TowerRig {
   root: THREE.Group;
   turretHead: THREE.Object3D;

@@ -17,18 +17,15 @@ import type {
   SimulationEngine,
   SlotState,
 } from '../core/SimulationEngine.ts';
+import { extractStaticPrimitives, type ModelName } from './AssetLoader.ts';
 import { CameraController } from './CameraController.ts';
 import { countDrawCalls } from './DrawCallCounter.ts';
 import { createCobbleRoadTexture, createMeadowTexture } from './ProceduralTextures.ts';
 import {
   createBearHeroRig,
-  createCliffProp,
-  createCrystalProp,
   createEnemyRig,
-  createFenceProp,
   createGreatOakCastle,
-  createLanternProp,
-  createStoneSlotPad,
+  createPropLOD,
   createStumpProp,
   createTowerRig,
   createTreeProp,
@@ -587,6 +584,29 @@ function createExplosiveBarrelProp(): THREE.Group {
   return g;
 }
 
+function buildInstancedModelGroup(
+  name: ModelName,
+  transforms: THREE.Matrix4[],
+  cloneMaterialFn?: (mat: THREE.Material, meshName: string) => THREE.Material,
+): THREE.Group {
+  const group = new THREE.Group();
+  if (transforms.length === 0) return group;
+  const prims = extractStaticPrimitives(name);
+  if (prims.length === 0) return group;
+  for (const p of prims) {
+    const mat = cloneMaterialFn ? cloneMaterialFn(p.material, p.name) : p.material;
+    const inst = new THREE.InstancedMesh(p.geometry, mat, transforms.length);
+    inst.castShadow = p.castShadow;
+    inst.receiveShadow = p.receiveShadow;
+    for (let i = 0; i < transforms.length; i++) {
+      inst.setMatrixAt(i, transforms[i]);
+    }
+    inst.instanceMatrix.needsUpdate = true;
+    group.add(inst);
+  }
+  return group;
+}
+
 export class SceneManager {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene: THREE.Scene;
@@ -606,8 +626,9 @@ export class SceneManager {
   private sunLight: THREE.DirectionalLight;
 
   private slotMeshes = new Map<string, { stump?: THREE.Group; smoke?: THREE.Group; hitArea: THREE.Mesh }>();
-  private barrelMeshes = new Map<string, { group: THREE.Group; hitArea: THREE.Mesh }>();
+  private barrelMeshes = new Map<string, { group: THREE.Group; hitArea: THREE.Mesh; alive: boolean }>();
   private ambientMotes: AmbientMotePool | null = null;
+  private lanternLights: THREE.PointLight[] = [];
   private towerRigs = new Map<string, { key: string; rig: TowerRig }>();
   private enemyRigs = new Map<number, EnemyRig>();
   private projectileMeshes = new Map<
@@ -641,7 +662,8 @@ export class SceneManager {
   /** Fired on each railgun / pierce-line shot. */
   onRailgunFire?: () => void;
   private poolMeshes: THREE.Mesh[] = [];
-  private swayTrees: Array<{ group: THREE.Group; phase: number }> = [];
+  private lodTrees: Array<{ lod: THREE.LOD; phase: number }> = [];
+  private batterySaver = false;
   private heroRig: HeroRig | null = null;
   private heroVisualKey = '';
   private rangeRing: THREE.Mesh;
@@ -1049,7 +1071,16 @@ export class SceneManager {
   }
 
   setBatterySaver(enabled: boolean): void {
+    this.batterySaver = enabled;
     this.usePostProcessing = !enabled && !this.bloomDisabled;
+    for (const light of this.lanternLights) {
+      light.visible = !enabled;
+    }
+    for (const t of this.lodTrees) {
+      if (t.lod.levels.length > 1) {
+        t.lod.levels[1].distance = enabled ? 14 : 22;
+      }
+    }
   }
 
   loadLevel(level: LevelSpec, equippedHat: HatId, heroClass: HeroClassId = 'auto'): void {
@@ -1200,7 +1231,14 @@ export class SceneManager {
     castle.position.set(0, 0, -9.8);
     this.levelGroup.add(castle);
 
-    // Canyon / Cavern / Alpine Cliffs framing visible viewport sides
+    const composeMat = (x: number, y: number, z: number, rotY: number, sx: number, sy: number, sz: number): THREE.Matrix4 =>
+      new THREE.Matrix4().compose(
+        new THREE.Vector3(x, y, z),
+        new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotY),
+        new THREE.Vector3(sx, sy, sz),
+      );
+
+    // Canyon / Cavern / Alpine Cliffs framing visible viewport sides (InstancedMesh)
     const cliffLayout: Array<[number, number, number, number]> = [
       [-5.35, -8.5, 1.05, 0.25],
       [-5.5, -4.1, 1.12, 1.1],
@@ -1213,23 +1251,20 @@ export class SceneManager {
       [-3.8, -11.0, 1.18, 0.2],
       [3.8, -10.9, 1.15, 2.9],
     ];
-    for (const [cx, cz, sc, rot] of cliffLayout) {
-      const cliff = createCliffProp(sc);
-      cliff.position.set(cx, 0, cz);
-      cliff.rotation.y = rot;
-      if (level.biome === 'canyon') cliff.scale.y = 1.28;
-      if (theme.cliffTint !== '#ffffff') {
-        cliff.traverse((obj) => {
-          const mat = (obj as THREE.Mesh).material;
-          if (mat instanceof THREE.MeshStandardMaterial) {
-            mat.color.multiply(new THREE.Color(theme.cliffTint));
-          }
-        });
-      }
-      this.levelGroup.add(cliff);
-    }
+    const cliffMats = cliffLayout.map(([cx, cz, sc, rot]) =>
+      composeMat(cx, 0, cz, rot, sc, level.biome === 'canyon' ? sc * 1.28 : sc, sc),
+    );
+    this.levelGroup.add(
+      buildInstancedModelGroup('env_cliff_segment', cliffMats, (origMat) => {
+        if (theme.cliffTint === '#ffffff' || !(origMat instanceof THREE.MeshStandardMaterial)) return origMat;
+        const cloned = origMat.clone();
+        cloned.color.multiply(new THREE.Color(theme.cliffTint));
+        cloned.needsUpdate = true;
+        return cloned;
+      }),
+    );
 
-    // Crystals ONLY in Crystal Cavern (12 clusters) and Frosted Peaks (ice-blue clusters)
+    // Crystals ONLY in Crystal Cavern (12 clusters) and Frosted Peaks (ice-blue clusters) — InstancedMesh
     const crystalCoords: Array<[number, number, number, number]> =
       level.biome === 'cavern'
         ? [
@@ -1256,47 +1291,55 @@ export class SceneManager {
               [2.8, -8.8, 0.85, -0.5],
             ]
           : [];
-    for (const [cx, cz, sc, rot] of crystalCoords) {
-      const crys = createCrystalProp(sc);
-      crys.position.set(cx, 0, cz);
-      crys.rotation.y = rot;
-      if (level.biome === 'snow') {
-        crys.traverse((obj) => {
-          const mat = (obj as THREE.Mesh).material;
-          if (mat instanceof THREE.MeshStandardMaterial) {
-            mat.color.lerp(new THREE.Color('#8fe3ff'), 0.68);
-            mat.emissive.set('#38bdf8');
+    if (crystalCoords.length > 0) {
+      const crysMats = crystalCoords.map(([cx, cz, sc, rot]) => composeMat(cx, 0, cz, rot, sc, sc, sc));
+      this.levelGroup.add(
+        buildInstancedModelGroup('env_crystal', crysMats, (origMat, meshName) => {
+          if (level.biome !== 'snow' || !(origMat instanceof THREE.MeshStandardMaterial)) return origMat;
+          const cloned = origMat.clone();
+          if (meshName.toLowerCase().includes('glow')) {
+            cloned.map = null;
+            cloned.emissiveMap = null;
+            cloned.color.set('#bceeff');
+            cloned.emissive.set('#38bdf8');
+          } else {
+            cloned.color.lerp(new THREE.Color('#8fe3ff'), 0.45);
           }
-        });
-      }
-      this.levelGroup.add(crys);
+          cloned.needsUpdate = true;
+          return cloned;
+        }),
+      );
     }
 
-    // Stone pads, rune pad rings, oak stumps
-    for (const s of level.slots) {
-      const pad = createStoneSlotPad();
-      pad.position.set(s.x, 0, s.z);
-      this.levelGroup.add(pad);
+    // Stone pads (InstancedMesh), batched rune rings/gems, hit areas & oak stumps
+    const padMatrices = level.slots.map((s) => composeMat(s.x, 0, s.z, 0, 1, 1, 1));
+    this.levelGroup.add(buildInstancedModelGroup('env_slot_pad', padMatrices));
 
-      if (s.runeSlot) {
-        const runeRing = new THREE.Mesh(
-          new THREE.RingGeometry(0.58, 0.76, 24),
-          new THREE.MeshBasicMaterial({ color: '#4ff2ff', side: THREE.DoubleSide, transparent: true, opacity: 0.85 }),
-        );
-        runeRing.rotation.x = -Math.PI / 2;
-        runeRing.position.set(s.x, 0.055, s.z);
-        this.levelGroup.add(runeRing);
+    const runeSlots = level.slots.filter((s) => s.runeSlot);
+    if (runeSlots.length > 0) {
+      const rGeo = new THREE.RingGeometry(0.58, 0.76, 24);
+      rGeo.rotateX(-Math.PI / 2);
+      const rMat = new THREE.MeshBasicMaterial({ color: '#4ff2ff', side: THREE.DoubleSide, transparent: true, opacity: 0.85 });
+      const rInst = new THREE.InstancedMesh(rGeo, rMat, runeSlots.length);
+      runeSlots.forEach((s, idx) => rInst.setMatrixAt(idx, composeMat(s.x, 0.055, s.z, 0, 1, 1, 1)));
+      rInst.instanceMatrix.needsUpdate = true;
+      this.levelGroup.add(rInst);
+
+      const gGeo = new THREE.OctahedronGeometry(0.085, 0);
+      const gMat = new THREE.MeshStandardMaterial({ color: '#7ff8ff', emissive: '#22d3ee', emissiveIntensity: 0.95, roughness: 0.2 });
+      const gInst = new THREE.InstancedMesh(gGeo, gMat, runeSlots.length * 4);
+      let gIdx = 0;
+      for (const s of runeSlots) {
         for (let k = 0; k < 4; k++) {
           const a = (k * Math.PI) / 2 + Math.PI / 4;
-          const gem = new THREE.Mesh(
-            new THREE.OctahedronGeometry(0.085, 0),
-            new THREE.MeshStandardMaterial({ color: '#7ff8ff', emissive: '#22d3ee', emissiveIntensity: 0.95, roughness: 0.2 }),
-          );
-          gem.position.set(s.x + Math.cos(a) * 0.68, 0.08, s.z + Math.sin(a) * 0.68);
-          this.levelGroup.add(gem);
+          gInst.setMatrixAt(gIdx++, composeMat(s.x + Math.cos(a) * 0.68, 0.08, s.z + Math.sin(a) * 0.68, 0, 1, 1, 1));
         }
       }
+      gInst.instanceMatrix.needsUpdate = true;
+      this.levelGroup.add(gInst);
+    }
 
+    for (const s of level.slots) {
       const hitArea = new THREE.Mesh(
         new THREE.CylinderGeometry(0.94, 0.94, 0.45, 12),
         new THREE.MeshBasicMaterial({ visible: false }),
@@ -1304,6 +1347,8 @@ export class SceneManager {
       hitArea.position.set(s.x, 0.22, s.z);
       hitArea.userData = { slotId: s.id };
       this.levelGroup.add(hitArea);
+      hitArea.updateMatrixWorld(true);
+      hitArea.visible = false;
 
       let stump: THREE.Group | undefined;
       if (s.lockedByStump) {
@@ -1341,19 +1386,26 @@ export class SceneManager {
       bHit.position.set(b.x, 0.45, b.z);
       bHit.userData = { barrelId: b.id };
       this.levelGroup.add(bHit);
+      bHit.updateMatrixWorld(true);
+      bHit.visible = false;
 
-      this.barrelMeshes.set(b.id, { group: bGroup, hitArea: bHit });
+      this.barrelMeshes.set(b.id, { group: bGroup, hitArea: bHit, alive: true });
     }
 
-    // Warm Amber Lanterns casting golden pools onto slate valley floor
+    // Warm Amber Lanterns casting golden pools onto slate valley floor (InstancedMesh posts + PointLights)
+    const lanternMats = level.lanterns.map((lan) =>
+      composeMat(lan.x, 0, lan.z, lan.x < 0 ? Math.PI * 0.45 : -Math.PI * 0.45, 1, 1, 1),
+    );
+    this.levelGroup.add(buildInstancedModelGroup('env_lantern', lanternMats));
     for (const lan of level.lanterns) {
-      const { group } = createLanternProp();
-      group.position.set(lan.x, 0, lan.z);
-      group.rotation.y = lan.x < 0 ? Math.PI * 0.45 : -Math.PI * 0.45;
-      this.levelGroup.add(group);
+      const light = new THREE.PointLight('#ff9638', 3.4, 7.5);
+      light.position.set(lan.x + (lan.x < 0 ? 0.35 : -0.35), 1.15, lan.z);
+      light.visible = !this.batterySaver;
+      this.levelGroup.add(light);
+      this.lanternLights.push(light);
     }
 
-    // Woodland trees & fences (omitted underground in Crystal Cavern)
+    // Woodland trees (LOD-wrapped with cloned per-biome shared material) & instanced fences (omitted in Crystal Cavern)
     if (level.biome !== 'cavern') {
       const pineAll = level.biome === 'snow';
       const baseTrees: Array<[number, number, number, 'oak' | 'pine']> =
@@ -1382,21 +1434,36 @@ export class SceneManager {
                   ] as Array<[number, number, number, 'oak' | 'pine']>)
                 : []),
             ];
+      const variantMatCache = new Map<'oak' | 'pine', THREE.Material>();
       for (let i = 0; i < baseTrees.length; i++) {
         const [tx, tz, sc, variant] = baseTrees[i];
         const tree = createTreeProp(sc, variant);
-        tree.position.set(tx, 0, tz);
-        tree.rotation.y = i * 0.9;
         if (theme.canopyTint !== '#ffffff') {
           tree.traverse((obj) => {
-            const mat = (obj as THREE.Mesh).material;
-            if (mat instanceof THREE.MeshStandardMaterial) {
-              mat.color.lerp(new THREE.Color(theme.canopyTint), level.biome === 'snow' ? 0.55 : 0.45);
+            const mesh = obj as THREE.Mesh;
+            if (!mesh.isMesh || !(mesh.material instanceof THREE.MeshStandardMaterial)) return;
+            let shared = variantMatCache.get(variant);
+            if (!shared) {
+              const cloned = mesh.material.clone();
+              cloned.color.lerp(new THREE.Color(theme.canopyTint), level.biome === 'snow' ? 0.55 : 0.45);
+              cloned.needsUpdate = true;
+              shared = cloned;
+              variantMatCache.set(variant, shared);
             }
+            mesh.material = shared;
           });
         }
-        this.levelGroup.add(tree);
-        this.swayTrees.push({ group: tree, phase: i * 1.1 });
+        const proxyCol =
+          theme.canopyTint !== '#ffffff'
+            ? theme.canopyTint
+            : variant === 'pine'
+              ? '#3f844b'
+              : '#5aa650';
+        const lod = createPropLOD(tree, proxyCol, 0.85 * sc, 2.4 * sc, this.batterySaver ? 14 : 22);
+        lod.position.set(tx, 0, tz);
+        lod.rotation.y = i * 0.9;
+        this.levelGroup.add(lod);
+        this.lodTrees.push({ lod, phase: i * 1.1 });
       }
 
       const fencePositions: Array<[number, number, number]> = [
@@ -1409,14 +1476,15 @@ export class SceneManager {
       ];
       const pathSamplesForFence = curves.flatMap((c) => c.getSpacedPoints(50));
       const activeFences = level.biome === 'canyon' ? fencePositions.slice(0, 3) : fencePositions;
+      const fenceMats: THREE.Matrix4[] = [];
       for (const [fx, fz, rot] of activeFences) {
         const tooCloseToSlot = level.slots.some((sl) => Math.hypot(sl.x - fx, sl.z - fz) < 1.55);
         const tooCloseToRoad = pathSamplesForFence.some((pt) => Math.hypot(pt.x - fx, pt.z - fz) < 1.22);
         if (tooCloseToSlot || tooCloseToRoad) continue;
-        const fence = createFenceProp();
-        fence.position.set(fx, 0, fz);
-        fence.rotation.y = rot;
-        this.levelGroup.add(fence);
+        fenceMats.push(composeMat(fx, 0, fz, rot, 1, 1, 1));
+      }
+      if (fenceMats.length > 0) {
+        this.levelGroup.add(buildInstancedModelGroup('env_fence', fenceMats));
       }
     }
 
@@ -1443,11 +1511,12 @@ export class SceneManager {
     this.slotMeshes.clear();
     this.barrelMeshes.clear();
     this.ambientMotes = null;
+    this.lanternLights = [];
     this.towerRigs.clear();
     this.enemyRigs.clear();
     this.projectileMeshes.clear();
     this.poolMeshes = [];
-    this.swayTrees = [];
+    this.lodTrees = [];
     this.shockRings = [];
     this.energyBeams = [];
     this.muzzleFlashes = [];
@@ -1485,8 +1554,9 @@ export class SceneManager {
     this.monitorFps(realDt);
     this.cameraCtrl.update(realDt);
 
-    for (const t of this.swayTrees) {
-      t.group.rotation.z = Math.sin(this.animTime * 1.3 + t.phase) * 0.018;
+    for (const t of this.lodTrees) {
+      t.lod.rotation.z = Math.sin(this.animTime * 1.3 + t.phase) * 0.018;
+      t.lod.update(this.cameraCtrl.camera);
     }
 
     // Sync slots & towers
@@ -1540,8 +1610,9 @@ export class SceneManager {
     for (const [bId, bv] of this.barrelMeshes.entries()) {
       const bState = sim.barrels.get(bId);
       const alive = Boolean(bState && !bState.exploded);
+      bv.alive = alive;
       bv.group.visible = alive;
-      bv.hitArea.visible = alive;
+      bv.hitArea.visible = false;
       if (alive) {
         const spark = bv.group.children[bv.group.children.length - 1];
         if (spark) spark.rotation.y = this.animTime * 4.5;
@@ -2093,6 +2164,7 @@ export class SceneManager {
       } else if (ev.type === 'BARREL_EXPLODED') {
         const bv = this.barrelMeshes.get(ev.barrelId);
         if (bv) {
+          bv.alive = false;
           bv.group.visible = false;
           bv.hitArea.visible = false;
         }
@@ -2366,7 +2438,7 @@ export class SceneManager {
 
     const barrelHitsTargets: THREE.Object3D[] = [];
     for (const bv of this.barrelMeshes.values()) {
-      if (bv.hitArea.visible) barrelHitsTargets.push(bv.hitArea);
+      if (bv.alive) barrelHitsTargets.push(bv.hitArea);
     }
     if (barrelHitsTargets.length > 0) {
       const bHits = this.raycaster.intersectObjects(barrelHitsTargets, false);
