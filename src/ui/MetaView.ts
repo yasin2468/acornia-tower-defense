@@ -681,7 +681,7 @@ export class MetaView {
       return `
         <button type="button" class="bestiary-row ${e.isBoss ? 'boss' : ''}" data-open-journal-id="${e.id}">
           <div class="bestiary-swatch" style="background: linear-gradient(155deg, ${e.color} 0%, ${e.accentColor} 100%);">
-            <span class="svg-ico" style="width:18px;height:18px;color:#ffffff;">${e.isBoss ? ICONS.skullCrown : ICONS.swords}</span>
+            <img class="bestiary-portrait-img" src="${getEnemyBadgeUrl(e.id, e.isBoss)}" alt="${t(loc, e.nameKey)}" />
           </div>
           <div class="bestiary-info">
             <div class="bestiary-head">

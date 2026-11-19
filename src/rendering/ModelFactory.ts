@@ -391,6 +391,7 @@ export interface EnemyRig {
   attackAction?: THREE.AnimationAction | null;
   activeClip?: 'move' | 'attack';
   spinPart?: THREE.Object3D;
+  spinBones: Array<{ obj: THREE.Object3D; speed: number }>;
   isFlying: boolean;
   hitJoltTimer: number;
   flashTimer: number;
@@ -430,6 +431,16 @@ export function createEnemyRig(enemyId: EnemyId): EnemyRig {
   }
 
   const spinPart = body.getObjectByName('SpinPart') ?? undefined;
+  const spinBones: Array<{ obj: THREE.Object3D; speed: number }> = [];
+  body.traverse((obj) => {
+    if (obj.name.startsWith('SpinBone_Fast')) {
+      spinBones.push({ obj, speed: 24 });
+    } else if (obj.name.startsWith('SpinBone_Med')) {
+      spinBones.push({ obj, speed: 11 });
+    } else if (obj.name.startsWith('SpinBone_Slow')) {
+      spinBones.push({ obj, speed: 5.5 });
+    }
+  });
   return {
     root,
     body,
@@ -440,6 +451,7 @@ export function createEnemyRig(enemyId: EnemyId): EnemyRig {
     attackAction,
     activeClip,
     spinPart,
+    spinBones,
     isFlying: ENEMIES[enemyId].isFlying,
     hitJoltTimer: 0,
     flashTimer: 0,
@@ -502,6 +514,11 @@ export function updateEnemyAnimation(
       rig.spinPart.rotation.x += fxDt * 18;
     } else {
       rig.spinPart.rotation.z += fxDt * 10;
+    }
+  }
+  if (fxDt > 0) {
+    for (const sb of rig.spinBones) {
+      sb.obj.rotateY(fxDt * sb.speed);
     }
   }
 }

@@ -687,7 +687,7 @@ export class BattleView {
       const hp = g ? g.hp : e.hp / e.maxHp;
       const ghost = g ? g.ghost : hp;
       if (hp >= 0.9999 && ghost >= 0.9999) continue;
-      const proj = sceneMgr.projectToScreen(e.x, e.isFlying ? 2.15 : e.isBoss ? 2.3 : 1.38, e.z);
+      const proj = sceneMgr.projectToScreen(e.x, e.isFlying ? 2.15 : e.isBoss ? 2.48 : 1.38, e.z);
       if (!proj.visible) continue;
       const bar = this.acquireBar(barCount);
       if (!bar) break;

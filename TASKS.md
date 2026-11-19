@@ -31,6 +31,7 @@ aynı anda değiştirmez. Durumlar: `planlandi` → `devam` → `dogrulaniyor` �
 | UI-1 | "Ulu Meşe Parşömeni" ana menü yenilemesi, Kenney Adventure UI (CC0) 9-slice çerçeveler ve 5'li alt navigasyon | Carbon | dogrulandi | `public/ui/kenney/*` (CC0) + `MetaView`/`styles.css`/`icons.ts`/`theme.ts`/`locales.ts`/`main.ts` + `tests/menu_ui.test.ts` (99/99 pass) + build + canlı tarayıcı QA (0 hata) ✓ |
 | UI-1B | Konsept 1'e birebir görsel sadakat yenilemesi (tam ekran boyama harita, 13 RGBA ikon/bot rozeti, kalkan düğümler & pirinç köşe çerçeveler) | Carbon | dogrulandi | `public/ui/oak/*` (world_map_oak + 13 RGBA PNG) + `MetaView`/`styles.css`/`icons.ts`/`locales.ts` + `tests/menu_ui.test.ts` (99/99 pass) + build + canlı tarayıcı QA (0 hata) ✓ |
 | P5 / GF-3 | Kahraman/slot takılma çözümü, 6 adet 3B yetenek modeli (`skill_*.glb`) & dinamik VFX/SFX, 14 düşman + 16 bölüm Kor Dökümhanesi genişlemesi | Carbon | dogrulandi | Blender 5.2 CLI + `AssetLoader`/`SimulationEngine`/`SceneManager`/`SoundEngine`/`levels`/`enemies`/`MetaView` + `99/99` test pass + `tsc/vite build` + canlı tarayıcı QA (0 hata) ✓ |
+| GF-4 / E-OPT2 | 14 düşman biriminin "Seçenek 2 · Buharlı Hurda" konseptlerine birebir 3B `.glb` (`SpinBone_*`, `Walk`/`Attack`) + 14 adet `160×160` RGBA portre yenilemesi | Carbon | dogrulandi | Blender 5.2 CLI (`blender_build_enemies_opt2.py`, `extract_enemy_opt2_portraits.py`) + yan yana konsept/3B doğrulama + `ModelFactory`/`icons`/`MetaView`/`BattleView`/`enemies` + `100/100` test pass + `tsc/vite build` + canlı QA ✓ |
 
 ## Kuyruk (Carbon doldurur)
 

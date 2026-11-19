@@ -4,7 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { SoundEngine } from '../src/audio/SoundEngine.ts';
 import { FIXED_DT, SimulationEngine } from '../src/core/SimulationEngine.ts';
-import { HEROES } from '../src/data/enemies.ts';
+import { ENEMY_LIST, HEROES } from '../src/data/enemies.ts';
+import { getEnemyBadgeUrl } from '../src/ui/icons.ts';
 import { LEVELS } from '../src/data/levels.ts';
 import { TOWERS } from '../src/data/towers.ts';
 import {
@@ -401,5 +402,35 @@ describe('F3-5 & F4-Hazırlık — 14 Günlük Kupa Ligi, 30 Kademeli Orman Bile
     } finally {
       g.__PALAMUT_NATIVE_BRIDGE__ = prev;
     }
+  });
+
+  it('Seçenek 2 (Buharlı Hurda) 14 düşman GLB modeli (skins + Walk/Attack) ve 14 benzersiz PNG portresi geçerlidir', () => {
+    assert.equal(ENEMY_LIST.length, 14);
+    const badgeUrls = new Set<string>();
+    for (const enemy of ENEMY_LIST) {
+      const glbPath = path.resolve(`public/models/enemy_${enemy.id}.glb`);
+      assert.ok(fs.existsSync(glbPath), `enemy_${enemy.id}.glb bulunamadı`);
+      const buf = fs.readFileSync(glbPath);
+      assert.equal(buf.readUInt32LE(0), 0x46546c67, `enemy_${enemy.id}.glb geçerli GLB magic içermiyor`);
+      const jsonLen = buf.readUInt32LE(12);
+      const gltf = JSON.parse(buf.subarray(20, 20 + jsonLen).toString('utf8')) as {
+        skins?: unknown[];
+        animations?: Array<{ name?: string }>;
+      };
+      assert.ok((gltf.skins?.length ?? 0) >= 1, `enemy_${enemy.id}.glb en az 1 skin içermeli`);
+      const animNames = (gltf.animations ?? []).map((a) => a.name ?? '');
+      assert.ok(animNames.includes('Walk'), `enemy_${enemy.id}.glb Walk animasyonu eksik (${animNames.join(',')})`);
+      assert.ok(animNames.includes('Attack'), `enemy_${enemy.id}.glb Attack animasyonu eksik (${animNames.join(',')})`);
+
+      const pngPath = path.resolve(`public/ui/oak/enemy_${enemy.id}.png`);
+      assert.ok(fs.existsSync(pngPath), `enemy_${enemy.id}.png portresi eksik`);
+      const pngBuf = fs.readFileSync(pngPath);
+      assert.equal(pngBuf.subarray(12, 16).toString('ascii'), 'IHDR', `enemy_${enemy.id}.png geçerli PNG değil`);
+
+      const badge = getEnemyBadgeUrl(enemy.id, enemy.isBoss);
+      assert.equal(badge, `./ui/oak/enemy_${enemy.id}.png`);
+      badgeUrls.add(badge);
+    }
+    assert.equal(badgeUrls.size, 14, 'Tüm 14 düşman rozeti benzersiz olmalı');
   });
 });

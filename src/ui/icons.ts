@@ -57,22 +57,25 @@ export const OAK_UI_URLS = {
   botBoss: resolvePublicUrl('ui/oak/bot_boss.png'),
 };
 
-export function getEnemyBadgeUrl(enemyId: EnemyId, isBoss?: boolean): string {
-  if (isBoss || enemyId === 'mega_harvester' || enemyId === 'cryo_colossus' || enemyId === 'magma_overlord') {
-    return OAK_UI_URLS.botBoss;
-  }
-  if (enemyId === 'shield_loader' || enemyId === 'crystal_golem' || enemyId === 'frost_warden') {
-    return OAK_UI_URLS.botShield;
-  }
-  if (
-    enemyId === 'swarm_saw' ||
-    enemyId === 'chomp_brute' ||
-    enemyId === 'turbo_hopper' ||
-    enemyId === 'ember_bomber'
-  ) {
-    return OAK_UI_URLS.botSaw;
-  }
-  return OAK_UI_URLS.botScout;
+export const ENEMY_PORTRAIT_URLS: Record<EnemyId, string> = {
+  scout_bot: resolvePublicUrl('ui/oak/enemy_scout_bot.png'),
+  swarm_saw: resolvePublicUrl('ui/oak/enemy_swarm_saw.png'),
+  shield_loader: resolvePublicUrl('ui/oak/enemy_shield_loader.png'),
+  hover_drone: resolvePublicUrl('ui/oak/enemy_hover_drone.png'),
+  mega_harvester: resolvePublicUrl('ui/oak/enemy_mega_harvester.png'),
+  turbo_hopper: resolvePublicUrl('ui/oak/enemy_turbo_hopper.png'),
+  chomp_brute: resolvePublicUrl('ui/oak/enemy_chomp_brute.png'),
+  repair_drone: resolvePublicUrl('ui/oak/enemy_repair_drone.png'),
+  crystal_golem: resolvePublicUrl('ui/oak/enemy_crystal_golem.png'),
+  cryo_colossus: resolvePublicUrl('ui/oak/enemy_cryo_colossus.png'),
+  frost_warden: resolvePublicUrl('ui/oak/enemy_frost_warden.png'),
+  ember_bomber: resolvePublicUrl('ui/oak/enemy_ember_bomber.png'),
+  tesla_strider: resolvePublicUrl('ui/oak/enemy_tesla_strider.png'),
+  magma_overlord: resolvePublicUrl('ui/oak/enemy_magma_overlord.png'),
+};
+
+export function getEnemyBadgeUrl(enemyId: EnemyId, _isBoss?: boolean): string {
+  return ENEMY_PORTRAIT_URLS[enemyId];
 }
 
 export const ICONS = {
