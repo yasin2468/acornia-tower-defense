@@ -523,8 +523,8 @@ export function updateEnemyAnimation(
   }
 }
 
-export function createGreatOakCastle(): THREE.Group {
-  const inst = instantiateModel('env_castle');
+export function createGreatOakCastle(biome: 'forest' | 'canyon' | 'cavern' | 'snow' | 'foundry' = 'forest'): THREE.Group {
+  const inst = instantiateModel(`env_castle_${biome}`) ?? instantiateModel('env_castle');
   return inst ? inst.scene : fallbackBox('#eae0cc', 2.4);
 }
 

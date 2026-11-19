@@ -91,9 +91,14 @@ describe('DrawCallCounter (C1, G1 olcum ayagi)', () => {
     assert.equal(stats.estimatedDrawCalls, 2);
   });
 
-  it('G1: env_castle ve cevre GLB modelleri tek difuz mesh + tek materyal olarak paketlenmistir', () => {
+  it('G1: env_castle, 5 biyom kalesi ve cevre GLB modelleri tek difuz mesh + tek materyal olarak paketlenmistir', () => {
     const singleAtlasModels = [
       'env_castle.glb',
+      'env_castle_forest.glb',
+      'env_castle_canyon.glb',
+      'env_castle_cavern.glb',
+      'env_castle_snow.glb',
+      'env_castle_foundry.glb',
       'env_slot_pad.glb',
       'env_cliff_segment.glb',
       'env_tree_oak.glb',
@@ -143,13 +148,15 @@ describe('DrawCallCounter (C1, G1 olcum ayagi)', () => {
     assert.equal(computeBattleStars(1, true), 3);
     assert.equal(computeSellRefund(125), 75);
 
-    assert.ok(BOOT_ESSENTIAL_MODELS.length < MODEL_NAMES.length, 'acilis seti tum 43 modelden kucuk olmali');
+    assert.ok(BOOT_ESSENTIAL_MODELS.length < MODEL_NAMES.length, 'acilis seti tum modellerden kucuk olmali');
     const l1Deps = getLevelModelDependencies(LEVELS[0], ['hero_bear'], 'none');
+    assert.ok(l1Deps.includes('env_castle_forest'), 'Lv1 orman kalesini icermeli');
     assert.ok(l1Deps.includes('env_stump'));
     assert.ok(!l1Deps.includes('env_crystal'), 'Lv1 orman bolumunde kristal indirilmemeli');
     assert.ok(!l1Deps.includes('enemy_cryo_colossus'), 'Lv1 bolumunde buz boss indirilmemeli');
 
     const l12Deps = getLevelModelDependencies(LEVELS[11], ['hero_bear'], 'wizard');
+    assert.ok(l12Deps.includes('env_castle_snow'), 'Lv12 kis kalesini icermeli');
     assert.ok(l12Deps.includes('hat_wizard'));
     assert.ok(l12Deps.includes('enemy_cryo_colossus'));
     assert.ok(l12Deps.includes('enemy_crystal_golem'), 'Faz 2 cagrilan crystal_golem otomatik dahil olmali');

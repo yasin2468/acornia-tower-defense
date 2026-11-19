@@ -7,6 +7,11 @@ import type { HatId } from '../data/towers.ts';
 
 export const MODEL_NAMES = [
   'env_castle',
+  'env_castle_forest',
+  'env_castle_canyon',
+  'env_castle_cavern',
+  'env_castle_snow',
+  'env_castle_foundry',
   'env_cliff_segment',
   'env_crystal',
   'env_tree_oak',
@@ -77,7 +82,7 @@ let preloadPromise: Promise<void> | null = null;
 let bgWarmStarted = false;
 
 export const BOOT_ESSENTIAL_MODELS: readonly ModelName[] = [
-  'env_castle',
+  'env_castle_forest',
   'env_cliff_segment',
   'env_tree_oak',
   'env_tree_pine',
@@ -194,8 +199,9 @@ export function getLevelModelDependencies(
   heroModels: readonly ModelName[],
   hatId: HatId,
 ): ModelName[] {
+  const castleModel = `env_castle_${level.biome}` as ModelName;
   const deps = new Set<ModelName>([
-    'env_castle',
+    castleModel,
     'env_cliff_segment',
     'env_slot_pad',
     'env_lantern',

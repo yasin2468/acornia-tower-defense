@@ -7,7 +7,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ENEMIES, resolveHeroVisualVariant, type HeroClassId, type HeroId } from '../data/enemies.ts';
-import type { LevelSpec, Vec2 } from '../data/levels.ts';
+import type { LevelSpec, StageConceptId, Vec2 } from '../data/levels.ts';
 import { TOWERS, type HatId, type TowerId } from '../data/towers.ts';
 import type {
   EnemyInstance,
@@ -20,7 +20,12 @@ import type {
 import { extractStaticPrimitives, instantiateModel, type ModelName } from './AssetLoader.ts';
 import { CameraController } from './CameraController.ts';
 import { countDrawCalls } from './DrawCallCounter.ts';
-import { createCobbleRoadTexture, createMeadowTexture } from './ProceduralTextures.ts';
+import {
+  createCobbleRoadTexture,
+  createMeadowTexture,
+  createStageRoadTextures,
+  type StageRoadTextureBundle,
+} from './ProceduralTextures.ts';
 import {
   STAGE_LIGHTING_THEMES,
   buildStageConcept,
@@ -247,19 +252,202 @@ function buildCurvedRibbonGeometry(curve: THREE.CatmullRomCurve3, width: number,
   return geo;
 }
 
-function buildRoadCurbstones(curve: THREE.CatmullRomCurve3): THREE.InstancedMesh {
+function buildRoadCurbstones(curve: THREE.CatmullRomCurve3, concept: StageConceptId = 'mossy_stream'): THREE.Group {
+  const group = new THREE.Group();
   const steps = 64;
   const totalInstances = steps * 2;
-  const stoneGeo = new RoundedBoxGeometry(0.26, 0.12, 0.35, 2, 0.05);
-  const stoneMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.88, metalness: 0.02 });
-  const mesh = new THREE.InstancedMesh(stoneGeo, stoneMat, totalInstances);
+  const roadHalfW = 0.84;
+
+  let curbGeo: THREE.BufferGeometry;
+  let curbMat: THREE.MeshStandardMaterial;
+  let palette: THREE.Color[];
+  let tiltOutRad = 0;
+  let extraGeo: THREE.BufferGeometry | null = null;
+  let extraMat: THREE.MeshStandardMaterial | null = null;
+  let extraScale: [number, number, number] = [1, 1, 1];
+  let extraY = 0.08;
+  let extraStride = 1;
+
+  switch (concept) {
+    case 'mossy_stream': {
+      curbGeo = new THREE.SphereGeometry(0.15, 7, 5);
+      curbGeo.scale(1.0, 0.52, 1.35);
+      curbMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.84, metalness: 0.02 });
+      palette = [new THREE.Color('#cfc4ab'), new THREE.Color('#bab099'), new THREE.Color('#dfd7c2')];
+      break;
+    }
+    case 'acorn_island_shrine': {
+      curbGeo = new THREE.CylinderGeometry(0.085, 0.085, 0.44, 7);
+      curbGeo.rotateX(Math.PI / 2);
+      curbMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.86, metalness: 0.02 });
+      palette = [new THREE.Color('#6b4122'), new THREE.Color('#5c361a'), new THREE.Color('#7a4b28')];
+      extraGeo = new THREE.CylinderGeometry(0.065, 0.075, 0.28, 6);
+      extraMat = new THREE.MeshStandardMaterial({ color: '#543016', roughness: 0.85 });
+      extraY = 0.14;
+      extraStride = 4;
+      break;
+    }
+    case 'oak_bastion_moat': {
+      curbGeo = new RoundedBoxGeometry(0.24, 0.13, 0.42, 2, 0.04);
+      curbMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.82, metalness: 0.03 });
+      palette = [new THREE.Color('#f2e6cc'), new THREE.Color('#e6d7b8'), new THREE.Color('#faefe0')];
+      break;
+    }
+    case 'crimson_powder_gorge': {
+      curbGeo = new THREE.DodecahedronGeometry(0.18, 0);
+      curbGeo.scale(1.0, 0.72, 1.15);
+      curbMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.92, metalness: 0.02 });
+      palette = [new THREE.Color('#b84c27'), new THREE.Color('#cf5d34'), new THREE.Color('#9e3c1e')];
+      break;
+    }
+    case 'desert_windmill_oasis': {
+      curbGeo = new THREE.BoxGeometry(0.14, 0.11, 0.44);
+      curbMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.42, metalness: 0.58 });
+      palette = [new THREE.Color('#664d3b'), new THREE.Color('#7d6049')];
+      extraGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.14, 6);
+      extraMat = new THREE.MeshStandardMaterial({ color: '#c78c44', roughness: 0.36, metalness: 0.65 });
+      extraY = 0.09;
+      extraStride = 2;
+      break;
+    }
+    case 'twin_bridge_chasm': {
+      curbGeo = new RoundedBoxGeometry(0.24, 0.12, 0.36, 2, 0.04);
+      curbMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.68, metalness: 0.08 });
+      palette = [new THREE.Color('#27d6c7'), new THREE.Color('#f0d29c'), new THREE.Color('#18a89c')];
+      break;
+    }
+    case 'biolum_quartz_stream': {
+      curbGeo = new THREE.ConeGeometry(0.11, 0.36, 5);
+      curbGeo.translate(0, 0.12, 0);
+      curbMat = new THREE.MeshStandardMaterial({
+        color: '#ffffff',
+        emissive: '#0ea5b8',
+        emissiveIntensity: 0.65,
+        roughness: 0.25,
+        metalness: 0.15,
+      });
+      palette = [new THREE.Color('#7ffaff'), new THREE.Color('#47e3f5'), new THREE.Color('#a6fcff')];
+      tiltOutRad = 0.42;
+      break;
+    }
+    case 'abandoned_drill_mine': {
+      curbGeo = new RoundedBoxGeometry(0.22, 0.13, 0.42, 1, 0.03);
+      curbMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.38, metalness: 0.66 });
+      palette = [new THREE.Color('#9c6635'), new THREE.Color('#825329'), new THREE.Color('#b07741')];
+      extraGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.15, 6);
+      extraMat = new THREE.MeshStandardMaterial({ color: '#c9d4e0', metalness: 0.72, roughness: 0.3 });
+      extraY = 0.08;
+      extraStride = 2;
+      break;
+    }
+    case 'amethyst_ley_sanctum': {
+      curbGeo = new THREE.OctahedronGeometry(0.15, 0);
+      curbGeo.scale(0.85, 1.55, 0.85);
+      curbMat = new THREE.MeshStandardMaterial({
+        color: '#ffffff',
+        emissive: '#9333ea',
+        emissiveIntensity: 0.7,
+        roughness: 0.24,
+        metalness: 0.2,
+      });
+      palette = [new THREE.Color('#df8aff'), new THREE.Color('#b85cff'), new THREE.Color('#f0b5ff')];
+      tiltOutRad = 0.32;
+      break;
+    }
+    case 'frozen_mirror_lake': {
+      curbGeo = new RoundedBoxGeometry(0.26, 0.15, 0.34, 1, 0.03);
+      curbMat = new THREE.MeshStandardMaterial({
+        color: '#ffffff',
+        emissive: '#22a6e0',
+        emissiveIntensity: 0.35,
+        roughness: 0.16,
+        metalness: 0.14,
+      });
+      palette = [new THREE.Color('#8ee8ff'), new THREE.Color('#b5f2ff'), new THREE.Color('#73d9fa')];
+      break;
+    }
+    case 'blizzard_watchtower': {
+      curbGeo = new THREE.BoxGeometry(0.12, 0.12, 0.44);
+      curbMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.84, metalness: 0.04 });
+      palette = [new THREE.Color('#594538'), new THREE.Color('#4a382d')];
+      extraGeo = new THREE.BoxGeometry(0.18, 0.28, 0.18);
+      extraMat = new THREE.MeshStandardMaterial({ color: '#6b5344', roughness: 0.82 });
+      extraY = 0.14;
+      extraStride = 4;
+      break;
+    }
+    case 'aurora_citadel_siege': {
+      curbGeo = new RoundedBoxGeometry(0.28, 0.15, 0.38, 2, 0.06);
+      curbMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.8, metalness: 0.04 });
+      palette = [new THREE.Color('#e8f4fc'), new THREE.Color('#9cb4cc'), new THREE.Color('#dcebf7')];
+      break;
+    }
+    case 'cinder_slag_canal': {
+      curbGeo = new THREE.DodecahedronGeometry(0.18, 0);
+      curbGeo.scale(1.0, 0.78, 1.15);
+      curbMat = new THREE.MeshStandardMaterial({
+        color: '#ffffff',
+        emissive: '#3b1506',
+        emissiveIntensity: 0.35,
+        roughness: 0.9,
+        metalness: 0.1,
+      });
+      palette = [new THREE.Color('#28272e'), new THREE.Color('#34323b'), new THREE.Color('#1f1e24')];
+      break;
+    }
+    case 'clockwork_gear_bridge':
+    case 'iron_core_citadel': {
+      curbGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.44, 8);
+      curbGeo.rotateX(Math.PI / 2);
+      curbMat = new THREE.MeshStandardMaterial({
+        color: '#ffffff',
+        roughness: 0.32,
+        metalness: 0.74,
+      });
+      palette =
+        concept === 'iron_core_citadel'
+          ? [new THREE.Color('#cf8e38'), new THREE.Color('#565b69')]
+          : [new THREE.Color('#c97538'), new THREE.Color('#b8682e'), new THREE.Color('#d98645')];
+      extraGeo = new THREE.CylinderGeometry(0.125, 0.125, 0.09, 8);
+      extraGeo.rotateX(Math.PI / 2);
+      extraMat = new THREE.MeshStandardMaterial({ color: '#5c4129', roughness: 0.35, metalness: 0.75 });
+      extraY = 0.08;
+      extraStride = 3;
+      break;
+    }
+    case 'magma_crucible_arena': {
+      curbGeo = new RoundedBoxGeometry(0.24, 0.14, 0.4, 1, 0.03);
+      curbMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.44, metalness: 0.68 });
+      palette = [new THREE.Color('#3e414a'), new THREE.Color('#4c505c'), new THREE.Color('#33363e')];
+      extraGeo = new THREE.BoxGeometry(0.28, 0.24, 0.24);
+      extraMat = new THREE.MeshStandardMaterial({ color: '#555a66', roughness: 0.4, metalness: 0.72 });
+      extraY = 0.12;
+      extraStride = 4;
+      break;
+    }
+    default: {
+      curbGeo = new RoundedBoxGeometry(0.26, 0.12, 0.35, 2, 0.05);
+      curbMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.88, metalness: 0.02 });
+      palette = [new THREE.Color('#ebe2cf'), new THREE.Color('#dfd5c0'), new THREE.Color('#f2ebda')];
+      break;
+    }
+  }
+
+  const mesh = new THREE.InstancedMesh(curbGeo, curbMat, totalInstances);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
 
-  const palette = [new THREE.Color('#ebe2cf'), new THREE.Color('#dfd5c0'), new THREE.Color('#f2ebda')];
+  const extraCount = extraGeo ? Math.ceil(steps / extraStride) * 2 : 0;
+  const extraMesh =
+    extraGeo && extraMat && extraCount > 0 ? new THREE.InstancedMesh(extraGeo, extraMat, extraCount) : null;
+  if (extraMesh) {
+    extraMesh.castShadow = true;
+    extraMesh.receiveShadow = true;
+  }
+
   const dummy = new THREE.Object3D();
-  const roadHalfW = 0.84;
   let idx = 0;
+  let exIdx = 0;
 
   for (let i = 0; i < steps; i++) {
     const u = (i + 0.5) / steps;
@@ -274,20 +462,35 @@ function buildRoadCurbstones(curve: THREE.CatmullRomCurve3): THREE.InstancedMesh
 
     for (const side of [-1, 1]) {
       const jitter = ((i * 17 + (side > 0 ? 5 : 1)) % 7) * 0.008 - 0.024;
-      dummy.position.set(pt.x + nx * (roadHalfW + jitter) * side, 0.055, pt.z + nz * (roadHalfW + jitter) * side);
-      dummy.rotation.set(0, yaw + jitter * 2, 0);
-      const lenScale = 0.88 + ((i + (side > 0 ? 1 : 0)) % 3) * 0.12;
-      dummy.scale.set(1, 0.9 + ((i % 2) * 0.16), lenScale);
+      dummy.position.set(pt.x + nx * (roadHalfW + jitter) * side, 0.06, pt.z + nz * (roadHalfW + jitter) * side);
+      dummy.rotation.set(0, yaw + jitter * 2, side * tiltOutRad);
+      const lenScale = 0.92 + ((i + (side > 0 ? 1 : 0)) % 3) * 0.08;
+      dummy.scale.set(1, 0.92 + ((i % 2) * 0.14), lenScale);
       dummy.updateMatrix();
       mesh.setMatrixAt(idx, dummy.matrix);
       mesh.setColorAt(idx, palette[(i + (side > 0 ? 1 : 0)) % palette.length]);
       idx += 1;
+
+      if (extraMesh && i % extraStride === 0 && exIdx < extraCount) {
+        dummy.position.set(pt.x + nx * (roadHalfW + 0.03) * side, extraY, pt.z + nz * (roadHalfW + 0.03) * side);
+        dummy.rotation.set(0, yaw, 0);
+        dummy.scale.set(extraScale[0], extraScale[1], extraScale[2]);
+        dummy.updateMatrix();
+        extraMesh.setMatrixAt(exIdx++, dummy.matrix);
+      }
     }
   }
 
   mesh.instanceMatrix.needsUpdate = true;
   if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-  return mesh;
+  group.add(mesh);
+
+  if (extraMesh) {
+    extraMesh.count = exIdx;
+    extraMesh.instanceMatrix.needsUpdate = true;
+    group.add(extraMesh);
+  }
+  return group;
 }
 
 function buildMeadowFoliageTufts(curves: THREE.CatmullRomCurve3[], level: LevelSpec): THREE.InstancedMesh {
@@ -698,7 +901,7 @@ export class SceneManager {
   private dyingBodies: DyingBody[] = [];
 
   private meadowTexCache = new Map<string, THREE.CanvasTexture>();
-  private cobbleTexCache = new Map<string, THREE.CanvasTexture>();
+  private roadBundleCache = new Map<string, StageRoadTextureBundle>();
   private stageAnimatedProps: StageAnimatedProp[] = [];
   private stagePulseMats: StagePulseMat[] = [];
   private hemiLight: THREE.HemisphereLight;
@@ -771,8 +974,8 @@ export class SceneManager {
     this.composer.addPass(new ShaderPass(VignetteShader));
     this.composer.addPass(new OutputPass());
 
-    this.meadowTexCache.set('forest', createMeadowTexture('forest'));
-    this.cobbleTexCache.set('forest', createCobbleRoadTexture('forest'));
+    this.meadowTexCache.set('mossy_stream', createMeadowTexture('mossy_stream'));
+    this.roadBundleCache.set('mossy_stream', createStageRoadTextures('mossy_stream'));
 
     this.rangeRing = new THREE.Mesh(
       new THREE.RingGeometry(0.955, 1.0, 48),
@@ -1264,10 +1467,12 @@ export class SceneManager {
       meadowTex = createMeadowTexture(texKey);
       this.meadowTexCache.set(texKey, meadowTex);
     }
-    let cobbleTex = this.cobbleTexCache.get(texKey);
-    if (!cobbleTex) {
-      cobbleTex = createCobbleRoadTexture(texKey);
-      this.cobbleTexCache.set(texKey, cobbleTex);
+    let roadBundle = this.roadBundleCache.get(texKey);
+    if (!roadBundle) {
+      roadBundle = level.concept
+        ? createStageRoadTextures(level.concept)
+        : { map: createCobbleRoadTexture(level.biome), roughness: 0.88, metalness: 0.02 };
+      this.roadBundleCache.set(texKey, roadBundle);
     }
 
     const ground = new THREE.Mesh(
@@ -1293,12 +1498,19 @@ export class SceneManager {
       this.levelGroup.add(borderMesh);
 
       const roadGeo = buildCurvedRibbonGeometry(c, 1.48, 160);
-      const roadMat = new THREE.MeshStandardMaterial({ map: cobbleTex, roughness: 0.88, metalness: 0.02 });
+      const roadMat = new THREE.MeshStandardMaterial({
+        map: roadBundle.map,
+        emissiveMap: roadBundle.emissiveMap ?? null,
+        emissive: roadBundle.emissive ?? '#000000',
+        emissiveIntensity: roadBundle.emissiveIntensity ?? 0,
+        roughness: roadBundle.roughness,
+        metalness: roadBundle.metalness,
+      });
       const roadMesh = new THREE.Mesh(roadGeo, roadMat);
       roadMesh.receiveShadow = true;
       this.levelGroup.add(roadMesh);
 
-      this.levelGroup.add(buildRoadCurbstones(c));
+      this.levelGroup.add(buildRoadCurbstones(c, level.concept));
     }
 
     // Slippery Ice Zones on frozen mountain passes (Snow biome)
@@ -1330,8 +1542,8 @@ export class SceneManager {
 
     this.levelGroup.add(buildMeadowFoliageTufts(curves, level));
 
-    // Sunlit Cream-Sandstone Castle Fortress at end of path
-    const castle = createGreatOakCastle();
+    // Biome-specific Option-1 Castle Fortress at end of path
+    const castle = createGreatOakCastle(level.biome);
     castle.position.set(0, 0, -9.8);
     this.levelGroup.add(castle);
 
