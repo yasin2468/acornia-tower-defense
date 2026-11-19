@@ -35,13 +35,21 @@ import {
 } from '../src/data/talents.ts';
 import { MODEL_NAMES } from '../src/rendering/AssetLoader.ts';
 import {
+  claimAchievement,
+  claimDailyQuest,
+  claimDailyQuestBonus,
   claimJournalReward,
+  DAILY_QUEST_BONUS_GEMS,
   discoverJournalEntries,
   getJournalCatalog,
   grantCampaignHeroUnlocks,
   JOURNAL_REWARD_GEMS,
+  recordDailyQuestProgress,
   resetTalents,
   unlockHeroWithGems,
+  unlockOrEquipAura,
+  unlockOrEquipBanner,
+  unlockOrEquipHat,
   upgradeTalent,
 } from '../src/services/ProgressionService.ts';
 import { createInitialSave, migrateSave, SAVE_VERSION, SaveManager } from '../src/services/SaveManager.ts';
@@ -199,10 +207,10 @@ describe('F3-2 — Kızıl Kuyruk ve Kaya Diş kahramanları', () => {
   });
 });
 
-describe('F3-3 & F3-6 — Orman Günlüğü ve Akustik Biyom Müzikleri', () => {
-  it('Orman Günlüğü 21 birim listeler ve ilk keşif +10 Zümrüt ödülünü yalnızca 1 kez verir', () => {
+describe('F3-3 & F3-6 — Sefer Günlüğü (26 Birim + Görev + Başarım) ve Akustik Biyom Müzikleri', () => {
+  it('Sefer Günlüğü 26 birim listeler ve ilk keşif +10 Zümrüt ödülünü yalnızca 1 kez verir', () => {
     const catalog = getJournalCatalog();
-    assert.equal(catalog.length, 21, '4 kule + 3 kahraman + 14 robot = 21 kayıt');
+    assert.equal(catalog.length, 26, '8 kule + 4 kahraman + 14 robot = 26 kayıt');
     for (const sModel of [
       'skill_pinecone_meteor',
       'skill_acorn_magnet',
@@ -432,5 +440,77 @@ describe('F3-5 & F4-Hazırlık — 14 Günlük Kupa Ligi, 30 Kademeli Orman Bile
       badgeUrls.add(badge);
     }
     assert.equal(badgeUrls.size, 14, 'Tüm 14 düşman rozeti benzersiz olmalı');
+  });
+
+  it('F4 — 8 kule, 4. kahraman Gümüş Kurt, 3B Aksesuarlar (Başlık/Aura/Sancak) ve Günlük Görev/Başarımlar tam çalışır', () => {
+    for (const modelName of [
+      'tower_badger_t1',
+      'tower_badger_t2',
+      'tower_badger_inferno',
+      'tower_badger_corrosion',
+      'tower_falcon_t1',
+      'tower_falcon_t2',
+      'tower_falcon_tempest',
+      'tower_falcon_skyhunter',
+      'tower_tortoise_t1',
+      'tower_tortoise_t2',
+      'tower_tortoise_quake',
+      'tower_tortoise_bastion',
+      'tower_lynx_t1',
+      'tower_lynx_t2',
+      'tower_lynx_flurry',
+      'tower_lynx_frostbite',
+      'hero_wolf',
+      'hat_crown',
+      'hat_goggles',
+      'hat_antlers',
+      'hat_samurai',
+    ] as const) {
+      assert.ok(MODEL_NAMES.includes(modelName), `${modelName} MODEL_NAMES eksik`);
+      assert.ok(fs.existsSync(path.resolve(`public/models/${modelName}.glb`)), `${modelName}.glb eksik`);
+    }
+
+    // Gümüş Kurt Northern Howl ultisi
+    const sim = new SimulationEngine(LEVELS[0], { seed: 8801, heroId: 'ay_kurdu' });
+    const bot = sim.spawnEnemy('scout_bot', 150, 0.5, 5, { x: sim.hero.x + 1.2, z: sim.hero.z, wpIndex: 2, progress: 5 });
+    sim.dispatch({ type: 'CAST_HERO_ULTIMATE' }, 'p1', 0);
+    sim.step(FIXED_DT);
+    assert.ok(bot.hp < 150 && bot.stunTimer >= 1.3, 'Kuzey Uluması hasar verip dondurmalı');
+    assert.equal(sim.hero.activeBuff, 'banner');
+
+    // Yeni kuleler inşa edilip ateş eder
+    const simTowers = new SimulationEngine(LEVELS[0], { seed: 8802, extraStartGold: 500 });
+    simTowers.dispatch({ type: 'BUILD_TOWER', slotId: 'slot_1', towerId: 'badger' }, 'p1', 0);
+    simTowers.dispatch({ type: 'BUILD_TOWER', slotId: 'slot_2', towerId: 'falcon' }, 'p1', 0);
+    simTowers.dispatch({ type: 'BUILD_TOWER', slotId: 'slot_3', towerId: 'tortoise' }, 'p1', 0);
+    simTowers.dispatch({ type: 'BUILD_TOWER', slotId: 'slot_4', towerId: 'lynx' }, 'p1', 0);
+    simTowers.step(FIXED_DT);
+    assert.equal(simTowers.slots.get('slot_1')?.tower?.towerId, 'badger');
+    assert.equal(simTowers.slots.get('slot_4')?.tower?.towerId, 'lynx');
+
+    // Aksesuar kilit açma, kuşanma ve Günlük Görev/Başarım ödülleri
+    const sm = new SaveManager(NOW);
+    sm.update((s) => {
+      s.oakCoins = 500;
+      s.emeraldGems = 200;
+      for (let i = 1; i <= 5; i++) s.levelStars[i] = 3; // 15 yıldız
+    });
+    assert.equal(unlockOrEquipHat(sm, 'goggles'), 'unlocked');
+    assert.equal(sm.get().equippedHat, 'goggles');
+    assert.equal(unlockOrEquipAura(sm, 'frost_crystal'), 'unlocked');
+    assert.equal(sm.get().equippedAura, 'frost_crystal');
+    assert.equal(unlockOrEquipBanner(sm, 'oak_crest'), 'unlocked');
+    assert.equal(sm.get().equippedBanner, 'oak_crest');
+
+    assert.equal(claimAchievement(sm, 'ach_stars_10'), true);
+    assert.equal(claimAchievement(sm, 'ach_stars_10'), false);
+
+    recordDailyQuestProgress(sm, { kills: 30, builds: 6, skills: 4, wins: 1 }, NOW);
+    const gemsBeforeBonus = sm.get().emeraldGems;
+    for (const qid of ['dq_kills', 'dq_builds', 'dq_skills', 'dq_wins']) {
+      assert.equal(claimDailyQuest(sm, qid, NOW), true);
+    }
+    assert.equal(claimDailyQuestBonus(sm, NOW), true);
+    assert.ok(sm.get().emeraldGems >= gemsBeforeBonus + DAILY_QUEST_BONUS_GEMS);
   });
 });

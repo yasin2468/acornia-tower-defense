@@ -167,7 +167,17 @@ export interface SeasonRewardSpec {
   hatUnlock?: HatId;
 }
 
-const SEASON_SHARD_UNITS: readonly CardUnitId[] = ['squirrel', 'beaver', 'owl', 'hedgehog', 'boz_pence'];
+const SEASON_SHARD_UNITS: readonly CardUnitId[] = [
+  'squirrel',
+  'beaver',
+  'owl',
+  'hedgehog',
+  'badger',
+  'falcon',
+  'tortoise',
+  'lynx',
+  'boz_pence',
+];
 
 export function getSeasonTierRewards(tier: number): { free: SeasonRewardSpec; gold: SeasonRewardSpec } {
   const t = Math.max(1, Math.min(SEASON_MAX_TIER, Math.floor(tier)));

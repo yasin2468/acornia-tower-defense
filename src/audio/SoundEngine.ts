@@ -411,7 +411,16 @@ export class SoundEngine {
   }
 
   /** Characterful multi-layer SFX tailored to each Hero Ultimate variant. */
-  playHeroUltimate(variant: 'classic' | 'viking' | 'royal' | 'fox_storm' | 'boar_charge'): void {
+  playHeroUltimate(variant: 'classic' | 'viking' | 'royal' | 'fox_storm' | 'boar_charge' | 'wolf_howl'): void {
+    if (variant === 'wolf_howl') {
+      // Resonant frost howl glide + crystalline ice chord + rallying chime
+      this.tone(290, 520, 0.24, 'triangle', 0.11, 0, 2);
+      this.tone(520, 390, 0.28, 'sine', 0.09, 0.18, 2);
+      this.noiseBurst(3600, 'bandpass', 0.22, 0.09, 2.2, 0.06, 2);
+      this.tone(659, 988, 0.22, 'triangle', 0.08, 0.14, 1);
+      this.duckMusic(0.35, 0.28);
+      return;
+    }
     if (variant === 'fox_storm') {
       // Flask shatter glass crackle + emerald chemical fizz + alchemy bell
       this.noiseBurst(4600, 'highpass', 0.16, 0.13, 1.4, 0, 2);

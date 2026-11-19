@@ -1,15 +1,28 @@
+import {
+  AURA_SPECS,
+  BANNER_SPECS,
+  HAT_SPECS,
+  type AuraId,
+  type BannerId,
+} from '../data/accessories.ts';
 import { ENEMY_LIST, HEROES, HERO_LIST, type HeroId } from '../data/enemies.ts';
 import {
   clampTalentRank,
   computeAvailableTalentStars,
+  computeTotalEarnedStars,
   createInitialTalents,
   getNextTalentCost,
   type TalentBranchId,
 } from '../data/talents.ts';
-import { CARD_MAX_LEVEL, TOWER_LIST } from '../data/towers.ts';
+import { CARD_MAX_LEVEL, TOWER_LIST, type HatId } from '../data/towers.ts';
 import type { ModelName } from '../rendering/AssetLoader.ts';
 import { isVipActive } from './CommercialServices.ts';
-import type { CardUnitId, SaveManager, SaveState } from './SaveManager.ts';
+import type {
+  CardUnitId,
+  DailyQuestProgressState,
+  SaveManager,
+  SaveState,
+} from './SaveManager.ts';
 
 export interface AfkAccumulation {
   hoursElapsed: number;
@@ -24,7 +37,17 @@ export interface ChestReward {
   cards: Partial<Record<CardUnitId, number>>;
 }
 
-const UNIT_IDS: CardUnitId[] = ['squirrel', 'beaver', 'owl', 'hedgehog', 'boz_pence'];
+const UNIT_IDS: CardUnitId[] = [
+  'squirrel',
+  'beaver',
+  'owl',
+  'hedgehog',
+  'badger',
+  'falcon',
+  'tortoise',
+  'lynx',
+  'boz_pence',
+];
 
 function activeCardPool(save: SaveState): CardUnitId[] {
   const pool = [...UNIT_IDS];
@@ -196,6 +219,7 @@ export interface JournalEntry {
   modelName: ModelName;
   nameKey: string;
   descKey: string;
+  tacticKey: string;
   statSummary: string;
 }
 
@@ -206,12 +230,14 @@ export function getJournalCatalog(): JournalEntry[] {
     modelName: `tower_${tw.id}_t1` as ModelName,
     nameKey: tw.nameKey,
     descKey: tw.roleKey,
+    tacticKey: `codex.tactic.tower.${tw.id}`,
     statSummary: `DMG ${tw.tier1.damage} · RNG ${tw.tier1.range}m · ${tw.tier1.cost}`,
   }));
   const heroModelMap: Record<HeroId, ModelName> = {
     boz_pence: 'hero_bear',
     kizil_kuyruk: 'hero_fox',
     kaya_dis: 'hero_boar',
+    ay_kurdu: 'hero_wolf',
   };
   const heroes: JournalEntry[] = HERO_LIST.map((h) => ({
     id: h.id,
@@ -219,6 +245,7 @@ export function getJournalCatalog(): JournalEntry[] {
     modelName: heroModelMap[h.id],
     nameKey: h.nameKey,
     descKey: h.descKey,
+    tacticKey: `codex.tactic.hero.${h.id}`,
     statSummary: `HP ${h.maxHp} · DMG ${h.damage} · BLK ${h.blockCap}`,
   }));
   const enemies: JournalEntry[] = ENEMY_LIST.map((e) => ({
@@ -227,6 +254,7 @@ export function getJournalCatalog(): JournalEntry[] {
     modelName: `enemy_${e.id}` as ModelName,
     nameKey: e.nameKey,
     descKey: e.descKey,
+    tacticKey: `codex.tactic.enemy.${e.id}`,
     statSummary: `HP ${e.baseHp} · SPD ${e.speed} · %${Math.round(e.armor * 100)}`,
   }));
   return [...towers, ...heroes, ...enemies];
@@ -252,4 +280,265 @@ export function claimJournalReward(saveManager: SaveManager, entryId: string): b
     draft.emeraldGems += JOURNAL_REWARD_GEMS;
   });
   return true;
+}
+
+export function unlockOrEquipHat(saveManager: SaveManager, hatId: HatId): 'equipped' | 'unlocked' | 'insufficient' {
+  const spec = HAT_SPECS.find((h) => h.id === hatId);
+  if (!spec) return 'insufficient';
+  const s = saveManager.get();
+  if (s.unlockedHats.includes(hatId) || spec.currency === 'free') {
+    saveManager.update((d) => {
+      if (!d.unlockedHats.includes(hatId)) d.unlockedHats.push(hatId);
+      d.equippedHat = hatId;
+    });
+    return 'equipped';
+  }
+  if (spec.currency === 'oak' && s.oakCoins < spec.cost) return 'insufficient';
+  if (spec.currency === 'gem' && s.emeraldGems < spec.cost) return 'insufficient';
+  saveManager.update((d) => {
+    if (spec.currency === 'oak') d.oakCoins -= spec.cost;
+    else d.emeraldGems -= spec.cost;
+    if (!d.unlockedHats.includes(hatId)) d.unlockedHats.push(hatId);
+    d.equippedHat = hatId;
+  });
+  return 'unlocked';
+}
+
+export function unlockOrEquipAura(saveManager: SaveManager, auraId: AuraId): 'equipped' | 'unlocked' | 'insufficient' {
+  const spec = AURA_SPECS.find((a) => a.id === auraId);
+  if (!spec) return 'insufficient';
+  const s = saveManager.get();
+  if (s.unlockedAuras.includes(auraId) || spec.currency === 'free') {
+    saveManager.update((d) => {
+      if (!d.unlockedAuras.includes(auraId)) d.unlockedAuras.push(auraId);
+      d.equippedAura = auraId;
+    });
+    return 'equipped';
+  }
+  if (spec.currency === 'oak' && s.oakCoins < spec.cost) return 'insufficient';
+  if (spec.currency === 'gem' && s.emeraldGems < spec.cost) return 'insufficient';
+  saveManager.update((d) => {
+    if (spec.currency === 'oak') d.oakCoins -= spec.cost;
+    else d.emeraldGems -= spec.cost;
+    if (!d.unlockedAuras.includes(auraId)) d.unlockedAuras.push(auraId);
+    d.equippedAura = auraId;
+  });
+  return 'unlocked';
+}
+
+export function unlockOrEquipBanner(
+  saveManager: SaveManager,
+  bannerId: BannerId,
+): 'equipped' | 'unlocked' | 'insufficient' {
+  const spec = BANNER_SPECS.find((b) => b.id === bannerId);
+  if (!spec) return 'insufficient';
+  const s = saveManager.get();
+  if (s.unlockedBanners.includes(bannerId) || spec.currency === 'free') {
+    saveManager.update((d) => {
+      if (!d.unlockedBanners.includes(bannerId)) d.unlockedBanners.push(bannerId);
+      d.equippedBanner = bannerId;
+    });
+    return 'equipped';
+  }
+  if (spec.currency === 'oak' && s.oakCoins < spec.cost) return 'insufficient';
+  if (spec.currency === 'gem' && s.emeraldGems < spec.cost) return 'insufficient';
+  saveManager.update((d) => {
+    if (spec.currency === 'oak') d.oakCoins -= spec.cost;
+    else d.emeraldGems -= spec.cost;
+    if (!d.unlockedBanners.includes(bannerId)) d.unlockedBanners.push(bannerId);
+    d.equippedBanner = bannerId;
+  });
+  return 'unlocked';
+}
+
+export interface DailyQuestSpec {
+  id: string;
+  metric: keyof DailyQuestProgressState;
+  target: number;
+  titleKey: string;
+  rewardOak: number;
+  rewardGems: number;
+}
+
+export const DAILY_QUEST_BONUS_GEMS = 25;
+
+export const DAILY_QUESTS: readonly DailyQuestSpec[] = [
+  { id: 'dq_kills', metric: 'kills', target: 25, titleKey: 'quest.daily.kills', rewardOak: 90, rewardGems: 5 },
+  { id: 'dq_builds', metric: 'builds', target: 6, titleKey: 'quest.daily.builds', rewardOak: 75, rewardGems: 5 },
+  { id: 'dq_skills', metric: 'skills', target: 4, titleKey: 'quest.daily.skills', rewardOak: 70, rewardGems: 8 },
+  { id: 'dq_wins', metric: 'wins', target: 1, titleKey: 'quest.daily.wins', rewardOak: 110, rewardGems: 10 },
+];
+
+export function recordDailyQuestProgress(
+  saveManager: SaveManager,
+  deltas: Partial<DailyQuestProgressState>,
+  nowMs = Date.now(),
+): void {
+  saveManager.rollDailyCounters(nowMs);
+  saveManager.update((d) => {
+    if (deltas.kills) {
+      d.dailyQuestsProgress.kills += deltas.kills;
+    }
+    if (deltas.builds) {
+      d.dailyQuestsProgress.builds += deltas.builds;
+      d.totalTowersBuilt += deltas.builds;
+    }
+    if (deltas.skills) {
+      d.dailyQuestsProgress.skills += deltas.skills;
+      d.totalSkillsCast += deltas.skills;
+    }
+    if (deltas.wins) {
+      d.dailyQuestsProgress.wins += deltas.wins;
+      d.totalBattlesWon += deltas.wins;
+    }
+  });
+}
+
+export function claimDailyQuest(saveManager: SaveManager, questId: string, nowMs = Date.now()): boolean {
+  saveManager.rollDailyCounters(nowMs);
+  const spec = DAILY_QUESTS.find((q) => q.id === questId);
+  if (!spec) return false;
+  const s = saveManager.get();
+  if (s.dailyQuestsClaimed.includes(questId)) return false;
+  if ((s.dailyQuestsProgress[spec.metric] ?? 0) < spec.target) return false;
+  saveManager.update((d) => {
+    d.dailyQuestsClaimed.push(questId);
+    d.oakCoins += spec.rewardOak;
+    d.emeraldGems += spec.rewardGems;
+  });
+  return true;
+}
+
+export function claimDailyQuestBonus(saveManager: SaveManager, nowMs = Date.now()): boolean {
+  saveManager.rollDailyCounters(nowMs);
+  const s = saveManager.get();
+  if (s.dailyQuestBonusClaimed) return false;
+  if (s.dailyQuestsClaimed.length < DAILY_QUESTS.length) return false;
+  saveManager.update((d) => {
+    d.dailyQuestBonusClaimed = true;
+    d.emeraldGems += DAILY_QUEST_BONUS_GEMS;
+    d.cardShards.badger = (d.cardShards.badger ?? 0) + 2;
+    d.cardShards.falcon = (d.cardShards.falcon ?? 0) + 2;
+  });
+  return true;
+}
+
+export interface AchievementSpec {
+  id: string;
+  titleKey: string;
+  descKey: string;
+  target: number;
+  rewardOak: number;
+  rewardGems: number;
+  unlockHat?: HatId;
+  measure: (save: SaveState) => number;
+}
+
+export const ACHIEVEMENTS: readonly AchievementSpec[] = [
+  {
+    id: 'ach_stars_10',
+    titleKey: 'ach.stars_10.title',
+    descKey: 'ach.stars_10.desc',
+    target: 10,
+    rewardOak: 140,
+    rewardGems: 15,
+    measure: (s) => computeTotalEarnedStars(s.levelStars, s.ironCleared),
+  },
+  {
+    id: 'ach_stars_30',
+    titleKey: 'ach.stars_30.title',
+    descKey: 'ach.stars_30.desc',
+    target: 30,
+    rewardOak: 260,
+    rewardGems: 35,
+    measure: (s) => computeTotalEarnedStars(s.levelStars, s.ironCleared),
+  },
+  {
+    id: 'ach_discover_14',
+    titleKey: 'ach.discover_14.title',
+    descKey: 'ach.discover_14.desc',
+    target: 14,
+    rewardOak: 120,
+    rewardGems: 20,
+    unlockHat: 'antlers',
+    measure: (s) => s.discoveredIds.length,
+  },
+  {
+    id: 'ach_kills_200',
+    titleKey: 'ach.kills_200.title',
+    descKey: 'ach.kills_200.desc',
+    target: 200,
+    rewardOak: 200,
+    rewardGems: 25,
+    measure: (s) => s.seasonPassKills,
+  },
+  {
+    id: 'ach_iron_3',
+    titleKey: 'ach.iron_3.title',
+    descKey: 'ach.iron_3.desc',
+    target: 3,
+    rewardOak: 220,
+    rewardGems: 40,
+    measure: (s) => Object.values(s.ironCleared).filter(Boolean).length,
+  },
+  {
+    id: 'ach_expedition_1',
+    titleKey: 'ach.expedition_1.title',
+    descKey: 'ach.expedition_1.desc',
+    target: 1,
+    rewardOak: 180,
+    rewardGems: 30,
+    measure: (s) => s.expeditionsCompleted,
+  },
+  {
+    id: 'ach_cards_3',
+    titleKey: 'ach.cards_3.title',
+    descKey: 'ach.cards_3.desc',
+    target: 3,
+    rewardOak: 150,
+    rewardGems: 20,
+    measure: (s) => Object.values(s.cardLevels).filter((lvl) => lvl >= 3).length,
+  },
+  {
+    id: 'ach_acc_5',
+    titleKey: 'ach.acc_5.title',
+    descKey: 'ach.acc_5.desc',
+    target: 5,
+    rewardOak: 180,
+    rewardGems: 25,
+    measure: (s) =>
+      s.unlockedHats.filter((h) => h !== 'none').length +
+      s.unlockedAuras.filter((a) => a !== 'none').length +
+      s.unlockedBanners.filter((b) => b !== 'none').length,
+  },
+];
+
+export function claimAchievement(saveManager: SaveManager, achievementId: string): boolean {
+  const spec = ACHIEVEMENTS.find((a) => a.id === achievementId);
+  if (!spec) return false;
+  const s = saveManager.get();
+  if (s.claimedAchievementIds.includes(achievementId)) return false;
+  if (spec.measure(s) < spec.target) return false;
+  saveManager.update((d) => {
+    d.claimedAchievementIds.push(achievementId);
+    d.oakCoins += spec.rewardOak;
+    d.emeraldGems += spec.rewardGems;
+    if (spec.unlockHat && !d.unlockedHats.includes(spec.unlockHat)) {
+      d.unlockedHats.push(spec.unlockHat);
+    }
+  });
+  return true;
+}
+
+export function countPendingJournalClaims(save: SaveState): number {
+  const questReady = DAILY_QUESTS.filter(
+    (q) => !save.dailyQuestsClaimed.includes(q.id) && (save.dailyQuestsProgress[q.metric] ?? 0) >= q.target,
+  ).length;
+  const questBonus =
+    !save.dailyQuestBonusClaimed && save.dailyQuestsClaimed.length >= DAILY_QUESTS.length ? 1 : 0;
+  const achReady = ACHIEVEMENTS.filter(
+    (a) => !save.claimedAchievementIds.includes(a.id) && a.measure(save) >= a.target,
+  ).length;
+  const codexReady = save.discoveredIds.filter((id) => !save.claimedJournalIds.includes(id)).length;
+  return questReady + questBonus + achReady + codexReady;
 }

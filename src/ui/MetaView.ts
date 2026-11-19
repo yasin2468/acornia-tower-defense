@@ -1,4 +1,13 @@
 import {
+  AURA_SPECS,
+  BANNER_SPECS,
+  HAT_SPECS,
+  getAuraSpec,
+  getBannerSpec,
+  type AuraId,
+  type BannerId,
+} from '../data/accessories.ts';
+import {
   ENEMIES,
   ENEMY_LIST,
   HEROES,
@@ -53,27 +62,49 @@ import {
 import type { NetworkService } from '../services/NetworkService.ts';
 import type { MultiMode } from '../server/wsRelay.ts';
 import {
+  ACHIEVEMENTS,
   AFK_QUICK_BOOST_HOURS,
   AFK_QUICK_BOOST_OAK,
   AFK_QUICK_BOOST_TOTAL_SHARDS,
+  DAILY_QUESTS,
+  DAILY_QUEST_BONUS_GEMS,
   JOURNAL_REWARD_GEMS,
   calculateAfkAccumulation,
+  claimAchievement,
   claimAfkPatrol,
+  claimDailyQuest,
+  claimDailyQuestBonus,
   claimJournalReward,
+  countPendingJournalClaims,
   getCardUpgradeCost,
   getJournalCatalog,
   grantQuickAfkBoost,
   openForestChest,
   resetTalents,
   unlockHeroWithGems,
+  unlockOrEquipAura,
+  unlockOrEquipBanner,
+  unlockOrEquipHat,
   upgradeCard,
   upgradeTalent,
 } from '../services/ProgressionService.ts';
 import type { CardUnitId, SaveManager } from '../services/SaveManager.ts';
-import { getEnemyBadgeUrl, ICONS, OAK_UI_URLS, PORTRAIT_URLS, UI_ICON_URLS } from './icons.ts';
+import {
+  AURA_ICON_URLS,
+  BANNER_ICON_URLS,
+  HAT_ICON_URLS,
+  ICONS,
+  OAK_UI_URLS,
+  PORTRAIT_URLS,
+  UI_ICON_URLS,
+  getEnemyBadgeUrl,
+  getJournalEntryPortraitUrl,
+} from './icons.ts';
 
 export type MetaTab = 'map' | 'multi' | 'cards' | 'journal' | 'shop';
-export type CardsSubTab = 'towers' | 'heroes' | 'talents';
+export type CardsSubTab = 'towers' | 'heroes' | 'accessories' | 'talents';
+export type JournalSubTab = 'quests' | 'achievements' | 'codex';
+export type CodexFilter = 'all' | 'tower' | 'hero' | 'enemy';
 
 interface NavBadges {
   map: string;
@@ -96,6 +127,9 @@ export interface MetaViewCallbacks {
 export class MetaView {
   activeTab: MetaTab = 'map';
   cardsSubTab: CardsSubTab = 'towers';
+  journalSubTab: JournalSubTab = 'quests';
+  codexFilter: CodexFilter = 'all';
+  confirmResetSave = false;
   selectedLevelId = 1;
   ironMode = false;
   showSettings = false;
@@ -103,7 +137,6 @@ export class MetaView {
   showPatrolModal = false;
   showExpeditionModal = false;
   selectedJournalId = 'boz_pence';
-  journalYaw = 0.45;
   multiMode: MultiMode = 'coop';
   roomCode = '';
   statusNotice = '';
@@ -183,10 +216,8 @@ export class MetaView {
     const totalCardActions = towersSub + heroesSub + talentsSub;
     const cards = totalCardActions > 0 ? String(totalCardActions) : '';
 
-    const unclaimedJournal = getJournalCatalog().filter(
-      (entry) => save.discoveredIds.includes(entry.id) && !save.claimedJournalIds.includes(entry.id),
-    ).length;
-    const journal = unclaimedJournal > 0 ? String(unclaimedJournal) : '';
+    const pendingJournal = countPendingJournalClaims(save);
+    const journal = pendingJournal > 0 ? String(pendingJournal) : '';
 
     const vipStatus = getVipDailyStatus(save, nowMs);
     const curTier = getSeasonCurrentTier(save.seasonPassKills);
@@ -1012,6 +1043,9 @@ export class MetaView {
           <span>${t(loc, 'cards.sub.heroes')}</span>
           ${badges.heroesSub > 0 ? `<span class="sub-pip">${badges.heroesSub}</span>` : ''}
         </button>
+        <button type="button" class="cards-sub-btn ${this.cardsSubTab === 'accessories' ? 'active' : ''}" data-cards-sub="accessories" role="tab" aria-selected="${this.cardsSubTab === 'accessories'}">
+          <span>${t(loc, 'cards.sub.accessories')}</span>
+        </button>
         <button type="button" class="cards-sub-btn ${this.cardsSubTab === 'talents' ? 'active' : ''}" data-cards-sub="talents" role="tab" aria-selected="${this.cardsSubTab === 'talents'}">
           <span>${t(loc, 'cards.sub.talents')}</span>
           ${badges.talentsSub > 0 ? `<span class="sub-pip">${badges.talentsSub}</span>` : ''}
@@ -1096,19 +1130,6 @@ export class MetaView {
         })
         .join('');
 
-      const hats: HatId[] = ['none', 'pirate', 'chef', 'wizard', 'viking'];
-      const hatsHtml = hats
-        .map((h) => {
-          const unlocked = save.unlockedHats.includes(h);
-          const active = save.equippedHat === h;
-          return `
-            <button class="btn btn-sm ${active ? 'btn-gold' : ''}" data-hat="${h}" ${unlocked ? '' : 'disabled'}>
-              ${t(loc, `hat.${h}`)}
-            </button>
-          `;
-        })
-        .join('');
-
       bodyHtml = `
         <div class="card-panel" style="display:flex; flex-direction:column; gap:8px;">
           <div style="font-size:13.5px; font-weight:900; color:#ffe17a;">${t(loc, 'hero.select.title')}</div>
@@ -1125,11 +1146,25 @@ export class MetaView {
             `
             : ''
         }
-        <div class="card-panel" style="display:flex; flex-direction:column; gap:8px;">
-          <div style="font-size:13px; font-weight:800; color:#ffe17a;">${t(loc, 'cards.hats')}</div>
-          <div style="display:flex; flex-wrap:wrap; gap:6px;">${hatsHtml}</div>
+        <div class="card-panel acc-quick-bar">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+            <div style="display:flex; align-items:center; gap:8px; min-width:0;">
+              <img class="acc-mini-thumb" src="${HAT_ICON_URLS[save.equippedHat]}" alt="" />
+              <img class="acc-mini-thumb" src="${AURA_ICON_URLS[save.equippedAura]}" alt="" />
+              <img class="acc-mini-thumb" src="${BANNER_ICON_URLS[save.equippedBanner]}" alt="" />
+              <div style="min-width:0;">
+                <div style="font-size:12.5px; font-weight:900; color:#ffe17a;">${t(loc, 'acc.quickTitle')}</div>
+                <div style="font-size:10.5px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                  ${t(loc, `hat.${save.equippedHat}`)} · ${t(loc, `aura.${save.equippedAura}`)} · ${t(loc, `banner.${save.equippedBanner}`)}
+                </div>
+              </div>
+            </div>
+            <button class="btn btn-gold btn-sm" id="btn-goto-accessories">${t(loc, 'acc.openMenu')}</button>
+          </div>
         </div>
       `;
+    } else if (this.cardsSubTab === 'accessories') {
+      bodyHtml = this.renderAccessoriesSubTab(loc);
     } else {
       const availableStars = computeAvailableTalentStars(save.levelStars, save.ironCleared, save.talents);
       const spentStars = computeSpentTalentStars(save.talents);
@@ -1175,52 +1210,274 @@ export class MetaView {
     `;
   }
 
-  private renderJournalTab(loc: Locale): string {
+  private renderAccessoriesSubTab(loc: Locale): string {
     const save = this.saveManager.get();
-    const catalog = getJournalCatalog();
-    const active = catalog.find((e) => e.id === this.selectedJournalId) ?? catalog[0];
-    const isDiscovered = save.discoveredIds.includes(active.id);
-    const isClaimed = save.claimedJournalIds.includes(active.id);
+    const activeHero = HEROES[save.selectedHero] ?? HEROES.boz_pence;
+    const activeAura = getAuraSpec(save.equippedAura);
+    const activeBanner = getBannerSpec(save.equippedBanner);
 
-    const gridHtml = catalog
-      .map((entry) => {
-        const disc = save.discoveredIds.includes(entry.id);
-        const claimed = save.claimedJournalIds.includes(entry.id);
-        const sel = entry.id === active.id;
-        return `
-          <button type="button" class="journal-entry-btn ${sel ? 'selected' : ''} ${disc ? '' : 'undiscovered'}" data-journal-id="${entry.id}">
-            <span class="journal-cat-pill">${t(loc, `journal.cat.${entry.category}`)}</span>
-            <span class="journal-entry-name">${t(loc, entry.nameKey)}</span>
-            ${disc && !claimed ? `<span class="journal-gem-pip">+${JOURNAL_REWARD_GEMS}</span>` : ''}
+    const priceLabel = (currency: 'free' | 'oak' | 'gem', cost: number): string => {
+      if (currency === 'free' || cost <= 0) return t(loc, 'acc.equip');
+      return `${t(loc, 'acc.unlock')} (${cost} ${t(loc, currency === 'oak' ? 'cur.oak' : 'cur.gem')})`;
+    };
+    const canPay = (currency: 'free' | 'oak' | 'gem', cost: number): boolean => {
+      if (currency === 'free' || cost <= 0) return true;
+      return currency === 'oak' ? save.oakCoins >= cost : save.emeraldGems >= cost;
+    };
+
+    const hatsHtml = HAT_SPECS.map((h) => {
+      const unlocked = save.unlockedHats.includes(h.id) || h.currency === 'free';
+      const equipped = save.equippedHat === h.id;
+      const affordable = unlocked || canPay(h.currency, h.cost);
+      return `
+        <div class="acc-item-card ${equipped ? 'equipped' : ''} ${!unlocked ? 'locked' : ''}">
+          <div class="acc-icon-well">
+            <img src="${HAT_ICON_URLS[h.id]}" alt="${t(loc, h.nameKey)}" />
+          </div>
+          <div class="acc-item-name">${t(loc, h.nameKey)}</div>
+          <div class="acc-item-desc">${t(loc, h.descKey)}</div>
+          <button class="btn btn-sm ${equipped ? 'btn-gold' : unlocked ? 'btn-primary' : affordable ? 'btn-gold' : ''}" data-acc-hat="${h.id}" ${equipped || !affordable ? 'disabled' : ''}>
+            ${equipped ? t(loc, 'acc.equipped') : unlocked ? t(loc, 'acc.equip') : priceLabel(h.currency, h.cost)}
           </button>
-        `;
-      })
-      .join('');
+        </div>
+      `;
+    }).join('');
 
-    const claimBtn = isDiscovered
-      ? `<button class="btn btn-sm ${isClaimed ? '' : 'btn-gold'}" id="btn-claim-journal" ${isClaimed ? 'disabled' : ''}>
-           ${isClaimed ? t(loc, 'journal.claimed') : tParams(loc, 'journal.claimReward', { gems: JOURNAL_REWARD_GEMS })}
-         </button>`
-      : `<button class="btn btn-sm" disabled>${t(loc, 'journal.locked')}</button>`;
+    const aurasHtml = AURA_SPECS.map((a) => {
+      const unlocked = save.unlockedAuras.includes(a.id) || a.currency === 'free';
+      const equipped = save.equippedAura === a.id;
+      const affordable = unlocked || canPay(a.currency, a.cost);
+      return `
+        <div class="acc-item-card ${equipped ? 'equipped' : ''} ${!unlocked ? 'locked' : ''}">
+          <div class="acc-icon-well" style="box-shadow: inset 0 0 14px ${a.primaryHex}55;">
+            <img src="${AURA_ICON_URLS[a.id]}" alt="${t(loc, a.nameKey)}" />
+          </div>
+          <div class="acc-item-name">${t(loc, a.nameKey)}</div>
+          <div class="acc-item-desc">${t(loc, a.descKey)}</div>
+          <button class="btn btn-sm ${equipped ? 'btn-gold' : unlocked ? 'btn-primary' : affordable ? 'btn-gold' : ''}" data-acc-aura="${a.id}" ${equipped || !affordable ? 'disabled' : ''}>
+            ${equipped ? t(loc, 'acc.equipped') : unlocked ? t(loc, 'acc.equip') : priceLabel(a.currency, a.cost)}
+          </button>
+        </div>
+      `;
+    }).join('');
+
+    const bannersHtml = BANNER_SPECS.map((b) => {
+      const unlocked = save.unlockedBanners.includes(b.id) || b.currency === 'free';
+      const equipped = save.equippedBanner === b.id;
+      const affordable = unlocked || canPay(b.currency, b.cost);
+      return `
+        <div class="acc-item-card ${equipped ? 'equipped' : ''} ${!unlocked ? 'locked' : ''}">
+          <div class="acc-icon-well" style="box-shadow: inset 0 0 14px ${b.clothHex}66;">
+            <img src="${BANNER_ICON_URLS[b.id]}" alt="${t(loc, b.nameKey)}" />
+          </div>
+          <div class="acc-item-name">${t(loc, b.nameKey)}</div>
+          <div class="acc-item-desc">${t(loc, b.descKey)}</div>
+          <button class="btn btn-sm ${equipped ? 'btn-gold' : unlocked ? 'btn-primary' : affordable ? 'btn-gold' : ''}" data-acc-banner="${b.id}" ${equipped || !affordable ? 'disabled' : ''}>
+            ${equipped ? t(loc, 'acc.equipped') : unlocked ? t(loc, 'acc.equip') : priceLabel(b.currency, b.cost)}
+          </button>
+        </div>
+      `;
+    }).join('');
 
     return `
-      <div style="font-size:15px; font-weight:900; color:#ffe17a;">${t(loc, 'journal.title')}</div>
-      <div style="font-size:11px; color:var(--text-muted); margin-top:-4px;">${t(loc, 'journal.sub')}</div>
-      <div class="card-panel journal-stage-card">
-        <div class="journal-canvas-wrap">
-          <canvas id="journal-turntable" width="320" height="196"></canvas>
-          <div class="journal-drag-hint">${t(loc, 'journal.dragHint')}</div>
-        </div>
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
-          <div>
-            <div style="font-size:14.5px; font-weight:900; color:#ffffff;">${t(loc, active.nameKey)}</div>
-            <div style="font-size:11px; font-weight:700; color:var(--accent-cyan);">${active.statSummary}</div>
-            <div style="font-size:11.5px; color:var(--text-muted); margin-top:2px;">${t(loc, active.descKey)}</div>
+      <div class="card-panel acc-loadout-card" id="accessories-panel">
+        <div class="acc-loadout-head">
+          <img class="acc-hero-avatar" src="${PORTRAIT_URLS[activeHero.id]}" alt="${t(loc, activeHero.nameKey)}" />
+          <div style="flex:1; min-width:0;">
+            <div style="font-size:14px; font-weight:900; color:#ffe17a;">${t(loc, 'acc.menuTitle')}</div>
+            <div style="font-size:11px; color:var(--text-muted);">${tParams(loc, 'acc.menuSub', { hero: t(loc, activeHero.nameKey) })}</div>
+            <div class="acc-equipped-chips">
+              <span class="pill-badge" style="font-size:10px; padding:2px 8px;">${t(loc, `hat.${save.equippedHat}`)}</span>
+              <span class="pill-badge" style="font-size:10px; padding:2px 8px; border-color:${activeAura.primaryHex};">${t(loc, activeAura.nameKey)}</span>
+              <span class="pill-badge" style="font-size:10px; padding:2px 8px; border-color:${activeBanner.trimHex};">${t(loc, activeBanner.nameKey)}</span>
+            </div>
           </div>
         </div>
-        ${claimBtn}
       </div>
-      <div class="journal-catalog-grid">${gridHtml}</div>
+
+      <div class="acc-section-head">${t(loc, 'acc.cat.hats')} (${HAT_SPECS.length})</div>
+      <div class="acc-grid">${hatsHtml}</div>
+
+      <div class="acc-section-head">${t(loc, 'acc.cat.auras')} (${AURA_SPECS.length})</div>
+      <div class="acc-grid">${aurasHtml}</div>
+
+      <div class="acc-section-head">${t(loc, 'acc.cat.banners')} (${BANNER_SPECS.length})</div>
+      <div class="acc-grid">${bannersHtml}</div>
+    `;
+  }
+
+  private renderJournalTab(loc: Locale): string {
+    const save = this.saveManager.get();
+    const questReadyCount = DAILY_QUESTS.filter(
+      (q) => !save.dailyQuestsClaimed.includes(q.id) && (save.dailyQuestsProgress[q.metric] ?? 0) >= q.target,
+    ).length + (!save.dailyQuestBonusClaimed && save.dailyQuestsClaimed.length >= DAILY_QUESTS.length ? 1 : 0);
+    const achReadyCount = ACHIEVEMENTS.filter(
+      (a) => !save.claimedAchievementIds.includes(a.id) && a.measure(save) >= a.target,
+    ).length;
+    const codexReadyCount = save.discoveredIds.filter((id) => !save.claimedJournalIds.includes(id)).length;
+
+    const subNavHtml = `
+      <div class="journal-subnav" role="tablist">
+        <button type="button" class="cards-sub-btn ${this.journalSubTab === 'quests' ? 'active' : ''}" data-journal-sub="quests" role="tab">
+          <span>${t(loc, 'journal.tab.quests')}</span>
+          ${questReadyCount > 0 ? `<span class="sub-pip">${questReadyCount}</span>` : ''}
+        </button>
+        <button type="button" class="cards-sub-btn ${this.journalSubTab === 'achievements' ? 'active' : ''}" data-journal-sub="achievements" role="tab">
+          <span>${t(loc, 'journal.tab.achievements')}</span>
+          ${achReadyCount > 0 ? `<span class="sub-pip">${achReadyCount}</span>` : ''}
+        </button>
+        <button type="button" class="cards-sub-btn ${this.journalSubTab === 'codex' ? 'active' : ''}" data-journal-sub="codex" role="tab">
+          <span>${t(loc, 'journal.tab.codex')}</span>
+          ${codexReadyCount > 0 ? `<span class="sub-pip">${codexReadyCount}</span>` : ''}
+        </button>
+      </div>
+    `;
+
+    let panelHtml = '';
+    if (this.journalSubTab === 'quests') {
+      const doneCount = save.dailyQuestsClaimed.length;
+      const bonusReady = !save.dailyQuestBonusClaimed && doneCount >= DAILY_QUESTS.length;
+      const bonusPct = Math.round((doneCount / DAILY_QUESTS.length) * 100);
+      const rowsHtml = DAILY_QUESTS.map((q) => {
+        const cur = Math.min(q.target, save.dailyQuestsProgress[q.metric] ?? 0);
+        const claimed = save.dailyQuestsClaimed.includes(q.id);
+        const ready = cur >= q.target && !claimed;
+        const pct = Math.min(100, Math.round((cur / q.target) * 100));
+        return `
+          <div class="quest-card ${ready ? 'ready' : ''} ${claimed ? 'claimed' : ''}">
+            <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:5px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
+                <span style="font-size:12.5px; font-weight:900; color:#fff7e6;">${t(loc, q.titleKey)}</span>
+                <span style="font-size:10.5px; font-weight:800; color:var(--accent-gold);">+${q.rewardOak} ${t(loc, 'cur.oak')} · +${q.rewardGems} ${t(loc, 'cur.gem')}</span>
+              </div>
+              <div class="shard-bar">
+                <div class="shard-bar-fill" style="width:${pct}%"></div>
+                <span class="shard-bar-text">${cur}/${q.target}</span>
+              </div>
+            </div>
+            <button class="btn btn-sm ${ready ? 'btn-gold' : ''}" data-claim-dq="${q.id}" ${ready ? '' : 'disabled'}>
+              ${t(loc, claimed ? 'quest.claimed' : ready ? 'quest.claim' : 'quest.inProgress')}
+            </button>
+          </div>
+        `;
+      }).join('');
+
+      panelHtml = `
+        <div id="journal-quests-panel" style="display:flex; flex-direction:column; gap:8px;">
+          <div class="card-panel quest-bonus-card">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+              <div>
+                <div style="font-size:13.5px; font-weight:900; color:#ffe17a;">${t(loc, 'quest.daily.bonusTitle')}</div>
+                <div style="font-size:11px; color:var(--text-muted);">${tParams(loc, 'quest.daily.bonusDesc', { gems: DAILY_QUEST_BONUS_GEMS })}</div>
+              </div>
+              <button class="btn btn-sm ${bonusReady ? 'btn-gold' : ''}" id="btn-claim-dq-bonus" ${bonusReady ? '' : 'disabled'}>
+                ${t(loc, save.dailyQuestBonusClaimed ? 'quest.claimed' : bonusReady ? 'quest.claim' : 'quest.inProgress')}
+              </button>
+            </div>
+            <div class="shard-bar">
+              <div class="shard-bar-fill" style="width:${bonusPct}%"></div>
+              <span class="shard-bar-text">${doneCount}/${DAILY_QUESTS.length}</span>
+            </div>
+          </div>
+          ${rowsHtml}
+        </div>
+      `;
+    } else if (this.journalSubTab === 'achievements') {
+      const achsHtml = ACHIEVEMENTS.map((ach) => {
+        const cur = Math.min(ach.target, ach.measure(save));
+        const claimed = save.claimedAchievementIds.includes(ach.id);
+        const ready = cur >= ach.target && !claimed;
+        const pct = Math.min(100, Math.round((cur / ach.target) * 100));
+        const hatTag = ach.unlockHat ? ` · +${t(loc, `hat.${ach.unlockHat}`)}` : '';
+        return `
+          <div class="quest-card ${ready ? 'ready' : ''} ${claimed ? 'claimed' : ''}">
+            <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:4px;">
+              <div style="font-size:12.5px; font-weight:900; color:#fff7e6;">${t(loc, ach.titleKey)}</div>
+              <div style="font-size:10.5px; color:var(--text-muted);">${t(loc, ach.descKey)}</div>
+              <div style="font-size:10.5px; font-weight:800; color:var(--accent-gold);">+${ach.rewardOak} ${t(loc, 'cur.oak')} · +${ach.rewardGems} ${t(loc, 'cur.gem')}${hatTag}</div>
+              <div class="shard-bar">
+                <div class="shard-bar-fill" style="width:${pct}%"></div>
+                <span class="shard-bar-text">${cur}/${ach.target}</span>
+              </div>
+            </div>
+            <button class="btn btn-sm ${ready ? 'btn-gold' : ''}" data-claim-ach="${ach.id}" ${ready ? '' : 'disabled'}>
+              ${t(loc, claimed ? 'quest.claimed' : ready ? 'quest.claim' : 'quest.inProgress')}
+            </button>
+          </div>
+        `;
+      }).join('');
+      panelHtml = `<div id="journal-achievements-panel" style="display:flex; flex-direction:column; gap:8px;">${achsHtml}</div>`;
+    } else {
+      const catalog = getJournalCatalog();
+      const filtered =
+        this.codexFilter === 'all' ? catalog : catalog.filter((e) => e.category === this.codexFilter);
+      const active = filtered.find((e) => e.id === this.selectedJournalId) ?? filtered[0] ?? catalog[0];
+      const isDiscovered = save.discoveredIds.includes(active.id);
+      const isClaimed = save.claimedJournalIds.includes(active.id);
+
+      const filtersHtml = (['all', 'tower', 'hero', 'enemy'] as const)
+        .map(
+          (cat) => `
+            <button type="button" class="codex-filter-btn ${this.codexFilter === cat ? 'active' : ''}" data-codex-cat="${cat}">
+              ${t(loc, `journal.filter.${cat}`)}
+            </button>
+          `,
+        )
+        .join('');
+
+      const gridHtml = filtered
+        .map((entry) => {
+          const disc = save.discoveredIds.includes(entry.id);
+          const claimed = save.claimedJournalIds.includes(entry.id);
+          const sel = entry.id === active.id;
+          return `
+            <button type="button" class="journal-entry-btn ${sel ? 'selected' : ''} ${disc ? '' : 'undiscovered'}" data-journal-id="${entry.id}">
+              <img class="journal-thumb-mini" src="${getJournalEntryPortraitUrl(entry.id, entry.category)}" alt="" />
+              <div style="min-width:0; flex:1;">
+                <span class="journal-cat-pill">${t(loc, `journal.cat.${entry.category}`)}</span>
+                <div class="journal-entry-name">${t(loc, entry.nameKey)}</div>
+              </div>
+              ${disc && !claimed ? `<span class="journal-gem-pip">+${JOURNAL_REWARD_GEMS}</span>` : ''}
+            </button>
+          `;
+        })
+        .join('');
+
+      const claimBtn = isDiscovered
+        ? `<button class="btn btn-sm ${isClaimed ? '' : 'btn-gold'}" id="btn-claim-journal" ${isClaimed ? 'disabled' : ''}>
+             ${isClaimed ? t(loc, 'journal.claimed') : tParams(loc, 'journal.claimReward', { gems: JOURNAL_REWARD_GEMS })}
+           </button>`
+        : `<button class="btn btn-sm" disabled>${t(loc, 'journal.locked')}</button>`;
+
+      panelHtml = `
+        <div id="journal-codex-panel" style="display:flex; flex-direction:column; gap:8px;">
+          <div class="codex-filter-row">${filtersHtml}</div>
+          <div class="card-panel journal-stage-card">
+            <div class="codex-detail-head">
+              <img class="codex-detail-portrait" src="${getJournalEntryPortraitUrl(active.id, active.category)}" alt="${t(loc, active.nameKey)}" />
+              <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:3px;">
+                <span class="journal-cat-pill">${t(loc, `journal.cat.${active.category}`)} · ${save.discoveredIds.length}/${catalog.length}</span>
+                <div style="font-size:15.5px; font-weight:900; color:#ffffff;">${t(loc, active.nameKey)}</div>
+                <div style="font-size:11px; font-weight:800; color:var(--accent-cyan);">${active.statSummary}</div>
+                <div style="font-size:11.5px; color:var(--text-muted);">${t(loc, active.descKey)}</div>
+              </div>
+            </div>
+            <div class="codex-tactic-box">
+              <div style="font-size:10px; font-weight:900; color:#ffe17a; text-transform:uppercase;">${t(loc, 'journal.tacticTitle')}</div>
+              <div style="font-size:11.5px; color:#f7ebd4;">${t(loc, active.tacticKey)}</div>
+            </div>
+            ${claimBtn}
+          </div>
+          <div class="journal-catalog-grid">${gridHtml}</div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="oak-section-title">${t(loc, 'journal.title')}</div>
+      <div style="font-size:11px; color:var(--text-muted); margin-top:-4px;">${t(loc, 'journal.subNew')}</div>
+      ${subNavHtml}
+      ${panelHtml}
     `;
   }
 
@@ -1397,6 +1654,16 @@ export class MetaView {
             this.callbacks.onDevUnlock
               ? `<button class="btn btn-sm btn-gold" id="btn-dev-unlock" type="button">${t(loc, 'settings.devUnlock')}</button>`
               : ''
+          }
+          ${
+            this.confirmResetSave
+              ? `
+                <div style="display:flex; gap:6px; align-items:center;">
+                  <button class="btn btn-sm btn-danger" style="flex:1;" id="btn-confirm-reset-save" type="button">${t(loc, 'settings.resetConfirm')}</button>
+                  <button class="btn btn-sm" id="btn-cancel-reset-save" type="button">${t(loc, 'map.close')}</button>
+                </div>
+              `
+              : `<button class="btn btn-sm" id="btn-reset-save" type="button">${t(loc, 'settings.resetSave')}</button>`
           }
         </div>
       </div>
@@ -1694,10 +1961,78 @@ export class MetaView {
       };
     });
 
-    container.querySelectorAll<HTMLElement>('[data-hat]').forEach((btn) => {
+    const gotoAcc = container.querySelector<HTMLButtonElement>('#btn-goto-accessories');
+    if (gotoAcc) {
+      gotoAcc.onclick = () => {
+        this.cardsSubTab = 'accessories';
+        this.callbacks.onRefresh();
+      };
+    }
+
+    container.querySelectorAll<HTMLElement>('[data-acc-hat]').forEach((btn) => {
       btn.onclick = () => {
-        const hat = btn.dataset.hat as HatId;
-        this.saveManager.update((s) => { s.equippedHat = hat; });
+        const res = unlockOrEquipHat(this.saveManager, btn.dataset.accHat as HatId);
+        if (res === 'unlocked') this.statusNotice = t(loc, 'acc.unlockedToast');
+        this.callbacks.onRefresh();
+      };
+    });
+
+    container.querySelectorAll<HTMLElement>('[data-acc-aura]').forEach((btn) => {
+      btn.onclick = () => {
+        const res = unlockOrEquipAura(this.saveManager, btn.dataset.accAura as AuraId);
+        if (res === 'unlocked') this.statusNotice = t(loc, 'acc.unlockedToast');
+        this.callbacks.onRefresh();
+      };
+    });
+
+    container.querySelectorAll<HTMLElement>('[data-acc-banner]').forEach((btn) => {
+      btn.onclick = () => {
+        const res = unlockOrEquipBanner(this.saveManager, btn.dataset.accBanner as BannerId);
+        if (res === 'unlocked') this.statusNotice = t(loc, 'acc.unlockedToast');
+        this.callbacks.onRefresh();
+      };
+    });
+
+    container.querySelectorAll<HTMLElement>('[data-journal-sub]').forEach((btn) => {
+      btn.onclick = () => {
+        this.journalSubTab = (btn.dataset.journalSub as JournalSubTab) ?? 'quests';
+        this.callbacks.onRefresh();
+      };
+    });
+
+    container.querySelectorAll<HTMLElement>('[data-codex-cat]').forEach((btn) => {
+      btn.onclick = () => {
+        this.codexFilter = (btn.dataset.codexCat as CodexFilter) ?? 'all';
+        this.callbacks.onRefresh();
+      };
+    });
+
+    container.querySelectorAll<HTMLElement>('[data-claim-dq]').forEach((btn) => {
+      btn.onclick = () => {
+        const qid = btn.dataset.claimDq ?? '';
+        if (claimDailyQuest(this.saveManager, qid)) {
+          this.statusNotice = t(loc, 'quest.claimedToast');
+        }
+        this.callbacks.onRefresh();
+      };
+    });
+
+    const dqBonusBtn = container.querySelector<HTMLButtonElement>('#btn-claim-dq-bonus');
+    if (dqBonusBtn) {
+      dqBonusBtn.onclick = () => {
+        if (claimDailyQuestBonus(this.saveManager)) {
+          this.statusNotice = t(loc, 'quest.claimedToast');
+        }
+        this.callbacks.onRefresh();
+      };
+    }
+
+    container.querySelectorAll<HTMLElement>('[data-claim-ach]').forEach((btn) => {
+      btn.onclick = () => {
+        const aid = btn.dataset.claimAch ?? '';
+        if (claimAchievement(this.saveManager, aid)) {
+          this.statusNotice = t(loc, 'quest.claimedToast');
+        }
         this.callbacks.onRefresh();
       };
     });
@@ -1808,10 +2143,38 @@ export class MetaView {
     }
 
     const btnSettings = container.querySelector<HTMLButtonElement>('#btn-settings');
-    if (btnSettings) btnSettings.onclick = () => { this.showSettings = true; this.callbacks.onRefresh(); };
+    if (btnSettings) btnSettings.onclick = () => { this.confirmResetSave = false; this.showSettings = true; this.callbacks.onRefresh(); };
 
     const closeSettings = container.querySelector<HTMLButtonElement>('#btn-close-settings');
-    if (closeSettings) closeSettings.onclick = () => { this.showSettings = false; this.callbacks.onRefresh(); };
+    if (closeSettings) closeSettings.onclick = () => { this.confirmResetSave = false; this.showSettings = false; this.callbacks.onRefresh(); };
+
+    const resetSaveBtn = container.querySelector<HTMLButtonElement>('#btn-reset-save');
+    if (resetSaveBtn) {
+      resetSaveBtn.onclick = () => {
+        this.confirmResetSave = true;
+        this.callbacks.onRefresh();
+      };
+    }
+
+    const cancelResetBtn = container.querySelector<HTMLButtonElement>('#btn-cancel-reset-save');
+    if (cancelResetBtn) {
+      cancelResetBtn.onclick = () => {
+        this.confirmResetSave = false;
+        this.callbacks.onRefresh();
+      };
+    }
+
+    const confirmResetBtn = container.querySelector<HTMLButtonElement>('#btn-confirm-reset-save');
+    if (confirmResetBtn) {
+      confirmResetBtn.onclick = () => {
+        this.saveManager.reset();
+        this.confirmResetSave = false;
+        this.showSettings = false;
+        this.selectedLevelId = 1;
+        this.statusNotice = t(loc, 'settings.resetDone');
+        this.callbacks.onRefresh();
+      };
+    }
 
     const toggleLang = container.querySelector<HTMLButtonElement>('#btn-toggle-lang');
     if (toggleLang) {
@@ -1880,6 +2243,8 @@ export class MetaView {
     container.querySelectorAll<HTMLElement>('[data-open-journal-id]').forEach((el) => {
       el.onclick = () => {
         this.selectedJournalId = el.dataset.openJournalId ?? 'boz_pence';
+        this.journalSubTab = 'codex';
+        this.codexFilter = 'all';
         this.showBestiary = false;
         this.activeTab = 'journal';
         this.callbacks.onRefresh();
@@ -1899,22 +2264,6 @@ export class MetaView {
         }
         this.callbacks.onRefresh();
       };
-    }
-    const turntable = container.querySelector<HTMLCanvasElement>('#journal-turntable');
-    if (turntable) {
-      let dragging = false;
-      let lastX = 0;
-      turntable.onpointerdown = (ev) => {
-        dragging = true;
-        lastX = ev.clientX;
-      };
-      turntable.onpointermove = (ev) => {
-        if (!dragging) return;
-        this.journalYaw += (ev.clientX - lastX) * 0.015;
-        lastX = ev.clientX;
-      };
-      turntable.onpointerup = () => { dragging = false; };
-      turntable.onpointerleave = () => { dragging = false; };
     }
     const closeBestiary = container.querySelector<HTMLButtonElement>('#btn-close-bestiary');
     if (closeBestiary) {

@@ -1,4 +1,12 @@
-export type TowerId = 'squirrel' | 'beaver' | 'owl' | 'hedgehog';
+export type TowerId =
+  | 'squirrel'
+  | 'beaver'
+  | 'owl'
+  | 'hedgehog'
+  | 'badger'
+  | 'falcon'
+  | 'tortoise'
+  | 'lynx';
 
 export type EvolutionBranchId =
   | 'squirrel_sniper'
@@ -8,11 +16,28 @@ export type EvolutionBranchId =
   | 'owl_chain'
   | 'owl_glacier'
   | 'hedgehog_pierce'
-  | 'hedgehog_shred';
+  | 'hedgehog_shred'
+  | 'badger_inferno'
+  | 'badger_corrosion'
+  | 'falcon_tempest'
+  | 'falcon_skyhunter'
+  | 'tortoise_quake'
+  | 'tortoise_bastion'
+  | 'lynx_flurry'
+  | 'lynx_frostbite';
 
 export type TargetingPriority = 'first' | 'strongest' | 'weakest' | 'closest';
 
-export type HatId = 'none' | 'pirate' | 'chef' | 'wizard' | 'viking';
+export type HatId =
+  | 'none'
+  | 'pirate'
+  | 'chef'
+  | 'wizard'
+  | 'viking'
+  | 'crown'
+  | 'goggles'
+  | 'antlers'
+  | 'samurai';
 
 export interface TowerTierStats {
   cost: number;
@@ -259,6 +284,226 @@ export const TOWERS: Record<TowerId, TowerSpec> = {
       },
     ],
   },
+  badger: {
+    id: 'badger',
+    nameKey: 'tower.badger.name',
+    roleKey: 'tower.badger.role',
+    canHitAir: false,
+    canHitGround: true,
+    defaultPriority: 'first',
+    smartModeHint: 'cluster',
+    accentColor: '#36c96c',
+    tier1: {
+      cost: 75,
+      damage: 24,
+      fireRate: 0.72,
+      range: 6.7,
+      aoeRadius: 2.1,
+      resinDuration: 2.0,
+      resinDps: 8,
+      resinSlowPct: 0.18,
+    },
+    tier2: {
+      cost: 110,
+      damage: 38,
+      fireRate: 0.82,
+      range: 7.2,
+      aoeRadius: 2.3,
+      resinDuration: 2.5,
+      resinDps: 12,
+      resinSlowPct: 0.22,
+    },
+    evolutions: [
+      {
+        id: 'badger_inferno',
+        branchKey: 'A',
+        nameKey: 'evo.badger_inferno.name',
+        descKey: 'evo.badger_inferno.desc',
+        stats: {
+          cost: 170,
+          damage: 62,
+          fireRate: 0.92,
+          range: 7.6,
+          aoeRadius: 2.55,
+          resinDuration: 3.6,
+          resinDps: 22,
+          resinSlowPct: 0.28,
+        },
+      },
+      {
+        id: 'badger_corrosion',
+        branchKey: 'B',
+        nameKey: 'evo.badger_corrosion.name',
+        descKey: 'evo.badger_corrosion.desc',
+        stats: {
+          cost: 170,
+          damage: 54,
+          fireRate: 0.95,
+          range: 7.6,
+          aoeRadius: 2.4,
+          armorBreakPct: 0.45,
+          slowPct: 0.32,
+          slowDuration: 2.6,
+          resinDuration: 2.6,
+          resinDps: 14,
+          resinSlowPct: 0.25,
+        },
+      },
+    ],
+  },
+  falcon: {
+    id: 'falcon',
+    nameKey: 'tower.falcon.name',
+    roleKey: 'tower.falcon.role',
+    canHitAir: true,
+    canHitGround: true,
+    defaultPriority: 'first',
+    smartModeHint: 'first',
+    accentColor: '#39b6e6',
+    tier1: { cost: 60, damage: 18, fireRate: 1.45, range: 8.2 },
+    tier2: { cost: 90, damage: 29, fireRate: 1.65, range: 9.0, critChance: 0.12, critMultiplier: 2.0 },
+    evolutions: [
+      {
+        id: 'falcon_tempest',
+        branchKey: 'A',
+        nameKey: 'evo.falcon_tempest.name',
+        descKey: 'evo.falcon_tempest.desc',
+        stats: {
+          cost: 145,
+          damage: 34,
+          fireRate: 1.75,
+          range: 9.4,
+          chainCount: 3,
+          slowPct: 0.2,
+          slowDuration: 1.4,
+        },
+      },
+      {
+        id: 'falcon_skyhunter',
+        branchKey: 'B',
+        nameKey: 'evo.falcon_skyhunter.name',
+        descKey: 'evo.falcon_skyhunter.desc',
+        stats: {
+          cost: 145,
+          damage: 56,
+          fireRate: 1.45,
+          range: 10.6,
+          armorPiercePct: 0.45,
+          critChance: 0.3,
+          critMultiplier: 2.4,
+        },
+      },
+    ],
+  },
+  tortoise: {
+    id: 'tortoise',
+    nameKey: 'tower.tortoise.name',
+    roleKey: 'tower.tortoise.role',
+    canHitAir: false,
+    canHitGround: true,
+    defaultPriority: 'strongest',
+    smartModeHint: 'cluster',
+    accentColor: '#c98e32',
+    tier1: {
+      cost: 95,
+      damage: 42,
+      fireRate: 0.52,
+      range: 6.4,
+      aoeRadius: 2.5,
+      stunChance: 0.2,
+      stunDuration: 0.65,
+    },
+    tier2: {
+      cost: 135,
+      damage: 68,
+      fireRate: 0.6,
+      range: 6.9,
+      aoeRadius: 2.7,
+      stunChance: 0.28,
+      stunDuration: 0.75,
+    },
+    evolutions: [
+      {
+        id: 'tortoise_quake',
+        branchKey: 'A',
+        nameKey: 'evo.tortoise_quake.name',
+        descKey: 'evo.tortoise_quake.desc',
+        stats: {
+          cost: 205,
+          damage: 105,
+          fireRate: 0.66,
+          range: 7.4,
+          aoeRadius: 3.1,
+          stunChance: 0.48,
+          stunDuration: 1.0,
+          slowPct: 0.3,
+          slowDuration: 2.0,
+        },
+      },
+      {
+        id: 'tortoise_bastion',
+        branchKey: 'B',
+        nameKey: 'evo.tortoise_bastion.name',
+        descKey: 'evo.tortoise_bastion.desc',
+        stats: {
+          cost: 205,
+          damage: 132,
+          fireRate: 0.68,
+          range: 7.4,
+          aoeRadius: 2.6,
+          armorPiercePct: 0.5,
+          armorBreakPct: 0.35,
+          bossBonusPct: 0.3,
+        },
+      },
+    ],
+  },
+  lynx: {
+    id: 'lynx',
+    nameKey: 'tower.lynx.name',
+    roleKey: 'tower.lynx.role',
+    canHitAir: true,
+    canHitGround: true,
+    defaultPriority: 'first',
+    smartModeHint: 'armored_first',
+    accentColor: '#a66bff',
+    tier1: { cost: 80, damage: 17, fireRate: 1.85, range: 7.6, armorPiercePct: 0.25 },
+    tier2: { cost: 115, damage: 27, fireRate: 2.1, range: 8.2, armorPiercePct: 0.32, critChance: 0.15, critMultiplier: 2.0 },
+    evolutions: [
+      {
+        id: 'lynx_flurry',
+        branchKey: 'A',
+        nameKey: 'evo.lynx_flurry.name',
+        descKey: 'evo.lynx_flurry.desc',
+        stats: {
+          cost: 175,
+          damage: 25,
+          fireRate: 3.6,
+          range: 8.6,
+          armorPiercePct: 0.35,
+          critChance: 0.22,
+          critMultiplier: 2.1,
+        },
+      },
+      {
+        id: 'lynx_frostbite',
+        branchKey: 'B',
+        nameKey: 'evo.lynx_frostbite.name',
+        descKey: 'evo.lynx_frostbite.desc',
+        stats: {
+          cost: 175,
+          damage: 44,
+          fireRate: 1.95,
+          range: 8.8,
+          armorPiercePct: 0.45,
+          slowPct: 0.42,
+          slowDuration: 2.4,
+          freezeEveryNth: 4,
+          freezeDuration: 1.35,
+        },
+      },
+    ],
+  },
 };
 
 export const TOWER_LIST: TowerSpec[] = [
@@ -266,4 +511,8 @@ export const TOWER_LIST: TowerSpec[] = [
   TOWERS.beaver,
   TOWERS.owl,
   TOWERS.hedgehog,
+  TOWERS.badger,
+  TOWERS.falcon,
+  TOWERS.tortoise,
+  TOWERS.lynx,
 ];

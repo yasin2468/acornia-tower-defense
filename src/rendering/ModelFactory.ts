@@ -110,6 +110,22 @@ function resolveTowerModelName(
       return 'tower_hedgehog_rail';
     case 'hedgehog_shred':
       return 'tower_hedgehog_shred';
+    case 'badger_inferno':
+      return 'tower_badger_inferno';
+    case 'badger_corrosion':
+      return 'tower_badger_corrosion';
+    case 'falcon_tempest':
+      return 'tower_falcon_tempest';
+    case 'falcon_skyhunter':
+      return 'tower_falcon_skyhunter';
+    case 'tortoise_quake':
+      return 'tower_tortoise_quake';
+    case 'tortoise_bastion':
+      return 'tower_tortoise_bastion';
+    case 'lynx_flurry':
+      return 'tower_lynx_flurry';
+    case 'lynx_frostbite':
+      return 'tower_lynx_frostbite';
     default:
       return `tower_${towerId}_t2`;
   }
@@ -144,7 +160,11 @@ export function createTowerRig(
   }
 
   const spinSpeed =
-    branchId === 'hedgehog_shred' ? 12.0 : branchId === 'squirrel_gatling' ? 7.5 : 2.6;
+    branchId === 'hedgehog_shred'
+      ? 12.0
+      : branchId === 'squirrel_gatling' || branchId === 'lynx_flurry'
+        ? 7.5
+        : 2.6;
 
   return {
     root,
@@ -222,11 +242,13 @@ export function createHeroRig(
       ? 'hero_fox'
       : heroId === 'kaya_dis'
         ? 'hero_boar'
-        : variant === 'viking'
-          ? 'hero_bear_viking'
-          : variant === 'royal'
-            ? 'hero_bear_royal'
-            : 'hero_bear';
+        : heroId === 'ay_kurdu'
+          ? 'hero_wolf'
+          : variant === 'viking'
+            ? 'hero_bear_viking'
+            : variant === 'royal'
+              ? 'hero_bear_royal'
+              : 'hero_bear';
   const inst = instantiateModel(modelName) ?? instantiateModel('hero_bear');
   const body = inst ? (inst.scene.getObjectByName('Body') ?? inst.scene) : fallbackBox('#915b3b', 1.1);
   if (inst && body !== inst.scene) {

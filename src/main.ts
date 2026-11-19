@@ -7,6 +7,7 @@ import {
   VICTORY_OAK_REWARD,
   type SimEvent,
 } from './core/SimulationEngine.ts';
+import { getBannerSpec } from './data/accessories.ts';
 import { ENEMIES, HEROES } from './data/enemies.ts';
 import { LEVELS, type LevelSpec } from './data/levels.ts';
 import {
@@ -38,6 +39,7 @@ import {
   discoverJournalEntries,
   getJournalCatalog,
   grantCampaignHeroUnlocks,
+  recordDailyQuestProgress,
 } from './services/ProgressionService.ts';
 import { SaveManager } from './services/SaveManager.ts';
 import { BattleView } from './ui/BattleView.ts';
@@ -91,8 +93,10 @@ function flushSeasonKills(): void {
   if (pendingSeasonKills <= 0) return;
   const delta = pendingSeasonKills;
   pendingSeasonKills = 0;
+  saveManager.rollDailyCounters();
   saveManager.update((d) => {
     d.seasonPassKills += delta;
+    d.dailyQuestsProgress.kills += delta;
   });
 }
 
@@ -116,9 +120,11 @@ function applyDevUnlock(): void {
     for (let id = 1; id <= LEVELS.length; id++) {
       d.levelStars[id] = Math.max(d.levelStars[id] ?? 0, 3);
     }
-    for (const h of ['boz_pence', 'kizil_kuyruk', 'kaya_dis'] as const) {
+    for (const h of ['boz_pence', 'kizil_kuyruk', 'kaya_dis', 'ay_kurdu'] as const) {
       if (!d.unlockedHeroes.includes(h)) d.unlockedHeroes.push(h);
-      if (!d.discoveredIds.includes(h)) d.discoveredIds.push(h);
+    }
+    for (const entry of getJournalCatalog()) {
+      if (!d.discoveredIds.includes(entry.id)) d.discoveredIds.push(entry.id);
     }
   });
 }
@@ -261,18 +267,28 @@ async function launchBattleSpec(
       ? ['hero_fox']
       : heroId === 'kaya_dis'
         ? ['hero_boar']
-        : ['hero_bear', 'hero_bear_viking', 'hero_bear_royal'];
+        : heroId === 'ay_kurdu'
+          ? ['hero_wolf']
+          : ['hero_bear', 'hero_bear_viking', 'hero_bear_royal'];
   const deps = getLevelModelDependencies(spec, heroModels, save.equippedHat);
   await ensureModelsLoaded(deps);
 
-  activeSim = new SimulationEngine(spec, {
+  const bannerSpec = !options.isMultiMatch ? getBannerSpec(save.equippedBanner) : null;
+  const effectiveSpec: LevelSpec =
+    bannerSpec?.bonusBaseHp && !options.ironMode && !options.isExpedition
+      ? { ...spec, baseHp: spec.baseHp + bannerSpec.bonusBaseHp }
+      : spec;
+
+  activeSim = new SimulationEngine(effectiveSpec, {
     seed: options.customSeed,
     ironMode: options.ironMode,
     cardLevels: save.cardLevels,
     heroId,
     heroClass: save.heroClass,
     talents: options.isMultiMatch ? undefined : save.talents,
-    extraStartGold: options.isMultiMatch ? 0 : remoteConfig.get().startGoldDelta,
+    extraStartGold: options.isMultiMatch ? 0 : remoteConfig.get().startGoldDelta + (bannerSpec?.bonusStartGold ?? 0),
+    towerDamageBonusPct: bannerSpec?.bonusTowerDmgPct ?? 0,
+    rainCooldownReduceSec: bannerSpec?.bonusRainCdSec ?? 0,
     waitForFirstWave: !isPromoMode && !options.isMultiMatch,
     allowedTowers: options.allowedTowers,
     relics: options.relics,
@@ -291,7 +307,14 @@ async function launchBattleSpec(
       ...spec.waves.flatMap((w) => w.groups.map((g) => g.enemyId)),
     ],
   );
-  sceneMgr.loadLevel(spec, save.equippedHat, save.heroClass, heroId);
+  sceneMgr.loadLevel(
+    effectiveSpec,
+    save.equippedHat,
+    save.heroClass,
+    heroId,
+    save.equippedAura,
+    save.equippedBanner,
+  );
   battleView.resetForLevel(spec.id);
   mode = 'battle';
   analytics.track('level_start', { levelId: spec.id, ironMode: options.ironMode, expedition: options.isExpedition });
@@ -348,12 +371,17 @@ function exitToMap(): void {
 
 function processBattleEvents(events: SimEvent[]): void {
   const loc = saveManager.get().settings.locale;
+  let questBuilds = 0;
+  let questSkills = 0;
+  let questWins = 0;
   for (const ev of events) {
     if (ev.type === 'TOWER_BUILT') {
       sound.playBuild();
       haptics.impact('light');
+      questBuilds += 1;
     } else if (ev.type === 'TOWER_UPGRADED') {
       sound.playUpgrade();
+      questBuilds += 1;
     } else if (ev.type === 'STUMP_CLEARED') {
       sound.playWoodBreak();
       haptics.impact('light');
@@ -367,7 +395,14 @@ function processBattleEvents(events: SimEvent[]): void {
       juice.triggerHitStop(0.075, 0.06);
       battleView.triggerBaseHitFlash(ev.damage);
     } else if (ev.type === 'TOWER_FIRED') {
-      const kind = ev.towerId === 'beaver' ? 'mortar' : ev.towerId === 'owl' ? 'emp' : ev.towerId === 'hedgehog' ? 'heavy' : 'arrow';
+      const kind =
+        ev.towerId === 'beaver' || ev.towerId === 'badger' || ev.towerId === 'tortoise'
+          ? 'mortar'
+          : ev.towerId === 'owl' || ev.towerId === 'lynx'
+            ? 'emp'
+            : ev.towerId === 'hedgehog'
+              ? 'heavy'
+              : 'arrow';
       sound.playShoot(kind);
     } else if (ev.type === 'ENEMY_HIT') {
       sound.playHit(ev.isCrit, ev.armorBroken, Boolean(ev.heavy), Boolean(ev.resisted));
@@ -404,9 +439,11 @@ function processBattleEvents(events: SimEvent[]): void {
       juice.triggerMicroHitStop(0.04, 0.08);
       sound.playPineconeBarrage();
       haptics.impact('medium');
+      questSkills += 1;
     } else if (ev.type === 'ACORN_MAGNET') {
       sound.playMagnetCast();
       haptics.impact('light');
+      questSkills += 1;
     } else if (ev.type === 'BARREL_EXPLODED') {
       juice.triggerMicroHitStop(0.04, 0.08);
       sound.playExplosion(true);
@@ -424,6 +461,7 @@ function processBattleEvents(events: SimEvent[]): void {
       juice.triggerMicroHitStop(0.042, 0.08);
       sound.playHeroUltimate(ev.variant);
       haptics.impact('medium');
+      questSkills += 1;
     } else if (ev.type === 'HERO_LEVELED') {
       sound.playUpgrade();
       if (activeSim?.heroId === 'boz_pence' && activeSim.heroClass === 'auto' && (ev.level === 2 || ev.level === 4)) {
@@ -444,6 +482,7 @@ function processBattleEvents(events: SimEvent[]): void {
       }
     } else if (ev.type === 'GAME_WON' && !victoryRecorded) {
       victoryRecorded = true;
+      questWins += 1;
       flushSeasonKills();
       if (network.state === 'in_match' && !multiOutcomeRecorded) {
         multiOutcomeRecorded = true;
@@ -505,6 +544,13 @@ function processBattleEvents(events: SimEvent[]): void {
       }
       analytics.track('level_fail', { levelId: currentLevelId, wave: (activeSim?.currentWaveIndex ?? 0) + 1 });
     }
+  }
+  if (questBuilds > 0 || questSkills > 0 || questWins > 0) {
+    recordDailyQuestProgress(saveManager, {
+      builds: questBuilds,
+      skills: questSkills,
+      wins: questWins,
+    });
   }
 }
 
@@ -632,7 +678,6 @@ resizeObserver.observe(shell);
 
 window.addEventListener('pointerdown', () => sound.resume(), { passive: true });
 
-let ensuringShowcaseModel = '';
 function frame(nowMs: number): void {
   requestAnimationFrame(frame);
   const rawDt = Math.min(0.1, (nowMs - lastFrameMs) / 1000);
@@ -641,22 +686,6 @@ function frame(nowMs: number): void {
     return;
   }
   lastFrameMs = nowMs;
-
-  if (mode === 'meta' && metaView.activeTab === 'journal') {
-    const turntable = uiRoot.querySelector<HTMLCanvasElement>('#journal-turntable');
-    if (turntable) {
-      const entry = getJournalCatalog().find((e) => e.id === metaView.selectedJournalId);
-      if (entry) {
-        if (ensuringShowcaseModel !== entry.modelName) {
-          ensuringShowcaseModel = entry.modelName;
-          void ensureModelsLoaded([entry.modelName]);
-        }
-        metaView.journalYaw += rawDt * 0.55;
-        sceneMgr.renderJournalShowcase(turntable, entry.modelName, metaView.journalYaw, rawDt);
-      }
-    }
-    return;
-  }
 
   if (mode === 'battle' && activeSim) {
     juice.step(rawDt);
@@ -684,13 +713,15 @@ function frame(nowMs: number): void {
     }
     battleView.updateTimers(rawDt, activeSim);
     if (!battleView.targetingSkill) sceneMgr.updateTargetingReticle(null);
+    const curSave = saveManager.get();
     sceneMgr.sync(
       activeSim,
       battleView.selectedSlotId,
-      saveManager.get().equippedHat,
+      curSave.equippedHat,
       rawDt,
       simDt,
       battleView.previewTowerId,
+      curSave.equippedAura,
     );
     // World overlay (HP ghost bars + damage numbers) runs every frame for smooth pops
     battleView.renderOverlay(activeSim, sceneMgr);

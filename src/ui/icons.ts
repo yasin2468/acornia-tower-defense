@@ -1,5 +1,6 @@
+import type { AuraId, BannerId } from '../data/accessories.ts';
 import type { EnemyId, HeroId } from '../data/enemies.ts';
-import type { TowerId } from '../data/towers.ts';
+import type { HatId, TowerId } from '../data/towers.ts';
 
 function resolvePublicUrl(relPath: string): string {
   return `./${relPath}`;
@@ -10,9 +11,42 @@ export const PORTRAIT_URLS: Record<TowerId | HeroId, string> = {
   beaver: resolvePublicUrl('ui/portrait_beaver.png'),
   owl: resolvePublicUrl('ui/portrait_owl.png'),
   hedgehog: resolvePublicUrl('ui/portrait_hedgehog.png'),
+  badger: resolvePublicUrl('ui/portrait_badger.png'),
+  falcon: resolvePublicUrl('ui/portrait_falcon.png'),
+  tortoise: resolvePublicUrl('ui/portrait_tortoise.png'),
+  lynx: resolvePublicUrl('ui/portrait_lynx.png'),
   boz_pence: resolvePublicUrl('ui/portrait_bear.png'),
   kizil_kuyruk: resolvePublicUrl('ui/portrait_fox.png'),
   kaya_dis: resolvePublicUrl('ui/portrait_boar.png'),
+  ay_kurdu: resolvePublicUrl('ui/portrait_wolf.png'),
+};
+
+export const HAT_ICON_URLS: Record<HatId, string> = {
+  none: resolvePublicUrl('ui/oak/acc_hat_none.png'),
+  pirate: resolvePublicUrl('ui/oak/acc_hat_pirate.png'),
+  chef: resolvePublicUrl('ui/oak/acc_hat_chef.png'),
+  wizard: resolvePublicUrl('ui/oak/acc_hat_wizard.png'),
+  viking: resolvePublicUrl('ui/oak/acc_hat_viking.png'),
+  crown: resolvePublicUrl('ui/oak/acc_hat_crown.png'),
+  goggles: resolvePublicUrl('ui/oak/acc_hat_goggles.png'),
+  antlers: resolvePublicUrl('ui/oak/acc_hat_antlers.png'),
+  samurai: resolvePublicUrl('ui/oak/acc_hat_samurai.png'),
+};
+
+export const AURA_ICON_URLS: Record<AuraId, string> = {
+  none: resolvePublicUrl('ui/oak/acc_aura_none.png'),
+  emerald_leaf: resolvePublicUrl('ui/oak/acc_aura_emerald_leaf.png'),
+  solar_ember: resolvePublicUrl('ui/oak/acc_aura_solar_ember.png'),
+  frost_crystal: resolvePublicUrl('ui/oak/acc_aura_frost_crystal.png'),
+  arcane_star: resolvePublicUrl('ui/oak/acc_aura_arcane_star.png'),
+};
+
+export const BANNER_ICON_URLS: Record<BannerId, string> = {
+  none: resolvePublicUrl('ui/oak/acc_banner_none.png'),
+  oak_crest: resolvePublicUrl('ui/oak/acc_banner_oak_crest.png'),
+  iron_ward: resolvePublicUrl('ui/oak/acc_banner_iron_ward.png'),
+  storm_feather: resolvePublicUrl('ui/oak/acc_banner_storm_feather.png'),
+  crimson_flame: resolvePublicUrl('ui/oak/acc_banner_crimson_flame.png'),
 };
 
 export const UI_ICON_URLS = {
@@ -76,6 +110,13 @@ export const ENEMY_PORTRAIT_URLS: Record<EnemyId, string> = {
 
 export function getEnemyBadgeUrl(enemyId: EnemyId, _isBoss?: boolean): string {
   return ENEMY_PORTRAIT_URLS[enemyId];
+}
+
+export function getJournalEntryPortraitUrl(entryId: string, category: 'tower' | 'hero' | 'enemy'): string {
+  if (category === 'enemy') {
+    return ENEMY_PORTRAIT_URLS[entryId as EnemyId] ?? ENEMY_PORTRAIT_URLS.scout_bot;
+  }
+  return PORTRAIT_URLS[entryId as TowerId | HeroId] ?? PORTRAIT_URLS.boz_pence;
 }
 
 export const ICONS = {

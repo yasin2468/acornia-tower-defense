@@ -1,3 +1,4 @@
+import type { AuraId, BannerId } from '../data/accessories.ts';
 import type { HeroClassId, HeroId } from '../data/enemies.ts';
 import { clampTalentRank, createInitialTalents, type TalentBranchId } from '../data/talents.ts';
 import type { HatId, TowerId } from '../data/towers.ts';
@@ -6,6 +7,13 @@ import { VIP_MONTHLY_DURATION_MS } from './CommercialServices.ts';
 
 export type CardUnitId = TowerId | HeroId;
 export type VipTier = 'none' | 'monthly' | 'lifetime';
+
+export interface DailyQuestProgressState {
+  kills: number;
+  builds: number;
+  skills: number;
+  wins: number;
+}
 export type RelicId =
   | 'explosive_acorns'
   | 'giant_hero'
@@ -48,8 +56,19 @@ export interface SaveState {
   heroClass: HeroClassId;
   unlockedHats: HatId[];
   equippedHat: HatId;
+  unlockedAuras: AuraId[];
+  equippedAura: AuraId;
+  unlockedBanners: BannerId[];
+  equippedBanner: BannerId;
   discoveredIds: string[];
   claimedJournalIds: string[];
+  dailyQuestsProgress: DailyQuestProgressState;
+  dailyQuestsClaimed: string[];
+  dailyQuestBonusClaimed: boolean;
+  claimedAchievementIds: string[];
+  totalBattlesWon: number;
+  totalTowersBuilt: number;
+  totalSkillsCast: number;
   activeExpedition: ExpeditionRunState | null;
   expeditionsCompleted: number;
   trophies: number;
@@ -114,26 +133,47 @@ export function createInitialSave(nowMs = Date.now()): SaveState {
       beaver: 1,
       owl: 1,
       hedgehog: 1,
+      badger: 1,
+      falcon: 1,
+      tortoise: 1,
+      lynx: 1,
       boz_pence: 1,
       kizil_kuyruk: 1,
       kaya_dis: 1,
+      ay_kurdu: 1,
     },
     cardShards: {
       squirrel: 3,
       beaver: 2,
       owl: 1,
       hedgehog: 1,
+      badger: 2,
+      falcon: 2,
+      tortoise: 1,
+      lynx: 1,
       boz_pence: 2,
       kizil_kuyruk: 0,
       kaya_dis: 0,
+      ay_kurdu: 0,
     },
     selectedHero: 'boz_pence',
     unlockedHeroes: ['boz_pence'],
     heroClass: 'auto',
     unlockedHats: ['none', 'pirate', 'chef'],
     equippedHat: 'none',
-    discoveredIds: ['squirrel', 'beaver', 'owl', 'hedgehog', 'boz_pence', 'scout_bot'],
+    unlockedAuras: ['none', 'emerald_leaf'],
+    equippedAura: 'none',
+    unlockedBanners: ['none'],
+    equippedBanner: 'none',
+    discoveredIds: ['squirrel', 'beaver', 'owl', 'hedgehog', 'badger', 'falcon', 'tortoise', 'lynx', 'boz_pence', 'scout_bot'],
     claimedJournalIds: [],
+    dailyQuestsProgress: { kills: 0, builds: 0, skills: 0, wins: 0 },
+    dailyQuestsClaimed: [],
+    dailyQuestBonusClaimed: false,
+    claimedAchievementIds: [],
+    totalBattlesWon: 0,
+    totalTowersBuilt: 0,
+    totalSkillsCast: 0,
     activeExpedition: null,
     expeditionsCompleted: 0,
     trophies: 0,
@@ -201,11 +241,40 @@ export function migrateSave(parsed: Partial<SaveState>, nowMs = Date.now()): { s
       Array.isArray(parsed.unlockedHats) && parsed.unlockedHats.length > 0
         ? Array.from(new Set(parsed.unlockedHats))
         : base.unlockedHats,
+    unlockedAuras:
+      Array.isArray(parsed.unlockedAuras) && parsed.unlockedAuras.length > 0
+        ? Array.from(new Set(parsed.unlockedAuras))
+        : base.unlockedAuras,
+    equippedAura: parsed.equippedAura ?? base.equippedAura,
+    unlockedBanners:
+      Array.isArray(parsed.unlockedBanners) && parsed.unlockedBanners.length > 0
+        ? Array.from(new Set(parsed.unlockedBanners))
+        : base.unlockedBanners,
+    equippedBanner: parsed.equippedBanner ?? base.equippedBanner,
     discoveredIds:
       Array.isArray(parsed.discoveredIds) && parsed.discoveredIds.length > 0
-        ? Array.from(new Set(parsed.discoveredIds))
+        ? Array.from(new Set([...base.discoveredIds, ...parsed.discoveredIds]))
         : base.discoveredIds,
     claimedJournalIds: Array.isArray(parsed.claimedJournalIds) ? parsed.claimedJournalIds : [],
+    dailyQuestsProgress: {
+      ...base.dailyQuestsProgress,
+      ...(parsed.dailyQuestsProgress ?? {}),
+    },
+    dailyQuestsClaimed: Array.isArray(parsed.dailyQuestsClaimed) ? parsed.dailyQuestsClaimed : [],
+    dailyQuestBonusClaimed: Boolean(parsed.dailyQuestBonusClaimed),
+    claimedAchievementIds: Array.isArray(parsed.claimedAchievementIds) ? parsed.claimedAchievementIds : [],
+    totalBattlesWon:
+      typeof parsed.totalBattlesWon === 'number' && Number.isFinite(parsed.totalBattlesWon)
+        ? Math.max(0, Math.floor(parsed.totalBattlesWon))
+        : 0,
+    totalTowersBuilt:
+      typeof parsed.totalTowersBuilt === 'number' && Number.isFinite(parsed.totalTowersBuilt)
+        ? Math.max(0, Math.floor(parsed.totalTowersBuilt))
+        : 0,
+    totalSkillsCast:
+      typeof parsed.totalSkillsCast === 'number' && Number.isFinite(parsed.totalSkillsCast)
+        ? Math.max(0, Math.floor(parsed.totalSkillsCast))
+        : 0,
     claimedLeagueTiers: Array.isArray(parsed.claimedLeagueTiers) ? parsed.claimedLeagueTiers : [],
     claimedSeasonFreeTiers: Array.isArray(parsed.claimedSeasonFreeTiers) ? parsed.claimedSeasonFreeTiers : [],
     claimedSeasonGoldTiers: Array.isArray(parsed.claimedSeasonGoldTiers) ? parsed.claimedSeasonGoldTiers : [],
@@ -280,8 +349,22 @@ export class SaveManager {
       this.state.dailyBoostsDate = key;
       this.state.dailyAfkBoostsUsed = 0;
       this.state.dailyFreeChestsUsed = 0;
+      this.state.dailyQuestsProgress = { kills: 0, builds: 0, skills: 0, wins: 0 };
+      this.state.dailyQuestsClaimed = [];
+      this.state.dailyQuestBonusClaimed = false;
       this.save();
     }
+  }
+
+  reset(nowMs = Date.now(), preserveSettings = true): SaveState {
+    const prevSettings = this.state.settings;
+    const fresh = createInitialSave(nowMs);
+    if (preserveSettings) {
+      fresh.settings = { ...prevSettings };
+    }
+    this.state = fresh;
+    this.save();
+    return this.state;
   }
 
   get(): SaveState {

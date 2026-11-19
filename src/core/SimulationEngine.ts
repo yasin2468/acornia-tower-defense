@@ -92,7 +92,7 @@ export type SimEvent =
   | { type: 'HERO_CLAW_SHOCK'; x: number; z: number; hits: number; heroId?: HeroId }
   | {
       type: 'HERO_ULTIMATE';
-      variant: 'classic' | 'viking' | 'royal' | 'fox_storm' | 'boar_charge';
+      variant: 'classic' | 'viking' | 'royal' | 'fox_storm' | 'boar_charge' | 'wolf_howl';
       x: number;
       z: number;
       fromX?: number;
@@ -226,6 +226,7 @@ export interface SimOptions {
   initialBaseHp?: number;
   extraStartGold?: number;
   towerDamageBonusPct?: number;
+  rainCooldownReduceSec?: number;
   waitForFirstWave?: boolean;
 }
 
@@ -270,6 +271,7 @@ export class SimulationEngine {
   readonly allowedTowers: readonly TowerId[] | null;
   readonly relics: readonly RelicId[];
   readonly towerDamageBonusPct: number;
+  readonly rainCooldownReduceSec: number;
 
   private nextUid = 1;
   private spawnLaneToggle = 0;
@@ -288,15 +290,21 @@ export class SimulationEngine {
     this.allowedTowers = options.allowedTowers ? [...options.allowedTowers] : null;
     this.relics = options.relics ? [...options.relics] : [];
     this.towerDamageBonusPct = options.towerDamageBonusPct ?? 0;
+    this.rainCooldownReduceSec = Math.max(0, options.rainCooldownReduceSec ?? 0);
 
     this.cardLevels = {
       squirrel: options.cardLevels?.squirrel ?? 1,
       beaver: options.cardLevels?.beaver ?? 1,
       owl: options.cardLevels?.owl ?? 1,
       hedgehog: options.cardLevels?.hedgehog ?? 1,
+      badger: options.cardLevels?.badger ?? 1,
+      falcon: options.cardLevels?.falcon ?? 1,
+      tortoise: options.cardLevels?.tortoise ?? 1,
+      lynx: options.cardLevels?.lynx ?? 1,
       boz_pence: options.cardLevels?.boz_pence ?? 1,
       kizil_kuyruk: options.cardLevels?.kizil_kuyruk ?? 1,
       kaya_dis: options.cardLevels?.kaya_dis ?? 1,
+      ay_kurdu: options.cardLevels?.ay_kurdu ?? 1,
     };
 
     this.gold = level.startGold + (options.extraStartGold ?? 0) + this.talentMods.extraStartGold;
@@ -640,6 +648,30 @@ export class SimulationEngine {
           break;
         }
 
+        if (this.heroId === 'ay_kurdu') {
+          h.skillCooldown = 18;
+          h.skillActiveTimer = 6.5;
+          h.activeBuff = 'banner';
+          h.hp = Math.min(h.maxHp, h.hp + Math.round(h.maxHp * 0.2));
+          const dmg = Math.round(80 * lvlMult * cardMult * this.talentMods.heroDamageMult * giantDmgMult);
+          for (const e of [...this.enemies]) {
+            if (e.hp <= 0) continue;
+            if (Math.hypot(e.x - h.x, e.z - h.z) <= 3.8) {
+              hits += 1;
+              e.stunTimer = Math.max(e.stunTimer, 1.4);
+              e.slowPct = Math.max(e.slowPct, 0.35);
+              e.slowTimer = Math.max(e.slowTimer, 3.0);
+              this.damageEnemy(e, dmg, 0.3, true, false, false, {
+                dirX: e.x - h.x,
+                dirZ: e.z - h.z,
+                heavy: true,
+              });
+            }
+          }
+          this.events.push({ type: 'HERO_ULTIMATE', variant: 'wolf_howl', x: h.x, z: h.z, fromX, fromZ, hits });
+          break;
+        }
+
         const variant = resolveHeroVisualVariant(this.heroClass, h.level);
 
         if (variant === 'classic') {
@@ -716,7 +748,9 @@ export class SimulationEngine {
       }
       case 'CAST_PINECONE_RAIN': {
         if (this.pineconeRainCooldown > 0) return;
-        this.pineconeRainCooldown = Number((24 * this.talentMods.spellCooldownMult).toFixed(2));
+        this.pineconeRainCooldown = Number(
+          Math.max(8, 24 * this.talentMods.spellCooldownMult - this.rainCooldownReduceSec).toFixed(2),
+        );
         const rainDmg = Math.round(45 * this.talentMods.rainDamageMult);
         let hits = 0;
         for (const e of [...this.enemies]) {
@@ -1253,7 +1287,13 @@ export class SimulationEngine {
     const runeMult = this.slots.get(tower.slotId)?.runeSlot ? 1.15 : 1.0;
     const rangeMult = runeMult * (1 + this.talentMods.towerRangePct);
     const relicAdd =
-      this.relics.includes('twin_mortar') && (tower.towerId === 'beaver' || tower.towerId === 'owl') ? 1.0 : 0;
+      this.relics.includes('twin_mortar') &&
+      (tower.towerId === 'beaver' ||
+        tower.towerId === 'owl' ||
+        tower.towerId === 'badger' ||
+        tower.towerId === 'tortoise')
+        ? 1.0
+        : 0;
     if (rangeMult !== 1.0 || relicAdd > 0) {
       return { ...base, range: Number((base.range * rangeMult + relicAdd).toFixed(2)) };
     }
@@ -1312,7 +1352,13 @@ export class SimulationEngine {
 
       const stats = this.getTowerStats(tower);
       let effectiveFireRate = stats.fireRate;
-      if (this.relics.includes('twin_mortar') && (tower.towerId === 'beaver' || tower.towerId === 'owl')) {
+      if (
+        this.relics.includes('twin_mortar') &&
+        (tower.towerId === 'beaver' ||
+          tower.towerId === 'owl' ||
+          tower.towerId === 'badger' ||
+          tower.towerId === 'tortoise')
+      ) {
         effectiveFireRate *= 1.3;
       }
       if (!this.hero.dead) {
@@ -1466,9 +1512,13 @@ export class SimulationEngine {
         const impactZ = p.targetZ;
         const isFreeze = Boolean(p.isFourthShot && p.stats.freezeDuration);
         const isSplash = Boolean(
-          this.relics.includes('explosive_acorns') && !p.stats.aoeRadius && (p.towerId === 'squirrel' || p.towerId === 'hedgehog'),
+          this.relics.includes('explosive_acorns') &&
+            !p.stats.aoeRadius &&
+            (p.towerId === 'squirrel' || p.towerId === 'hedgehog' || p.towerId === 'falcon' || p.towerId === 'lynx'),
         );
-        const heavyHit = Boolean(p.stats.aoeRadius || p.towerId === 'hedgehog' || p.isCrit);
+        const heavyHit = Boolean(
+          p.stats.aoeRadius || p.towerId === 'hedgehog' || p.towerId === 'tortoise' || p.isCrit,
+        );
         this.events.push({
           type: 'PROJECTILE_IMPACT',
           towerId: p.towerId,

@@ -397,6 +397,12 @@ export class BattleView {
           }
           return;
         }
+        if (sim.heroId === 'ay_kurdu') {
+          this.targetingSkill = null;
+          sim.dispatch({ type: 'CAST_HERO_ULTIMATE' });
+          this.showBanner(t(loc, 'skill.hero.wolf_howl'), 2.0);
+          return;
+        }
         const variant = resolveHeroVisualVariant(sim.heroClass, sim.hero.level);
         if (variant === 'viking') {
           this.targetingSkill = this.targetingSkill === 'hero_leap' ? null : 'hero_leap';
@@ -587,7 +593,9 @@ export class BattleView {
           ? 'skill.hero.fox_storm'
           : sim.heroId === 'kaya_dis'
             ? 'skill.hero.boar_charge'
-            : `skill.hero.${resolveHeroVisualVariant(sim.heroClass, sim.hero.level)}`;
+            : sim.heroId === 'ay_kurdu'
+              ? 'skill.hero.wolf_howl'
+              : `skill.hero.${resolveHeroVisualVariant(sim.heroClass, sim.hero.level)}`;
       this.heroBtnEl.title = t(loc, skillKey);
       this.heroBtnEl.classList.toggle(
         'active',
@@ -777,8 +785,8 @@ export class BattleView {
     if (!slot) return parts.join('');
 
     const proj = sceneMgr.projectToScreen(slot.x, 0.4, slot.z);
-    const clampedX = Math.max(126, Math.min(264, proj.x));
-    const clampedY = Math.max(165, Math.min(540, proj.y));
+    const clampedX = Math.max(116, Math.min(314, proj.x));
+    const clampedY = Math.max(168, Math.min(542, proj.y));
 
     if (slot.stumpLocked) {
       parts.push(`
@@ -794,18 +802,18 @@ export class BattleView {
     }
 
     if (!slot.tower) {
-      const positions: Array<{ left: string; top: string }> = [
-        { left: '24px', top: '30px' },
-        { left: '162px', top: '30px' },
-        { left: '24px', top: '154px' },
-        { left: '162px', top: '154px' },
-      ];
+      const ringSize = 220;
+      const center = ringSize * 0.5;
+      const radius = 84;
+      const count = TOWER_LIST.length;
       const rings = TOWER_LIST.map((tw, idx) => {
-        const p = positions[idx];
+        const ang = -Math.PI / 2 + (idx * Math.PI * 2) / count;
+        const left = `${(center + Math.cos(ang) * radius).toFixed(1)}px`;
+        const top = `${(center + Math.sin(ang) * radius).toFixed(1)}px`;
         const allowed = !sim.allowedTowers || sim.allowedTowers.includes(tw.id);
         const canBuild = allowed && sim.gold >= tw.tier1.cost;
         return `
-          <button class="radial-btn ${allowed ? '' : 'locked-tower'}" style="left:${p.left}; top:${p.top};" data-build-tower="${tw.id}" ${canBuild ? '' : 'disabled'} title="${t(loc, tw.nameKey)}">
+          <button class="radial-btn ${allowed ? '' : 'locked-tower'}" style="left:${left}; top:${top};" data-build-tower="${tw.id}" ${canBuild ? '' : 'disabled'} title="${t(loc, tw.nameKey)}">
             <img src="${PORTRAIT_URLS[tw.id]}" alt="${t(loc, tw.nameKey)}" />
             <span class="radial-cost">${allowed ? tw.tier1.cost : '🔒'}</span>
           </button>

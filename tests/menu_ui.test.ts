@@ -100,11 +100,21 @@ describe('UI-1 — Ulu Mese Parsomeni menu ve Kenney CC0 + boyama ozel varliklar
       'bot_saw.png',
       'bot_shield.png',
       'bot_boss.png',
+      'acc_hat_crown.png',
+      'acc_hat_goggles.png',
+      'acc_aura_emerald_leaf.png',
+      'acc_banner_oak_crest.png',
     ];
     for (const file of oakPngs) {
       const buf = fs.readFileSync(path.join(oakDir, file));
       assert.ok(buf.length > 500, `oak/${file} boyutu gecersiz`);
       assert.equal(buf.subarray(12, 16).toString('ascii'), 'IHDR', `oak/${file} gecerli PNG degil`);
+    }
+
+    for (const pFile of ['portrait_fox.png', 'portrait_boar.png', 'portrait_wolf.png', 'portrait_badger.png', 'portrait_falcon.png', 'portrait_tortoise.png', 'portrait_lynx.png']) {
+      const pBuf = fs.readFileSync(path.resolve('public/ui', pFile));
+      assert.ok(pBuf.length > 1000, `ui/${pFile} boyutu gecersiz`);
+      assert.equal(pBuf.subarray(12, 16).toString('ascii'), 'IHDR', `ui/${pFile} gecerli PNG degil`);
     }
   });
 
@@ -214,7 +224,7 @@ describe('UI-1 — Ulu Mese Parsomeni menu ve Kenney CC0 + boyama ozel varliklar
       view.showExpeditionModal = false;
 
       view.activeTab = 'cards';
-      for (const sub of ['towers', 'heroes', 'talents'] as const) {
+      for (const sub of ['towers', 'heroes', 'accessories', 'talents'] as const) {
         view.cardsSubTab = sub;
         renderInto();
         assert.ok(
@@ -222,14 +232,24 @@ describe('UI-1 — Ulu Mese Parsomeni menu ve Kenney CC0 + boyama ozel varliklar
           `Birlikler alt sekmesi ${sub} eksik`,
         );
       }
+      view.cardsSubTab = 'accessories';
+      renderInto();
+      assert.ok(container.innerHTML.includes('id="accessories-panel"'), 'Aksesuar menüsü eksik');
 
       view.activeTab = 'multi';
       renderInto();
       assert.ok(container.innerHTML.includes('id="league-panel"'), 'Arena sekmesi eksik');
 
       view.activeTab = 'journal';
-      renderInto();
-      assert.ok(container.innerHTML.includes('id="journal-turntable"'), 'Gunluk vitrini eksik');
+      for (const jsub of ['quests', 'achievements', 'codex'] as const) {
+        view.journalSubTab = jsub;
+        renderInto();
+        assert.ok(!container.innerHTML.includes('id="journal-turntable"'), 'Eski 360 inceleme kaldırılmış olmalı');
+        assert.ok(
+          container.innerHTML.includes(`id="journal-${jsub}-panel"`),
+          `Gunluk ${jsub} paneli eksik`,
+        );
+      }
 
       view.activeTab = 'shop';
       renderInto();

@@ -6,6 +6,7 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { getAuraSpec, getBannerSpec, type AuraId, type BannerId } from '../data/accessories.ts';
 import { ENEMIES, resolveHeroVisualVariant, type HeroClassId, type HeroId } from '../data/enemies.ts';
 import type { LevelSpec, StageConceptId, Vec2 } from '../data/levels.ts';
 import { TOWERS, type HatId, type TowerId } from '../data/towers.ts';
@@ -886,6 +887,9 @@ export class SceneManager {
   private batterySaver = false;
   private heroRig: HeroRig | null = null;
   private heroVisualKey = '';
+  private heroAuraGroup: THREE.Group | null = null;
+  private heroAuraKey: AuraId = 'none';
+  private castleBannerClothes: THREE.Mesh[] = [];
   private rangeRing: THREE.Mesh;
   private targetingReticle: THREE.Mesh;
   private rallyMarker: THREE.Group;
@@ -1377,6 +1381,8 @@ export class SceneManager {
     equippedHat: HatId,
     heroClass: HeroClassId = 'auto',
     heroId: HeroId = 'boz_pence',
+    equippedAura: AuraId = 'none',
+    equippedBanner: BannerId = 'none',
   ): void {
     this.clearLevel();
     this.activeLevel = level;
@@ -1546,6 +1552,17 @@ export class SceneManager {
     const castle = createGreatOakCastle(level.biome);
     castle.position.set(0, 0, -9.8);
     this.levelGroup.add(castle);
+
+    if (equippedBanner !== 'none') {
+      const bSpec = getBannerSpec(equippedBanner);
+      for (const sx of [-1.7, 1.7]) {
+        const std = this.buildCastleWarBanner(bSpec.clothHex, bSpec.trimHex);
+        std.root.position.set(sx, 0, -8.55);
+        std.root.rotation.y = sx < 0 ? 0.14 : -0.14;
+        this.levelGroup.add(std.root);
+        this.castleBannerClothes.push(std.cloth);
+      }
+    }
 
     const composeMat = (x: number, y: number, z: number, rotY: number, sx: number, sy: number, sz: number): THREE.Matrix4 =>
       new THREE.Matrix4().compose(
@@ -1817,6 +1834,14 @@ export class SceneManager {
     this.heroVisualKey = `${heroId}_${heroVariant}_${equippedHat}`;
     this.heroRig = createHeroRig(heroId, equippedHat, heroVariant);
     this.heroRig.root.position.set(level.heroStart.x, 0, level.heroStart.z);
+    if (equippedAura !== 'none') {
+      this.heroAuraGroup = this.buildAuraRingGroup(equippedAura, 0.72);
+      this.heroRig.root.add(this.heroAuraGroup);
+      this.heroAuraKey = equippedAura;
+    } else {
+      this.heroAuraGroup = null;
+      this.heroAuraKey = 'none';
+    }
     this.dynamicGroup.add(this.heroRig.root);
 
     if (import.meta.env.DEV) {
@@ -1841,6 +1866,9 @@ export class SceneManager {
     this.stagePulseMats = [];
     this.ambientMotes = null;
     this.lanternLights = [];
+    this.castleBannerClothes = [];
+    this.heroAuraGroup = null;
+    this.heroAuraKey = 'none';
     this.towerRigs.clear();
     this.enemyRigs.clear();
     this.projectileMeshes.clear();
@@ -1877,8 +1905,13 @@ export class SceneManager {
     realDt: number,
     simDt: number,
     previewTowerId: TowerId | null = null,
+    equippedAura: AuraId = 'none',
   ): void {
     this.animTime += realDt;
+    for (let i = 0; i < this.castleBannerClothes.length; i++) {
+      this.castleBannerClothes[i].rotation.x = Math.sin(this.animTime * 2.6 + i * 0.9) * 0.11;
+      this.castleBannerClothes[i].rotation.z = Math.cos(this.animTime * 1.9 + i) * 0.045;
+    }
     this.lastSim = sim;
     this.monitorFps(realDt);
     this.cameraCtrl.update(realDt);
@@ -1906,15 +1939,22 @@ export class SceneManager {
         continue;
       }
 
-      const desiredKey = `${slot.tower.towerId}_${slot.tower.tier}_${slot.tower.branchId ?? ''}_${equippedHat}`;
+      const desiredKey = `${slot.tower.towerId}_${slot.tower.tier}_${slot.tower.branchId ?? ''}_${equippedHat}_${equippedAura}`;
       if (!existing || existing.key !== desiredKey) {
         if (existing) this.dynamicGroup.remove(existing.rig.root);
         const rig = createTowerRig(slot.tower.towerId, slot.tower.tier, slot.tower.branchId, equippedHat, true);
+        if (equippedAura !== 'none' && slot.tower.tier === 3) {
+          const tAura = this.buildAuraRingGroup(equippedAura, 0.78);
+          tAura.name = 'TowerTier3Aura';
+          rig.root.add(tAura);
+        }
         rig.root.position.set(slot.x, 0, slot.z);
         this.dynamicGroup.add(rig.root);
         this.towerRigs.set(slot.id, { key: desiredKey, rig });
       }
       const rigRef = this.towerRigs.get(slot.id)!.rig;
+      const tAuraNode = rigRef.root.getObjectByName('TowerTier3Aura');
+      if (tAuraNode) tAuraNode.rotation.y = this.animTime * 1.35;
       rigRef.turretHead.rotation.y = slot.tower.angle;
       updateTowerAnimation(rigRef, this.animTime, realDt);
 
@@ -1979,10 +2019,26 @@ export class SceneManager {
       this.heroRig = createHeroRig(sim.heroId, equippedHat, wantHeroVariant);
       this.heroRig.root.position.copy(prevPos);
       this.heroRig.body.rotation.y = prevRotY;
+      this.heroAuraGroup = null;
+      this.heroAuraKey = 'none';
       this.dynamicGroup.add(this.heroRig.root);
       this.heroVisualKey = wantHeroKey;
     }
     if (this.heroRig) {
+      if (this.heroAuraKey !== equippedAura) {
+        if (this.heroAuraGroup) {
+          this.heroRig.root.remove(this.heroAuraGroup);
+          this.heroAuraGroup = null;
+        }
+        if (equippedAura !== 'none') {
+          this.heroAuraGroup = this.buildAuraRingGroup(equippedAura, 0.72);
+          this.heroRig.root.add(this.heroAuraGroup);
+        }
+        this.heroAuraKey = equippedAura;
+      }
+      if (this.heroAuraGroup) {
+        this.heroAuraGroup.rotation.y = -this.animTime * 1.65;
+      }
       this.heroRig.root.visible = !sim.hero.dead;
       this.heroRig.root.position.set(sim.hero.x, 0, sim.hero.z);
       this.heroRig.root.scale.setScalar(sim.relics.includes('giant_hero') ? 1.22 : 1.0);
@@ -2117,13 +2173,25 @@ export class SceneManager {
         let mortarRing: THREE.Mesh | undefined;
         if (isMortar) {
           const shellGroup = new THREE.Group();
+          const mortarShellCol =
+            p.towerId === 'badger'
+              ? p.branchId === 'badger_inferno'
+                ? '#ff7a24'
+                : '#35e87a'
+              : p.towerId === 'tortoise'
+                ? '#d49d35'
+                : '#ff8e3c';
           const pinecone = new THREE.Mesh(
-            new THREE.DodecahedronGeometry(0.28, 0),
-            new THREE.MeshStandardMaterial({ color: '#6b3e24', roughness: 0.55, metalness: 0.18 }),
+            new THREE.DodecahedronGeometry(p.towerId === 'tortoise' ? 0.32 : 0.28, 0),
+            new THREE.MeshStandardMaterial({
+              color: p.towerId === 'badger' ? '#2c4a3e' : '#6b3e24',
+              roughness: 0.52,
+              metalness: p.towerId === 'tortoise' ? 0.55 : 0.18,
+            }),
           );
           const coreGlow = new THREE.Mesh(
             new THREE.SphereGeometry(0.18, 10, 8),
-            new THREE.MeshBasicMaterial({ color: '#ff8e3c', toneMapped: false }),
+            new THREE.MeshBasicMaterial({ color: mortarShellCol, toneMapped: false }),
           );
           coreGlow.position.y = 0.14;
           shellGroup.add(pinecone, coreGlow);
@@ -2133,7 +2201,7 @@ export class SceneManager {
           mortarRing = new THREE.Mesh(
             new THREE.RingGeometry(r * 0.88, r * 0.98, 24),
             new THREE.MeshBasicMaterial({
-              color: '#ff9642',
+              color: mortarShellCol,
               transparent: true,
               opacity: 0.42,
               side: THREE.DoubleSide,
@@ -2143,12 +2211,20 @@ export class SceneManager {
           mortarRing.rotation.x = -Math.PI / 2;
           mortarRing.position.set(p.targetX, 0.068, p.targetZ);
           this.dynamicGroup.add(mortarRing);
-        } else if (p.towerId === 'owl') {
+        } else if (p.towerId === 'owl' || p.towerId === 'lynx') {
           const orbGroup = new THREE.Group();
+          const boltCol =
+            p.towerId === 'lynx'
+              ? p.branchId === 'lynx_frostbite'
+                ? '#7ef5ff'
+                : '#be75ff'
+              : p.branchId === 'owl_glacier'
+                ? '#c8f8ff'
+                : '#6be8ff';
           const orb = new THREE.Mesh(
             new THREE.OctahedronGeometry(0.16, 0),
             new THREE.MeshBasicMaterial({
-              color: p.branchId === 'owl_glacier' ? '#c8f8ff' : '#6be8ff',
+              color: boltCol,
               toneMapped: false,
             }),
           );
@@ -2158,13 +2234,14 @@ export class SceneManager {
           );
           orbGroup.add(orb, halo);
           mesh = orbGroup;
-        } else if (p.towerId === 'hedgehog') {
+        } else if (p.towerId === 'hedgehog' || p.towerId === 'falcon') {
           const boltGroup = new THREE.Group();
+          const isFalcon = p.towerId === 'falcon';
           const shaft = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.055, 0.08, 0.82, 7),
+            new THREE.CylinderGeometry(isFalcon ? 0.045 : 0.055, isFalcon ? 0.065 : 0.08, 0.82, 7),
             new THREE.MeshStandardMaterial({
-              color: '#ffbe4d',
-              emissive: new THREE.Color('#ffa22b'),
+              color: isFalcon ? '#4be8ff' : '#ffbe4d',
+              emissive: new THREE.Color(isFalcon ? '#25bfff' : '#ffa22b'),
               emissiveIntensity: 1.5,
               roughness: 0.28,
             }),
@@ -2172,7 +2249,7 @@ export class SceneManager {
           shaft.rotation.x = Math.PI / 2;
           const tip = new THREE.Mesh(
             new THREE.ConeGeometry(0.085, 0.22, 7),
-            new THREE.MeshBasicMaterial({ color: '#fff3ba', toneMapped: false }),
+            new THREE.MeshBasicMaterial({ color: isFalcon ? '#e3fbff' : '#fff3ba', toneMapped: false }),
           );
           tip.rotation.x = Math.PI / 2;
           tip.position.z = 0.46;
@@ -2202,14 +2279,26 @@ export class SceneManager {
 
         this.dynamicGroup.add(mesh);
         const trailColor = isMortar
-          ? '#ff8a2a'
+          ? p.towerId === 'badger'
+            ? p.branchId === 'badger_inferno'
+              ? '#ff7a24'
+              : '#3bf284'
+            : p.towerId === 'tortoise'
+              ? '#f0b844'
+              : '#ff8a2a'
           : p.towerId === 'owl'
             ? p.branchId === 'owl_glacier'
               ? '#a8f0ff'
               : '#45d8ff'
-            : p.towerId === 'hedgehog'
-              ? '#ffb238'
-              : '#ffd84a';
+            : p.towerId === 'lynx'
+              ? p.branchId === 'lynx_frostbite'
+                ? '#78f2ff'
+                : '#b872ff'
+              : p.towerId === 'falcon'
+                ? '#4fe8ff'
+                : p.towerId === 'hedgehog'
+                  ? '#ffb238'
+                  : '#ffd84a';
         const trail = this.acquireTrail(trailColor, isMortar ? 0.22 : p.towerId === 'hedgehog' ? 0.16 : 0.12);
         const ddx = p.targetX - p.x;
         const ddz = p.targetZ - p.z;
@@ -2440,8 +2529,18 @@ export class SceneManager {
           rigRef.recoilTimer = 0.22;
           this.towerPunch.set(ev.slotId, { elapsed: 0, dirX: ux, dirZ: uz });
           const flashCol =
-            ev.towerId === 'owl' ? '#68ebff' : ev.towerId === 'beaver' ? '#ff9f38' : ev.towerId === 'hedgehog' ? '#ffc04a' : '#ffe47a';
-          const big = ev.towerId === 'beaver' || Boolean(ev.isLine);
+            ev.towerId === 'owl' || ev.towerId === 'falcon'
+              ? '#68ebff'
+              : ev.towerId === 'badger'
+                ? '#4cf58d'
+                : ev.towerId === 'lynx'
+                  ? '#be78ff'
+                  : ev.towerId === 'beaver' || ev.towerId === 'tortoise'
+                    ? '#ff9f38'
+                    : ev.towerId === 'hedgehog'
+                      ? '#ffc04a'
+                      : '#ffe47a';
+          const big = ev.towerId === 'beaver' || ev.towerId === 'badger' || ev.towerId === 'tortoise' || Boolean(ev.isLine);
           this.spawnMuzzleFlash(ev.fromX + ux * 0.55, 1.45, ev.fromZ + uz * 0.55, flashCol, ux, uz, big);
         }
 
@@ -2494,10 +2593,19 @@ export class SceneManager {
           this.cameraCtrl.addDirectionalKick(ev.dirX, ev.dirZ, 0.14);
           this.onMortarExplode?.();
         } else {
-          const sparkHex = ev.towerId === 'owl' ? '#9eefff' : ev.towerId === 'hedgehog' ? '#ffd27a' : '#fff1b8';
+          const sparkHex =
+            ev.towerId === 'owl' || ev.towerId === 'falcon'
+              ? '#9eefff'
+              : ev.towerId === 'badger'
+                ? '#5ef79b'
+                : ev.towerId === 'lynx'
+                  ? '#c98aff'
+                  : ev.towerId === 'hedgehog' || ev.towerId === 'tortoise'
+                    ? '#ffd27a'
+                    : '#fff1b8';
           const burstScale = ev.isCrit ? 1.25 : ev.towerId === 'hedgehog' ? 1.15 : 0.85;
           this.spawnImpactBurst(ev.x, 0.85, ev.z, sparkHex, burstScale, ev.dirX, ev.dirZ);
-          if (ev.isFreeze || ev.branchId === 'owl_glacier') {
+          if (ev.isFreeze || ev.branchId === 'owl_glacier' || ev.branchId === 'lynx_frostbite') {
             this.spawnShockRing(ev.x, ev.z, '#c9f6ff', 1.65, 0.36);
             this.spawnSparks(ev.x, 0.9, ev.z, 0, 0, 0, '#dffaff', 10, 5.5);
             this.onFreezeImpact?.();
@@ -3123,13 +3231,15 @@ export class SceneManager {
     const col =
       ev.variant === 'fox_storm'
         ? '#44f0a6'
-        : ev.variant === 'boar_charge'
-          ? '#e8a848'
-          : ev.variant === 'viking'
-            ? '#ff7b3b'
-            : ev.variant === 'royal'
-              ? '#ffd84f'
-              : '#80f272';
+        : ev.variant === 'wolf_howl'
+          ? '#67e8f9'
+          : ev.variant === 'boar_charge'
+            ? '#e8a848'
+            : ev.variant === 'viking'
+              ? '#ff7b3b'
+              : ev.variant === 'royal'
+                ? '#ffd84f'
+                : '#80f272';
 
     this.spawnFlashLight(ev.x, 1.6, ev.z, col, 4.8, 8.5, 0.65);
     this.spawnShockRing(ev.x, ev.z, '#ffffff', 1.8, 0.18);
@@ -3419,7 +3529,65 @@ export class SceneManager {
   }
 
   getTowerColorPreview(id: TowerId): string {
-    return id === 'squirrel' ? '#e07a3c' : id === 'beaver' ? '#b97a4b' : id === 'owl' ? '#5da9e9' : '#7c8b6f';
+    return TOWERS[id]?.accentColor ?? '#7fe8ff';
+  }
+
+  private buildAuraRingGroup(auraId: AuraId, radius: number): THREE.Group {
+    const spec = getAuraSpec(auraId);
+    const group = new THREE.Group();
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(radius * 0.86, radius, 28),
+      new THREE.MeshBasicMaterial({
+        color: spec.primaryHex,
+        transparent: true,
+        opacity: 0.78,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      }),
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.058;
+    group.add(ring);
+
+    const gemGeo = new THREE.OctahedronGeometry(0.085, 0);
+    const gemMat = new THREE.MeshBasicMaterial({ color: spec.secondaryHex, toneMapped: false });
+    for (let i = 0; i < 4; i++) {
+      const a = (i * Math.PI) / 2;
+      const gem = new THREE.Mesh(gemGeo, gemMat);
+      gem.position.set(Math.cos(a) * radius * 0.93, 0.14, Math.sin(a) * radius * 0.93);
+      group.add(gem);
+    }
+    return group;
+  }
+
+  private buildCastleWarBanner(clothHex: string, trimHex: string): { root: THREE.Group; cloth: THREE.Mesh } {
+    const root = new THREE.Group();
+    const poleMat = new THREE.MeshStandardMaterial({ color: '#6b3e1e', roughness: 0.68 });
+    const metalMat = new THREE.MeshStandardMaterial({ color: trimHex, roughness: 0.28, metalness: 0.78 });
+    const clothMat = new THREE.MeshStandardMaterial({ color: clothHex, roughness: 0.58, side: THREE.DoubleSide });
+
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.075, 2.25, 10), poleMat);
+    pole.position.y = 1.125;
+    pole.castShadow = true;
+
+    const crossbar = new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.038, 0.96, 8), poleMat);
+    crossbar.rotation.z = Math.PI / 2;
+    crossbar.position.y = 2.02;
+
+    const finial = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.28, 10), metalMat);
+    finial.position.y = 2.38;
+
+    const crest = new THREE.Mesh(new THREE.OctahedronGeometry(0.13, 0), metalMat);
+    crest.position.set(0, 1.54, 0.10);
+
+    const clothGeo = new THREE.PlaneGeometry(0.76, 1.12, 1, 4);
+    clothGeo.translate(0, -0.56, 0);
+    const cloth = new THREE.Mesh(clothGeo, clothMat);
+    cloth.position.set(0, 2.02, 0.06);
+    cloth.castShadow = true;
+
+    root.add(pole, crossbar, finial, crest, cloth);
+    return { root, cloth };
   }
 
   renderJournalShowcase(

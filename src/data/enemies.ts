@@ -283,7 +283,7 @@ export const ENEMIES: Record<EnemyId, EnemySpec> = {
 
 export const ENEMY_LIST: EnemySpec[] = Object.values(ENEMIES);
 
-export type HeroId = 'boz_pence' | 'kizil_kuyruk' | 'kaya_dis';
+export type HeroId = 'boz_pence' | 'kizil_kuyruk' | 'kaya_dis' | 'ay_kurdu';
 
 export interface HeroSpec {
   id: HeroId;
@@ -444,6 +444,29 @@ export const HEROES: Record<HeroId, HeroSpec> = {
     clawShockInterval: 10,
     clawShockDamage: 42,
     clawShockRadius: 2.9,
+  },
+  ay_kurdu: {
+    id: 'ay_kurdu',
+    nameKey: 'hero.ay_kurdu.name',
+    roleKey: 'hero.ay_kurdu.role',
+    descKey: 'hero.ay_kurdu.desc',
+    canHitAir: false,
+    isRanged: false,
+    attackRange: 2.2,
+    armor: 0.15,
+    unlockLevel: 10,
+    gemUnlockCost: 260,
+    maxHp: 310,
+    damage: 26,
+    attackInterval: 0.82,
+    moveSpeed: 5.6,
+    blockCap: 3,
+    engageRange: 2.2,
+    respawnSeconds: 14,
+    regenPerSecond: 16,
+    clawShockInterval: 9,
+    clawShockDamage: 38,
+    clawShockRadius: 3.0,
   },
 };
 
