@@ -188,7 +188,6 @@ describe('UI-1 — Ulu Mese Parsomeni menu ve Kenney CC0 + boyama ozel varliklar
         'map-horiz-track',
         'stage-pill-strip',
         'stage-concept-pill',
-        'stage-mini-map-svg',
         'ui/oak/world_map_oak.jpg',
         'ui/oak/nav_map.png',
         'shield-pin-svg',
@@ -201,6 +200,10 @@ describe('UI-1 — Ulu Mese Parsomeni menu ve Kenney CC0 + boyama ozel varliklar
       ]) {
         assert.ok(container.innerHTML.includes(attr), `Harita sekmesinde ${attr} eksik`);
       }
+      assert.ok(
+        !container.innerHTML.includes('stage-mini-map'),
+        'Bölüm çekmecesinde küçük harita önizlemesi kaldırılmış olmalı',
+      );
 
       const pinMatches = [...container.innerHTML.matchAll(/class="stage-pin[^"]*"\s+style="left:\s*([\d.]+)%;\s*top:\s*([\d.]+)%;"/g)];
       assert.equal(pinMatches.length, 16, '16 yatay kalkan pini render edilmeli');

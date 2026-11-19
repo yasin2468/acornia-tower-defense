@@ -364,97 +364,6 @@ export class MetaView {
     return Math.max(-72.2222, Math.min(0, 13.8889 - xPct));
   }
 
-  private renderStageMiniMapSvg(level: LevelSpec): string {
-    const toX = (x: number) => ((x + 4.4) / 8.8) * 68 + 3;
-    const toY = (z: number) => ((10.2 - z) / 20.4) * 84 + 3;
-    const ptsAttr = (pts: Array<{ x: number; z: number }>) =>
-      pts.map((p) => `${toX(p.x).toFixed(1)},${toY(p.z).toFixed(1)}`).join(' ');
-
-    const bgMap: Record<LevelSpec['biome'], { bg: string; road: string; accent: string }> = {
-      forest: { bg: '#2c4f3b', road: '#f2e2bf', accent: '#62d98a' },
-      canyon: { bg: '#633725', road: '#f5cfa0', accent: '#ff944d' },
-      cavern: { bg: '#242347', road: '#cad8f2', accent: '#6df5ff' },
-      snow: { bg: '#5a7d9e', road: '#f2f9ff', accent: '#9ae6ff' },
-      foundry: { bg: '#381e1c', road: '#d9b5a6', accent: '#ff7033' },
-    };
-    const pal = bgMap[level.biome];
-
-    // Stylized concept motif in mini-map background
-    let conceptShape = '';
-    if (
-      level.concept === 'mossy_stream' ||
-      level.concept === 'biolum_quartz_stream' ||
-      level.concept === 'cinder_slag_canal' ||
-      level.concept === 'twin_bridge_chasm' ||
-      level.concept === 'aurora_citadel_siege' ||
-      level.concept === 'magma_crucible_arena' ||
-      level.concept === 'crimson_powder_gorge'
-    ) {
-      const col =
-        level.concept === 'cinder_slag_canal' ||
-        level.concept === 'twin_bridge_chasm' ||
-        level.concept === 'magma_crucible_arena'
-          ? 'rgba(255, 108, 36, 0.55)'
-          : level.concept === 'crimson_powder_gorge'
-            ? 'rgba(68, 28, 18, 0.55)'
-            : 'rgba(66, 224, 245, 0.48)';
-      conceptShape = `<path d="M 2 44 Q 37 50 72 41" fill="none" stroke="${col}" stroke-width="6.5" stroke-linecap="round"/>`;
-    } else if (level.concept === 'acorn_island_shrine' || level.concept === 'frozen_mirror_lake') {
-      conceptShape = `<ellipse cx="37" cy="40" rx="22" ry="11" fill="rgba(78, 222, 240, 0.42)"/>`;
-    } else if (level.concept === 'amethyst_ley_sanctum' || level.concept === 'clockwork_gear_bridge') {
-      const rCol = level.concept === 'clockwork_gear_bridge' ? 'rgba(240, 178, 84, 0.5)' : 'rgba(216, 128, 255, 0.5)';
-      conceptShape = `<circle cx="37" cy="44" r="15" fill="none" stroke="${rCol}" stroke-width="2" stroke-dasharray="3 2"/><circle cx="37" cy="44" r="7" fill="none" stroke="${rCol}" stroke-width="1.6"/>`;
-    } else if (level.concept === 'oak_bastion_moat' || level.concept === 'iron_core_citadel') {
-      const mCol = level.concept === 'iron_core_citadel' ? 'rgba(255, 110, 32, 0.6)' : 'rgba(66, 194, 245, 0.5)';
-      conceptShape = `<rect x="4" y="10" width="66" height="6" rx="2" fill="${mCol}"/>`;
-    }
-
-    const slotsSvg = level.slots
-      .map(
-        (s) =>
-          `<circle cx="${toX(s.x).toFixed(1)}" cy="${toY(s.z).toFixed(1)}" r="2.2" fill="${s.runeSlot ? '#4ff2ff' : '#ffd559'}" stroke="#2a1405" stroke-width="0.9"/>`,
-      )
-      .join('');
-    const iceSvg = (level.iceZones ?? [])
-      .map(
-        (iz) =>
-          `<circle cx="${toX(iz.x).toFixed(1)}" cy="${toY(iz.z).toFixed(1)}" r="7" fill="rgba(164, 236, 255, 0.35)" stroke="#d9f6ff" stroke-width="0.9"/>`,
-      )
-      .join('');
-    const barrelSvg = (level.barrels ?? [])
-      .map(
-        (b) =>
-          `<circle cx="${toX(b.x).toFixed(1)}" cy="${toY(b.z).toFixed(1)}" r="2.5" fill="#ff7426" stroke="#fff3c4" stroke-width="0.8"/>`,
-      )
-      .join('');
-
-    const goal = level.path[level.path.length - 1];
-
-    return `
-      <svg class="stage-mini-map-svg" viewBox="0 0 74 90" aria-hidden="true">
-        <rect x="0" y="0" width="74" height="90" rx="8" fill="${pal.bg}"/>
-        ${conceptShape}
-        ${iceSvg}
-        <polyline points="${ptsAttr(level.path)}" fill="none" stroke="rgba(26,12,4,0.65)" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>
-        ${
-          level.secondaryPath
-            ? `<polyline points="${ptsAttr(level.secondaryPath)}" fill="none" stroke="rgba(26,12,4,0.65)" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>`
-            : ''
-        }
-        <polyline points="${ptsAttr(level.path)}" fill="none" stroke="${pal.road}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-        ${
-          level.secondaryPath
-            ? `<polyline points="${ptsAttr(level.secondaryPath)}" fill="none" stroke="${pal.road}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`
-            : ''
-        }
-        ${slotsSvg}
-        ${barrelSvg}
-        <rect x="${(toX(goal.x) - 5.5).toFixed(1)}" y="${(toY(goal.z) - 4).toFixed(1)}" width="11" height="7.5" rx="2" fill="#f7c85c" stroke="#2a1405" stroke-width="1.2"/>
-        <circle cx="${toX(level.path[0].x).toFixed(1)}" cy="${toY(level.path[0].z).toFixed(1)}" r="3.1" fill="${pal.accent}" stroke="#ffffff" stroke-width="1"/>
-      </svg>
-    `;
-  }
-
   private getStageUniqueEnemies(level: LevelSpec): EnemyId[] {
     const seen = new Set<EnemyId>();
     const list: EnemyId[] = [];
@@ -752,9 +661,6 @@ export class MetaView {
         </div>
 
         <div class="drawer-stage-body">
-          <div class="stage-mini-map-wrap">
-            ${this.renderStageMiniMapSvg(selLevel)}
-          </div>
           <div class="drawer-stage-info">
             <div class="drawer-title-row">
               <button type="button" class="drawer-step-btn" id="btn-drawer-prev" ${hasPrev ? '' : 'disabled'} aria-label="${t(loc, 'map.prevStage')}">◀</button>
