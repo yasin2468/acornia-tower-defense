@@ -1,3 +1,4 @@
+import { HEROES, type HeroId } from '../data/enemies.ts';
 import {
   clampTalentRank,
   computeAvailableTalentStars,
@@ -23,6 +24,14 @@ export interface ChestReward {
 }
 
 const UNIT_IDS: CardUnitId[] = ['squirrel', 'beaver', 'owl', 'hedgehog', 'boz_pence'];
+
+function activeCardPool(save: SaveState): CardUnitId[] {
+  const pool = [...UNIT_IDS];
+  for (const h of save.unlockedHeroes) {
+    if (!pool.includes(h)) pool.push(h);
+  }
+  return pool;
+}
 
 export const AFK_OAK_PER_HOUR = 35;
 export const AFK_QUICK_BOOST_HOURS = 4;
@@ -53,10 +62,11 @@ export function calculateAfkAccumulation(save: SaveState, nowMs = Date.now()): A
 
 export function claimAfkPatrol(saveManager: SaveManager, nowMs = Date.now()): AfkAccumulation {
   const reward = calculateAfkAccumulation(saveManager.get(), nowMs);
+  const pool = activeCardPool(saveManager.get());
   saveManager.update((s) => {
     s.oakCoins += reward.oakCoins;
     for (let i = 0; i < reward.shards; i++) {
-      const unit = UNIT_IDS[i % UNIT_IDS.length];
+      const unit = pool[i % pool.length];
       s.cardShards[unit] += 1;
     }
     s.afkLastClaimAt = nowMs;
@@ -104,8 +114,9 @@ export function openForestChest(
     cards: {},
   };
   const count = isEpic ? 10 : 3;
+  const pool = activeCardPool(saveManager.get());
   for (let i = 0; i < count; i++) {
-    const unit = UNIT_IDS[(Math.abs(seedOffset) + i * 3) % UNIT_IDS.length];
+    const unit = pool[(Math.abs(seedOffset) + i * 3) % pool.length];
     reward.cards[unit] = (reward.cards[unit] ?? 0) + 1;
   }
 
@@ -142,4 +153,36 @@ export function resetTalents(saveManager: SaveManager): boolean {
     draft.talents = createInitialTalents();
   });
   return true;
+}
+
+export function unlockHeroWithGems(saveManager: SaveManager, heroId: HeroId): boolean {
+  const s = saveManager.get();
+  if (s.unlockedHeroes.includes(heroId)) return false;
+  const cost = HEROES[heroId].gemUnlockCost;
+  if (cost <= 0 || s.emeraldGems < cost) return false;
+  saveManager.update((draft) => {
+    draft.emeraldGems -= cost;
+    if (!draft.unlockedHeroes.includes(heroId)) draft.unlockedHeroes.push(heroId);
+    if (!draft.discoveredIds.includes(heroId)) draft.discoveredIds.push(heroId);
+    draft.selectedHero = heroId;
+  });
+  return true;
+}
+
+export function grantCampaignHeroUnlocks(saveManager: SaveManager, clearedLevelId: number): HeroId[] {
+  const s = saveManager.get();
+  const unlocked: HeroId[] = [];
+  for (const h of Object.values(HEROES)) {
+    if (clearedLevelId >= h.unlockLevel && !s.unlockedHeroes.includes(h.id)) {
+      unlocked.push(h.id);
+    }
+  }
+  if (unlocked.length === 0) return [];
+  saveManager.update((draft) => {
+    for (const id of unlocked) {
+      if (!draft.unlockedHeroes.includes(id)) draft.unlockedHeroes.push(id);
+      if (!draft.discoveredIds.includes(id)) draft.discoveredIds.push(id);
+    }
+  });
+  return unlocked;
 }

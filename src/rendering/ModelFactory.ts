@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { evalSquashPop } from '../core/JuiceController.ts';
-import { ENEMIES, type EnemyId, type HeroVisualVariant } from '../data/enemies.ts';
+import { ENEMIES, type EnemyId, type HeroId, type HeroVisualVariant } from '../data/enemies.ts';
 import type { EvolutionBranchId, HatId, TowerId } from '../data/towers.ts';
 import { instantiateModel } from './AssetLoader.ts';
 
@@ -205,10 +205,22 @@ export interface HeroRig {
   activeClip?: 'idle' | 'walk' | 'attack';
 }
 
-export function createBearHeroRig(hatId: HatId, variant: HeroVisualVariant = 'classic'): HeroRig {
+export function createHeroRig(
+  heroId: HeroId,
+  hatId: HatId,
+  variant: HeroVisualVariant = 'classic',
+): HeroRig {
   const root = new THREE.Group();
   const modelName =
-    variant === 'viking' ? 'hero_bear_viking' : variant === 'royal' ? 'hero_bear_royal' : 'hero_bear';
+    heroId === 'kizil_kuyruk'
+      ? 'hero_fox'
+      : heroId === 'kaya_dis'
+        ? 'hero_boar'
+        : variant === 'viking'
+          ? 'hero_bear_viking'
+          : variant === 'royal'
+            ? 'hero_bear_royal'
+            : 'hero_bear';
   const inst = instantiateModel(modelName) ?? instantiateModel('hero_bear');
   const body = inst ? (inst.scene.getObjectByName('Body') ?? inst.scene) : fallbackBox('#915b3b', 1.1);
   if (inst && body !== inst.scene) {
@@ -246,7 +258,7 @@ export function createBearHeroRig(hatId: HatId, variant: HeroVisualVariant = 'cl
       inst.animations.find((a) => /walking_a/i.test(a.name)) ??
       idleClip;
     const attackClip =
-      inst.animations.find((a) => /attack|chop/i.test(a.name)) ?? idleClip;
+      inst.animations.find((a) => /attack|chop|spellcast/i.test(a.name)) ?? idleClip;
     idleAction = mixer.clipAction(idleClip);
     walkAction = mixer.clipAction(walkClip);
     walkAction.setEffectiveTimeScale(1.25);
@@ -283,6 +295,10 @@ export function createBearHeroRig(hatId: HatId, variant: HeroVisualVariant = 'cl
     attackAction,
     activeClip,
   };
+}
+
+export function createBearHeroRig(hatId: HatId, variant: HeroVisualVariant = 'classic'): HeroRig {
+  return createHeroRig('boz_pence', hatId, variant);
 }
 
 export function updateHeroAnimation(rig: HeroRig, moving: boolean, time: number, dt: number): void {

@@ -6,7 +6,7 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import { resolveHeroVisualVariant, type HeroClassId } from '../data/enemies.ts';
+import { resolveHeroVisualVariant, type HeroClassId, type HeroId } from '../data/enemies.ts';
 import type { LevelSpec, Vec2 } from '../data/levels.ts';
 import { TOWERS, type HatId, type TowerId } from '../data/towers.ts';
 import type {
@@ -22,9 +22,9 @@ import { CameraController } from './CameraController.ts';
 import { countDrawCalls } from './DrawCallCounter.ts';
 import { createCobbleRoadTexture, createMeadowTexture } from './ProceduralTextures.ts';
 import {
-  createBearHeroRig,
   createEnemyRig,
   createGreatOakCastle,
+  createHeroRig,
   createPropLOD,
   createStumpProp,
   createTowerRig,
@@ -1083,7 +1083,12 @@ export class SceneManager {
     }
   }
 
-  loadLevel(level: LevelSpec, equippedHat: HatId, heroClass: HeroClassId = 'auto'): void {
+  loadLevel(
+    level: LevelSpec,
+    equippedHat: HatId,
+    heroClass: HeroClassId = 'auto',
+    heroId: HeroId = 'boz_pence',
+  ): void {
     this.clearLevel();
 
     const biomeTheme: Record<
@@ -1492,8 +1497,8 @@ export class SceneManager {
     this.levelGroup.add(this.ambientMotes.mesh);
 
     const heroVariant = resolveHeroVisualVariant(heroClass, 1);
-    this.heroVisualKey = `${heroVariant}_${equippedHat}`;
-    this.heroRig = createBearHeroRig(equippedHat, heroVariant);
+    this.heroVisualKey = `${heroId}_${heroVariant}_${equippedHat}`;
+    this.heroRig = createHeroRig(heroId, equippedHat, heroVariant);
     this.heroRig.root.position.set(level.heroStart.x, 0, level.heroStart.z);
     this.dynamicGroup.add(this.heroRig.root);
 
@@ -1640,14 +1645,14 @@ export class SceneManager {
       this.rangeRing.visible = false;
     }
 
-    // Sync Bear Hero (supports auto-evolution by level or explicit class swap)
+    // Sync Active Hero (supports multi-hero switching + auto-evolution by level)
     const wantHeroVariant = resolveHeroVisualVariant(sim.heroClass, sim.hero.level);
-    const wantHeroKey = `${wantHeroVariant}_${equippedHat}`;
+    const wantHeroKey = `${sim.heroId}_${wantHeroVariant}_${equippedHat}`;
     if (this.heroRig && wantHeroKey !== this.heroVisualKey) {
       const prevRotY = this.heroRig.body.rotation.y;
       const prevPos = this.heroRig.root.position.clone();
       this.dynamicGroup.remove(this.heroRig.root);
-      this.heroRig = createBearHeroRig(equippedHat, wantHeroVariant);
+      this.heroRig = createHeroRig(sim.heroId, equippedHat, wantHeroVariant);
       this.heroRig.root.position.copy(prevPos);
       this.heroRig.body.rotation.y = prevRotY;
       this.dynamicGroup.add(this.heroRig.root);
@@ -1662,6 +1667,14 @@ export class SceneManager {
         ringMat.color.set('#ffd454');
         ringMat.opacity = 0.72 + Math.sin(this.animTime * 6) * 0.18;
         this.heroRig.ring.scale.setScalar(6.4);
+      } else if (sim.hero.alchemyAuraTimer > 0) {
+        ringMat.color.set('#44f0a6');
+        ringMat.opacity = 0.65 + Math.sin(this.animTime * 6) * 0.16;
+        this.heroRig.ring.scale.setScalar(8.4);
+      } else if (sim.hero.activeBuff === 'ironhide') {
+        ringMat.color.set('#e8a848');
+        ringMat.opacity = 0.92;
+        this.heroRig.ring.scale.setScalar(1.45 + Math.sin(this.animTime * 9) * 0.12);
       } else if (sim.hero.activeBuff === 'berserk') {
         ringMat.color.set('#ff6b3d');
         ringMat.opacity = 0.92;
@@ -2186,10 +2199,30 @@ export class SceneManager {
         }
         const hx = ev.targetX - ev.x;
         const hz = ev.targetZ - ev.z;
-        this.spawnSparks(ev.targetX, 0.65, ev.targetZ, hx, 0.25, hz, '#ffe27a', 5, 6.5, 0.5);
+        if (ev.ranged) {
+          this.spawnEnergyBeam(
+            [new THREE.Vector3(ev.x, 1.0, ev.z), new THREE.Vector3(ev.targetX, 0.7, ev.targetZ)],
+            '#4ef2b0',
+            0.065,
+            0.16,
+          );
+          this.spawnShockRing(ev.targetX, ev.targetZ, '#4ef2b0', 1.35, 0.25);
+          this.spawnSparks(ev.targetX, 0.7, ev.targetZ, 0, 0, 0, '#78ffca', 9, 6.5);
+        } else {
+          this.spawnSparks(ev.targetX, 0.65, ev.targetZ, hx, 0.25, hz, '#ffe27a', 5, 6.5, 0.5);
+        }
       } else if (ev.type === 'HERO_ULTIMATE') {
         if (this.heroRig) this.heroRig.attackTimer = 0.42;
-        const col = ev.variant === 'viking' ? '#ff7b3b' : ev.variant === 'royal' ? '#ffd84f' : '#80f272';
+        const col =
+          ev.variant === 'fox_storm'
+            ? '#44f0a6'
+            : ev.variant === 'boar_charge'
+              ? '#e8a848'
+              : ev.variant === 'viking'
+                ? '#ff7b3b'
+                : ev.variant === 'royal'
+                  ? '#ffd84f'
+                  : '#80f272';
         this.spawnShockRing(ev.x, ev.z, '#ffffff', 1.8, 0.18);
         this.spawnShockRing(ev.x, ev.z, col, 3.8, 0.45);
         this.spawnSparks(ev.x, 0.55, ev.z, 0, 0, 0, col, 24, 9.5);
@@ -2199,13 +2232,16 @@ export class SceneManager {
         this.cameraCtrl.addZoomPunch(1.5);
       } else if (ev.type === 'HERO_CLAW_SHOCK') {
         if (this.heroRig) this.heroRig.attackTimer = 0.26;
+        const ringCol = ev.heroId === 'kizil_kuyruk' ? '#44f0a6' : ev.heroId === 'kaya_dis' ? '#e8a848' : '#95e06c';
         this.spawnShockRing(ev.x, ev.z, '#ffffff', 1.6, 0.16);
-        this.spawnShockRing(ev.x, ev.z, '#95e06c', 3.0);
-        this.spawnScorch(ev.x, ev.z, 1.1);
-        this.spawnSparks(ev.x, 0.45, ev.z, 0, 0, 0, '#c8ff9a', 16, 8);
-        this.spawnParticles(ev.x, 0.45, ev.z, '#95e06c', 12, 1.2);
-        this.cameraCtrl.addTrauma(0.36);
-        this.cameraCtrl.addZoomPunch(1.1);
+        this.spawnShockRing(ev.x, ev.z, ringCol, ev.heroId === 'kizil_kuyruk' ? 5.2 : 3.0);
+        if (ev.heroId !== 'kizil_kuyruk') {
+          this.spawnScorch(ev.x, ev.z, 1.1);
+          this.cameraCtrl.addTrauma(0.36);
+          this.cameraCtrl.addZoomPunch(1.1);
+        }
+        this.spawnSparks(ev.x, 0.45, ev.z, 0, 0, 0, ringCol, 16, 8);
+        this.spawnParticles(ev.x, 0.45, ev.z, ringCol, 12, 1.2);
       } else if (ev.type === 'HERO_LEVELED') {
         this.spawnShockRing(ev.x, ev.z, '#ffffff', 1.5, 0.18);
         this.spawnShockRing(ev.x, ev.z, '#ffd54f', 2.4, 0.36);

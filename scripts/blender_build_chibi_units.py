@@ -2085,8 +2085,8 @@ def build_tower_glb(model_name):
 # Rigged & Skinned Chibi Bear Hero Builder (head bone weight 1.0 + Actions)
 # ---------------------------------------------------------------------------
 
-def skin_meshes_to_head_bone(objs, arm, target_name):
-    """Join static unscaled head meshes into a single clean mesh weighted 100% to the 'head' bone."""
+def skin_meshes_to_bone(objs, arm, target_name, bone_name="head"):
+    """Join static meshes into a single clean mesh weighted 100% to `bone_name`."""
     meshes = []
     stack = list(objs) if isinstance(objs, (list, tuple)) else [objs]
     while stack:
@@ -2108,13 +2108,106 @@ def skin_meshes_to_head_bone(objs, arm, target_name):
     joined = bpy.context.active_object
     joined.name = target_name
 
-    vg = joined.vertex_groups.new(name="head")
+    vg = joined.vertex_groups.new(name=bone_name)
     vg.add([v.index for v in joined.data.vertices], 1.0, "REPLACE")
     joined.parent = arm
     joined.matrix_parent_inverse = arm.matrix_world.inverted()
     mod = joined.modifiers.new("Armature", "ARMATURE")
     mod.object = arm
     return joined
+
+
+def skin_meshes_to_head_bone(objs, arm, target_name):
+    return skin_meshes_to_bone(objs, arm, target_name, bone_name="head")
+
+
+def build_fox_head(fur_col=0, muzzle_col=3, emerald_col=15):
+    hr = make_empty("AnimalHeadRoot")
+    elems = [
+        {"co": (0.0, -0.02, 0.22), "radius": 0.41, "sx": 1.18, "sy": 0.92, "sz": 0.88},
+        {"co": (-0.28, -0.10, 0.04), "radius": 0.25, "sx": 1.12, "sy": 0.85, "sz": 0.72},
+        {"co": (0.28, -0.10, 0.04), "radius": 0.25, "sx": 1.12, "sy": 0.85, "sz": 0.72},
+        {"co": (0.0, -0.34, 0.02), "radius": 0.22, "sx": 0.92, "sy": 1.32, "sz": 0.74},
+    ]
+    head = sculpt_metaball_mesh("FoxHead", elems, target_dims=(1.08, 1.00, 0.82), target_center_xy=(0.0, -0.06),
+                                bottom_z=1.24, swatch_col=fur_col, resolution=0.036, smooth_iter=6)
+    head.parent = hr
+
+    for sx in (-1, 1):
+        eh = make_empty(f"FoxEar_{sx}", loc=(sx * 0.34, 0.0, 1.92), parent=hr)
+        eh.rotation_euler = (math.radians(8), math.radians(sx * -20), math.radians(sx * -8))
+        make_smooth_subdiv_prim("FoxEarOut", "CONE", (0, 0, 0.19), scale=(0.16, 0.09, 0.25),
+                                swatch_col=fur_col, segs=18, radius=1.0, depth=2.0, subdiv=0, parent=eh)
+        make_smooth_subdiv_prim("FoxEarIn", "CONE", (0, -0.032, 0.16), scale=(0.088, 0.048, 0.17),
+                                swatch_col=muzzle_col, segs=16, radius=1.0, depth=2.0, subdiv=0, parent=eh)
+        make_smooth_subdiv_prim("FoxEarTip", "CONE", (0, 0, 0.36), scale=(0.075, 0.055, 0.095),
+                                swatch_col=5, segs=14, radius=1.0, depth=2.0, subdiv=0, parent=eh)
+
+    hit, loc, _ = raycast_front(head, 0.0, 1.46)
+    my = loc.y if hit else -0.54
+    for sx in (-1, 1):
+        make_smooth_subdiv_prim(f"FoxCheek_{sx}", "SPHERE", (sx * 0.28, my + 0.14, 1.44),
+                                scale=(0.24, 0.14, 0.14), rot_deg=(0, 0, sx * 22),
+                                swatch_col=muzzle_col, segs=14, subdiv=1, parent=hr)
+    make_smooth_subdiv_prim("FoxMuzzle", "SPHERE", (0.0, my + 0.02, 1.44),
+                            scale=(0.24, 0.22, 0.14), swatch_col=muzzle_col, segs=16, subdiv=1, parent=hr)
+    make_smooth_subdiv_prim("FoxNose", "SPHERE", (0.0, my - 0.15, 1.49),
+                            scale=(0.075, 0.058, 0.054), swatch_col=5, segs=14, subdiv=1, parent=hr)
+
+    add_chibi_eyes(head, hr, eye_x=0.24, eye_z=1.59, eye_rx=0.084, eye_rz=0.098,
+                   brow_col=fur_col, brow_tilt=8.0, iris_col_hex="#36d47d")
+
+    gear = []
+    gear.append(make_headband_ring("NativeHat_FoxBand", center=(0.0, -0.04, 1.85), rx=0.45, ry=0.39,
+                                   tube_r=0.030, swatch_col=emerald_col, parent=hr))
+    gear.append(make_smooth_subdiv_prim("NativeHat_FoxGem", "SPHERE", (0.0, -0.43, 1.86),
+                                        scale=(0.068, 0.038, 0.075),
+                                        solid_mat=get_solid_mat("FoxEmeraldMat", "#4ef2b0", roughness=0.18,
+                                                                emission=1.1),
+                                        segs=14, parent=hr))
+    return hr, gear
+
+
+def build_boar_head(fur_col=4, snout_col=3, tusk_col=10):
+    hr = make_empty("AnimalHeadRoot")
+    elems = [
+        {"co": (0.0, -0.02, 0.20), "radius": 0.47, "sx": 1.22, "sy": 0.98, "sz": 0.92},
+        {"co": (0.0, -0.26, 0.04), "radius": 0.30, "sx": 1.26, "sy": 0.95, "sz": 0.72},
+        {"co": (0.0, -0.38, 0.02), "radius": 0.22, "sx": 1.12, "sy": 1.04, "sz": 0.68},
+    ]
+    head = sculpt_metaball_mesh("BoarHead", elems, target_dims=(1.16, 1.00, 0.88), target_center_xy=(0.0, -0.04),
+                                bottom_z=1.24, swatch_col=fur_col, resolution=0.036, smooth_iter=6)
+    head.parent = hr
+
+    for sx in (-1, 1):
+        eh = make_empty(f"BoarEar_{sx}", loc=(sx * 0.46, -0.02, 2.01), parent=hr)
+        make_smooth_subdiv_prim("BoarEarOut", "SPHERE", (0, 0, 0), scale=(0.18, 0.085, 0.16),
+                                rot_deg=(12, sx * -22, 0), swatch_col=fur_col, segs=14, subdiv=1, parent=eh)
+        make_smooth_subdiv_prim("BoarEarIn", "SPHERE", (0, -0.042, 0), scale=(0.10, 0.048, 0.09),
+                                rot_deg=(12, sx * -22, 0), swatch_col=snout_col, segs=12, subdiv=1, parent=eh)
+
+    hit, loc, _ = raycast_front(head, 0.0, 1.46)
+    my = loc.y if hit else -0.52
+    make_smooth_subdiv_prim("BoarSnout", "CYL", (0.0, my - 0.06, 1.46),
+                            scale=(0.25, 0.13, 0.19), rot_deg=(88, 0, 0),
+                            swatch_col=snout_col, segs=20, radius=1.0, depth=1.0, parent=hr)
+    for sx in (-1, 1):
+        make_smooth_subdiv_prim(f"BoarNostril_{sx}", "SPHERE", (sx * 0.085, my - 0.135, 1.47),
+                                scale=(0.045, 0.032, 0.055), swatch_col=5, segs=12, parent=hr)
+        make_smooth_subdiv_prim(f"BoarTusk_{sx}", "CONE", (sx * 0.25, my - 0.08, 1.50),
+                                scale=(0.058, 0.058, 0.155), rot_deg=(-28, sx * -28, 0),
+                                swatch_col=tusk_col, segs=14, radius=1.0, depth=2.0, subdiv=0, parent=hr)
+
+    add_chibi_eyes(head, hr, eye_x=0.27, eye_z=1.64, eye_rx=0.076, eye_rz=0.088,
+                   brow_col=fur_col, brow_tilt=13.0, angry_brow=True)
+
+    gear = []
+    bronze = get_solid_mat("BoarBronzeMat", "#b87a3d", roughness=0.34, metallic=0.68)
+    gear.append(make_headband_ring("NativeHat_BoarBand", center=(0.0, -0.03, 1.89), rx=0.51, ry=0.43,
+                                   tube_r=0.034, solid_mat=bronze, parent=hr))
+    gear.append(make_smooth_subdiv_prim("NativeHat_BoarCrest", "SPHERE", (0.0, -0.47, 1.90),
+                                        scale=(0.095, 0.042, 0.085), solid_mat=bronze, segs=12, parent=hr))
+    return hr, gear
 
 
 def build_hero_bear_variant(variant_name):
@@ -2213,6 +2306,262 @@ def build_hero_bear_variant(variant_name):
     export_glb(variant_name, has_armature=True)
 
 
+def build_hero_fox():
+    clear_scene()
+    char_file = "Mage.glb"
+    tex = ensure_kaykit_variant_tex(
+        "mage", "fox_alchemist", paw_hex="#e67e35", hue_shift=-0.26, sat_mult=1.22, val_mult=1.04
+    )
+    keep = {"1H_Wand"}
+    keep_actions = ("Idle", "Walking_A", "Running_A", "Spellcasting", "Spellcast_Shoot", "Cheer", "Hit_A")
+    default_action = "Idle"
+
+    objs = import_asset(os.path.join(ADV_C, char_file))
+    arm = next(o for o in objs if o.type == "ARMATURE")
+    drop_head_names = {"Mage_Head", "Mage_Hat"}
+
+    body_meshes = []
+    for o in list(objs):
+        if o.type != "MESH":
+            continue
+        if o.parent_bone in ("handslot.r", "handslot.l") and o.name not in keep:
+            bpy.data.objects.remove(o, do_unlink=True)
+            continue
+        if o.name in drop_head_names or o.name == "Icosphere":
+            bpy.data.objects.remove(o, do_unlink=True)
+            continue
+        body_meshes.append(o)
+
+    retexture(body_meshes, "mage", tex)
+
+    for act in list(bpy.data.actions):
+        if act.name not in keep_actions:
+            bpy.data.actions.remove(act)
+        else:
+            act.use_fake_user = True
+
+    clear_nla(arm)
+    for pb in arm.pose.bones:
+        pb.matrix_basis = Matrix.Identity(4)
+    if arm.animation_data:
+        arm.animation_data.action = None
+    bpy.context.view_layer.update()
+
+    head_root, gear_objs = build_fox_head()
+    gear_set = set(gear_objs)
+    head_mesh_objs = [o for o in collect_meshes(head_root) if o not in gear_set]
+    hat_mesh_objs = [o for o in gear_objs if o.type == "MESH"]
+
+    skin_meshes_to_bone(head_mesh_objs, arm, "FoxChibiHead", "head")
+    if hat_mesh_objs:
+        skin_meshes_to_bone(hat_mesh_objs, arm, "NativeHat_hero_fox", "head")
+
+    # Fluffy red-orange fox tail skinned to hips
+    tail_holder = make_empty("FoxTailTmp")
+    hips_m = bone_world(arm, "hips")
+    hips_pos = hips_m.translation
+    tail_obj = attach_squirrel_tail(tail_holder, hips_pos=hips_pos + Vector((0.0, 0.14, 0.02)), scale=0.92, swatch_col=0)
+    tail_tip = make_smooth_subdiv_prim("FoxTailTip", "SPHERE",
+                                       hips_pos + Vector((0.12, 0.30, 0.80)),
+                                       scale=(0.14, 0.14, 0.18), swatch_col=3, segs=14, parent=tail_holder)
+    skin_meshes_to_bone([tail_obj, tail_tip], arm, "FoxTailMesh", "hips")
+
+    for o in list(bpy.data.objects):
+        if o.type == "EMPTY" and (o is head_root or o is tail_holder or o.name.startswith("FoxEar_")):
+            bpy.data.objects.remove(o, do_unlink=True)
+
+    root = make_empty("HeroRoot")
+    body = make_empty("Body", parent=root)
+    holder = make_empty("HeroScale", parent=body)
+    holder.scale = (HERO_SCALE * 0.94, HERO_SCALE * 0.94, HERO_SCALE * 0.94)
+    for r in roots_of([o for o in bpy.data.objects if o not in (body, root, holder)]):
+        r.parent = holder
+    bpy.context.view_layer.update()
+
+    all_meshes = [o for o in bpy.data.objects if o.type == "MESH"]
+    mn, _ = mesh_bounds(all_meshes)
+    holder.location.z -= mn.z
+    bpy.context.view_layer.update()
+
+    head_m = bone_world(arm, "head")
+    sock = make_empty("HeadSocket")
+    sock_mat = head_m @ Matrix.Translation((0.0, -0.02 * HERO_SCALE, -0.03 * HERO_SCALE)) @ Matrix.Scale(HERO_SCALE / 0.56, 4)
+    attach_to_bone(arm, "head", sock, sock_mat)
+
+    set_action(arm, default_action)
+    bpy.context.scene.frame_set(int(bpy.data.actions[default_action].frame_range[0]))
+    export_glb("hero_fox", has_armature=True)
+
+
+def build_hero_boar():
+    clear_scene()
+    char_file = "Knight.glb"
+    tex = ensure_kaykit_variant_tex(
+        "knight", "boar_guard", paw_hex="#73452d", hue_shift=-0.04, sat_mult=1.18,
+        armor_tint="#b87a40", armor_mix=0.45
+    )
+    keep = {"1H_Sword", "Spike_Shield"}
+    keep_actions = ("Idle", "Walking_A", "Running_A", "1H_Melee_Attack_Chop", "Cheer", "Hit_A")
+    default_action = "Idle"
+
+    objs = import_asset(os.path.join(ADV_C, char_file))
+    arm = next(o for o in objs if o.type == "ARMATURE")
+    drop_head_names = {"Knight_Head", "Knight_Helmet"}
+
+    body_meshes = []
+    for o in list(objs):
+        if o.type != "MESH":
+            continue
+        if o.parent_bone in ("handslot.r", "handslot.l") and o.name not in keep:
+            bpy.data.objects.remove(o, do_unlink=True)
+            continue
+        if o.name in drop_head_names or o.name == "Icosphere":
+            bpy.data.objects.remove(o, do_unlink=True)
+            continue
+        body_meshes.append(o)
+
+    retexture(body_meshes, "knight", tex)
+
+    for act in list(bpy.data.actions):
+        if act.name not in keep_actions:
+            bpy.data.actions.remove(act)
+        else:
+            act.use_fake_user = True
+
+    clear_nla(arm)
+    for pb in arm.pose.bones:
+        pb.matrix_basis = Matrix.Identity(4)
+    if arm.animation_data:
+        arm.animation_data.action = None
+    bpy.context.view_layer.update()
+
+    head_root, gear_objs = build_boar_head()
+    gear_set = set(gear_objs)
+    head_mesh_objs = [o for o in collect_meshes(head_root) if o not in gear_set]
+    hat_mesh_objs = [o for o in gear_objs if o.type == "MESH"]
+
+    skin_meshes_to_bone(head_mesh_objs, arm, "BoarChibiHead", "head")
+    if hat_mesh_objs:
+        skin_meshes_to_bone(hat_mesh_objs, arm, "NativeHat_hero_boar", "head")
+
+    for o in list(bpy.data.objects):
+        if o.type == "EMPTY" and (o is head_root or o.name.startswith("BoarEar_")):
+            bpy.data.objects.remove(o, do_unlink=True)
+
+    root = make_empty("HeroRoot")
+    body = make_empty("Body", parent=root)
+    holder = make_empty("HeroScale", parent=body)
+    holder.scale = (HERO_SCALE * 1.05, HERO_SCALE * 1.05, HERO_SCALE * 1.05)
+    for r in roots_of([o for o in bpy.data.objects if o not in (body, root, holder)]):
+        r.parent = holder
+    bpy.context.view_layer.update()
+
+    all_meshes = [o for o in bpy.data.objects if o.type == "MESH"]
+    mn, _ = mesh_bounds(all_meshes)
+    holder.location.z -= mn.z
+    bpy.context.view_layer.update()
+
+    head_m = bone_world(arm, "head")
+    sock = make_empty("HeadSocket")
+    sock_mat = head_m @ Matrix.Translation((0.0, -0.02 * HERO_SCALE, -0.03 * HERO_SCALE)) @ Matrix.Scale(HERO_SCALE / 0.56, 4)
+    attach_to_bone(arm, "head", sock, sock_mat)
+
+    set_action(arm, default_action)
+    bpy.context.scene.frame_set(int(bpy.data.actions[default_action].frame_range[0]))
+    export_glb("hero_boar", has_armature=True)
+
+
+def render_hero_portraits():
+    ensure_animal_chibi_atlas()
+    ui_dir = "/Users/yasinozkan/Desktop/Projelerim/palamut-kalesi/public/ui"
+    os.makedirs(ui_dir, exist_ok=True)
+    specs = [
+        ("hero_fox", "portrait_fox.png", (0.08, 0.22, 0.18), (0.28, 0.85, 0.62)),
+        ("hero_boar", "portrait_boar.png", (0.22, 0.14, 0.10), (0.90, 0.64, 0.30)),
+    ]
+    for model_name, out_name, bg_dark, rim_col in specs:
+        clear_scene()
+        objs = import_asset(os.path.join(OUT_DIR, f"{model_name}.glb"))
+        arms = [o for o in objs if o.type == "ARMATURE"]
+        if arms and arms[0].animation_data and arms[0].animation_data.action:
+            bpy.context.scene.frame_set(int(arms[0].animation_data.action.frame_range[0]) + 4)
+        bpy.context.view_layer.update()
+        mn, mx = mesh_bounds(objs)
+        focus_z = mn.z + (mx.z - mn.z) * 0.62
+
+        sc = bpy.context.scene
+        sc.render.engine = "CYCLES"
+        sc.cycles.device = "CPU"
+        sc.cycles.samples = 24
+        sc.cycles.use_denoising = True
+        sc.render.film_transparent = True
+        sc.render.resolution_x = 256
+        sc.render.resolution_y = 256
+        sc.view_settings.view_transform = "AgX"
+
+        world = bpy.data.worlds.new("W")
+        sc.world = world
+        world.use_nodes = True
+        world.node_tree.nodes["Background"].inputs[1].default_value = 0.85
+
+        def add_area(lname, energy, rot_deg, loc, col=(1.0, 1.0, 1.0), size=2.4):
+            ld = bpy.data.lights.new(lname, type="AREA")
+            ld.energy = energy
+            ld.size = size
+            ld.color = col
+            lo = bpy.data.objects.new(lname, ld)
+            sc.collection.objects.link(lo)
+            lo.location = loc
+            lo.rotation_euler = tuple(math.radians(a) for a in rot_deg)
+
+        add_area("Key", 260, (58, 0, -32), (1.8, -2.2, focus_z + 1.4), (1.0, 0.96, 0.88))
+        add_area("Fill", 130, (66, 0, 48), (-2.0, -1.6, focus_z + 0.9), (0.82, 0.90, 1.0))
+        add_area("Rim", 210, (108, 0, 148), (0.2, 2.3, focus_z + 1.1), rim_col)
+
+        cd = bpy.data.cameras.new("Cam")
+        cd.lens = 72
+        cam = bpy.data.objects.new("Cam", cd)
+        sc.collection.objects.link(cam)
+        cam.location = (0.72, -2.15, focus_z + 0.42)
+        cam.rotation_euler = (Vector((0.0, 0.0, focus_z)) - cam.location).to_track_quat("-Z", "Y").to_euler()
+        sc.camera = cam
+
+        raw_fp = os.path.join(CHIBI_TEX, f"_raw_{out_name}")
+        sc.render.filepath = raw_fp
+        bpy.ops.render.render(write_still=True)
+
+        fg, w, h = _load_pixels_img(raw_fp)
+        yy, xx = np.mgrid[0:h, 0:w]
+        nx = (xx - (w - 1) * 0.5) / (w * 0.5)
+        ny = (yy - (h - 1) * 0.5) / (h * 0.5)
+        r = np.sqrt(nx * nx + ny * ny)
+        # Circular dark medallion + warm gold bevel border
+        bg_px = np.zeros((h, w, 4), dtype=np.float32)
+        radial = np.clip(1.0 - r * 0.95, 0.0, 1.0)[..., None]
+        bg_c = np.array(bg_dark, dtype=np.float32)[None, None, :] * (0.45 + 0.85 * radial)
+        gold_c = np.array([0.96, 0.78, 0.28], dtype=np.float32)
+        ring_dark = np.array([0.48, 0.30, 0.06], dtype=np.float32)
+        inside = r <= 0.93
+        inner_ring = (r > 0.87) & (r <= 0.93)
+        outer_rim = (r > 0.93) & (r <= 0.98)
+        bg_px[inside, :3] = bg_c[inside]
+        bg_px[inside, 3] = 1.0
+        bg_px[inner_ring, :3] = gold_c
+        bg_px[inner_ring, 3] = 1.0
+        bg_px[outer_rim, :3] = ring_dark
+        bg_px[outer_rim, 3] = 1.0
+
+        # Clip character inside the medallion circle
+        alpha = np.where(r <= 0.88, fg[..., 3], 0.0)[..., None]
+        out_px = bg_px.copy()
+        out_px[..., :3] = fg[..., :3] * alpha + bg_px[..., :3] * (1.0 - alpha)
+        out_px[..., 3] = np.maximum(bg_px[..., 3], np.squeeze(alpha, axis=-1))
+
+        final_fp = os.path.join(ui_dir, out_name)
+        _save_pixels_img(out_px, w, h, final_fp)
+        print("PORTRAIT SAVED:", final_fp)
+
+
 # ---------------------------------------------------------------------------
 # Post-export verification contact sheet renderer (renders actual shipped .glbs!)
 # ---------------------------------------------------------------------------
@@ -2239,6 +2588,8 @@ def render_live_verification_sheet(want=None):
         ("hero_bear", True),
         ("hero_bear_viking", True),
         ("hero_bear_royal", True),
+        ("hero_fox", True),
+        ("hero_boar", True),
     ]
     tmp_dir = os.path.join(CHIBI_TEX, "verify_thumbs")
     os.makedirs(tmp_dir, exist_ok=True)
@@ -2303,13 +2654,14 @@ ALL_TOWER_NAMES = [
     "tower_owl_t1", "tower_owl_t2", "tower_owl_chain", "tower_owl_blizzard",
     "tower_hedgehog_t1", "tower_hedgehog_t2", "tower_hedgehog_rail", "tower_hedgehog_shred",
 ]
-ALL_HERO_NAMES = ["hero_bear", "hero_bear_viking", "hero_bear_royal"]
+ALL_HERO_NAMES = ["hero_bear", "hero_bear_viking", "hero_bear_royal", "hero_fox", "hero_boar"]
 
 
 def main():
     args = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     verify = "--verify" in args
-    want = {a for a in args if a != "--verify"}
+    portraits = "--portraits" in args
+    want = {a for a in args if not a.startswith("--")}
 
     ensure_cc0_sources()
     ensure_warm_hex_atlas()
@@ -2320,7 +2672,15 @@ def main():
             build_tower_glb(tn)
     for hn in ALL_HERO_NAMES:
         if not want or hn in want:
-            build_hero_bear_variant(hn)
+            if hn == "hero_fox":
+                build_hero_fox()
+            elif hn == "hero_boar":
+                build_hero_boar()
+            else:
+                build_hero_bear_variant(hn)
+
+    if portraits:
+        render_hero_portraits()
 
     if verify:
         render_live_verification_sheet(want=want or None)

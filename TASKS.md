@@ -23,13 +23,13 @@ aynı anda değiştirmez. Durumlar: `planlandi` → `devam` → `dogrulaniyor` �
 | O1 | Gerçek RFC 6455 WebSocket rölesi (`wsRelay.ts` + Vite `/ws`), `NetworkService`, 2P Co-op & 1v1 PvP + `SmartBotDirector` yedeği | Carbon | dogrulandi | `tests/multiplayer.test.ts` (4/4 gerçek soket testi, toplam 76/76 pass) + `tsc/build` ✓ + tarayıcıda canlı oda + PvP `#bw-multi-bar` 0 hata ✓ |
 | T-A | Kopya yıldız/ödül sabitlerinin tekilleştirilmesi, Three.js `manualChunks` paket bölme ve seviye-öncelikli lazy GLB yükleme | Carbon | dogrulandi | `tests/drawcall.test.ts` (8/8 pass, toplam 77/77 pass) + `tsc` OK + `vite build` 0 chunk uyarısı ✓ |
 | F3-1 | 4 dallı Taktik Yetenek Ağacı (`SaveManager` v4 + `SimulationEngine` + `MetaView`) | Carbon | dogrulandi | `tests/faz3.test.ts` (3/3 pass, toplam 80/80 pass) + `tsc` OK + build ✓ |
+| F3-2 | 2 yeni kahraman: Kızıl Kuyruk (`hero_fox.glb`) ve Kaya Diş (`hero_boar.glb`) | Carbon | dogrulandi | Blender Cycles portre + `hero_fox`/`hero_boar.glb` + `tests/faz3.test.ts` (84/84 pass) + build ✓ |
 
 ## Kuyruk (Carbon doldurur)
 
 | # | İş | Not |
 |---|---|---|
-| F3-2 | 2 yeni kahraman: Kızıl Kuyruk (`hero_fox.glb`) ve Kaya Diş (`hero_boar.glb`) | devam |
-| F3-3 | Orman Günlüğü (`360°` 3D vitrin + Zümrüt ödülü) & Akustik Biyom Müzikleri (`F3-6`) | sirada |
+| F3-3 | Orman Günlüğü (`360°` 3D vitrin + Zümrüt ödülü) & Akustik Biyom Müzikleri (`F3-6`) | devam |
 | F3-4 | Kayıp Orman Seferi (5 aşamalı Roguelike oyun sonu + 6 Orman Tılsımı) | sirada |
 | F3-5 | 14 Günlük PvP Kupa Ligi, Harita Pin/Emoji, 30 Kademeli Sezonluk Orman Bileti & Haptics/SDK kancaları | sirada |
 

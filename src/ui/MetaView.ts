@@ -1,4 +1,13 @@
-import { ENEMIES, ENEMY_LIST, HERO_CLASSES, type EnemyId, type HeroClassId } from '../data/enemies.ts';
+import {
+  ENEMIES,
+  ENEMY_LIST,
+  HEROES,
+  HERO_CLASSES,
+  HERO_LIST,
+  type EnemyId,
+  type HeroClassId,
+  type HeroId,
+} from '../data/enemies.ts';
 import { LEVELS, WORLD_MAP_NODES, isLevelUnlocked, type LevelSpec } from '../data/levels.ts';
 import {
   TALENT_BRANCHES,
@@ -32,6 +41,7 @@ import {
   grantQuickAfkBoost,
   openForestChest,
   resetTalents,
+  unlockHeroWithGems,
   upgradeCard,
   upgradeTalent,
 } from '../services/ProgressionService.ts';
@@ -372,22 +382,30 @@ export class MetaView {
         label: t(loc, tw.nameKey),
         portraitUrl: PORTRAIT_URLS[tw.id],
       })),
-      { id: 'boz_pence', label: t(loc, 'hero.boz_pence.name'), portraitUrl: PORTRAIT_URLS.boz_pence },
+      ...HERO_LIST.map((h) => ({
+        id: h.id as CardUnitId,
+        label: t(loc, h.nameKey),
+        portraitUrl: PORTRAIT_URLS[h.id],
+      })),
     ];
 
     const cardsHtml = units
       .map((u) => {
-        const lvl = save.cardLevels[u.id];
-        const shards = save.cardShards[u.id];
+        const lvl = save.cardLevels[u.id] ?? 1;
+        const shards = save.cardShards[u.id] ?? 0;
         const cost = getCardUpgradeCost(lvl);
         const pct = Math.min(100, Math.round((shards / cost.shards) * 100));
         const canUpgrade = shards >= cost.shards && save.oakCoins >= cost.oakCoins;
         const spec = u.id in TOWERS ? TOWERS[u.id as TowerId] : null;
+        const heroSpec = !spec && u.id in HEROES ? HEROES[u.id as HeroId] : null;
+        const isLockedHero = Boolean(heroSpec && !save.unlockedHeroes.includes(heroSpec.id));
         const branchNote = spec
           ? `${t(loc, spec.evolutions[0].nameKey)} / ${t(loc, spec.evolutions[1].nameKey)}`
-          : t(loc, HERO_CLASSES[save.heroClass].nameKey);
+          : heroSpec && heroSpec.id !== 'boz_pence'
+            ? t(loc, heroSpec.roleKey)
+            : t(loc, HERO_CLASSES[save.heroClass].nameKey);
         return `
-          <div class="collector-card">
+          <div class="collector-card ${isLockedHero ? 'locked' : ''}">
             <span class="collector-level-badge">${t(loc, 'cards.level')}${lvl}</span>
             <img class="collector-portrait" src="${u.portraitUrl}" alt="${u.label}" />
             <div class="collector-name">${u.label}</div>
@@ -396,13 +414,33 @@ export class MetaView {
               <div class="shard-bar-fill" style="width:${pct}%"></div>
               <span class="shard-bar-text">${shards}/${cost.shards}</span>
             </div>
-            <button class="btn btn-sm ${canUpgrade ? 'btn-primary' : ''}" style="width:100%;" data-card-up="${u.id}" ${canUpgrade ? '' : 'disabled'}>
+            <button class="btn btn-sm ${canUpgrade && !isLockedHero ? 'btn-primary' : ''}" style="width:100%;" data-card-up="${u.id}" ${canUpgrade && !isLockedHero ? '' : 'disabled'}>
               ${t(loc, 'cards.upgrade')} (${cost.oakCoins})
             </button>
           </div>
         `;
       })
       .join('');
+
+    const heroesHtml = HERO_LIST.map((h) => {
+      const unlocked = save.unlockedHeroes.includes(h.id);
+      const selected = save.selectedHero === h.id;
+      const canBuy = !unlocked && h.gemUnlockCost > 0 && save.emeraldGems >= h.gemUnlockCost;
+      const actionBtn = unlocked
+        ? `<button class="btn btn-sm ${selected ? 'btn-gold' : 'btn-primary'}" data-select-hero="${h.id}" ${selected ? 'disabled' : ''}>${t(loc, selected ? 'hero.select.active' : 'hero.select.pick')}</button>`
+        : `<button class="btn btn-sm ${canBuy ? 'btn-gold' : ''}" data-unlock-hero="${h.id}" ${canBuy ? '' : 'disabled'}>${tParams(loc, 'hero.select.unlockGems', { gems: h.gemUnlockCost })}</button>`;
+      return `
+        <div class="hero-roster-row ${selected ? 'active' : ''}">
+          <img class="hero-roster-thumb" src="${PORTRAIT_URLS[h.id]}" alt="${t(loc, h.nameKey)}" />
+          <div style="flex:1; min-width:0;">
+            <div style="font-size:12.5px; font-weight:900; color:#ffffff;">${t(loc, h.nameKey)}</div>
+            <div style="font-size:10.5px; font-weight:700; color:var(--accent-cyan);">${t(loc, h.roleKey)}</div>
+            <div style="font-size:10px; color:var(--text-muted);">${unlocked ? t(loc, h.descKey) : tParams(loc, 'hero.select.unlockAt', { lvl: h.unlockLevel })}</div>
+          </div>
+          ${actionBtn}
+        </div>
+      `;
+    }).join('');
 
     const classIds: HeroClassId[] = ['auto', 'classic', 'viking', 'royal'];
     const activeCls = HERO_CLASSES[save.heroClass];
@@ -456,6 +494,10 @@ export class MetaView {
 
     return `
       <div style="font-size:15px; font-weight:900; color:#ffe17a;">${t(loc, 'cards.title')}</div>
+      <div class="card-panel" style="display:flex; flex-direction:column; gap:8px; border-color: rgba(110, 231, 183, 0.35);">
+        <div style="font-size:13.5px; font-weight:900; color:#ffe17a;">${t(loc, 'hero.select.title')}</div>
+        <div style="display:flex; flex-direction:column; gap:6px;">${heroesHtml}</div>
+      </div>
       <div class="collector-grid">${cardsHtml}</div>
       <div class="card-panel" style="display:flex; flex-direction:column; gap:8px; border-color: rgba(255, 202, 69, 0.35);">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
@@ -467,11 +509,17 @@ export class MetaView {
         </div>
         <div class="talent-grid">${talentsHtml}</div>
       </div>
-      <div class="card-panel" style="display:flex; flex-direction:column; gap:8px; border-color: rgba(255, 202, 69, 0.35);">
-        <div style="font-size:13px; font-weight:800; color:#ffe17a;">${t(loc, 'hero.class.title')}</div>
-        <div style="display:flex; flex-wrap:wrap; gap:6px;">${classesHtml}</div>
-        <div style="font-size:11.5px; color:var(--text-muted); font-weight:700;">${t(loc, activeCls.descKey)}</div>
-      </div>
+      ${
+        save.selectedHero === 'boz_pence'
+          ? `
+            <div class="card-panel" style="display:flex; flex-direction:column; gap:8px; border-color: rgba(255, 202, 69, 0.35);">
+              <div style="font-size:13px; font-weight:800; color:#ffe17a;">${t(loc, 'hero.class.title')}</div>
+              <div style="display:flex; flex-wrap:wrap; gap:6px;">${classesHtml}</div>
+              <div style="font-size:11.5px; color:var(--text-muted); font-weight:700;">${t(loc, activeCls.descKey)}</div>
+            </div>
+          `
+          : ''
+      }
       <div class="card-panel" style="display:flex; flex-direction:column; gap:8px;">
         <div style="font-size:13px; font-weight:800;">${t(loc, 'cards.hats')}</div>
         <div style="display:flex; flex-wrap:wrap; gap:6px;">${hatsHtml}</div>
@@ -659,6 +707,24 @@ export class MetaView {
         this.callbacks.onRefresh();
       };
     }
+
+    container.querySelectorAll<HTMLElement>('[data-select-hero]').forEach((btn) => {
+      btn.onclick = () => {
+        const hid = btn.dataset.selectHero as HeroId;
+        this.saveManager.update((s) => { s.selectedHero = hid; });
+        this.callbacks.onRefresh();
+      };
+    });
+
+    container.querySelectorAll<HTMLElement>('[data-unlock-hero]').forEach((btn) => {
+      btn.onclick = () => {
+        const hid = btn.dataset.unlockHero as HeroId;
+        if (unlockHeroWithGems(this.saveManager, hid)) {
+          this.statusNotice = tParams(loc, 'hero.select.unlockedToast', { name: t(loc, HEROES[hid].nameKey) });
+        }
+        this.callbacks.onRefresh();
+      };
+    });
 
     container.querySelectorAll<HTMLElement>('[data-hero-class]').forEach((btn) => {
       btn.onclick = () => {

@@ -5,7 +5,7 @@ import {
   VICTORY_OAK_REWARD,
   type SimulationEngine,
 } from '../core/SimulationEngine.ts';
-import { ENEMIES, resolveHeroVisualVariant, type EnemyId } from '../data/enemies.ts';
+import { ENEMIES, HEROES, resolveHeroVisualVariant, type EnemyId } from '../data/enemies.ts';
 import { TOWER_LIST, TOWERS, type TargetingPriority, type TowerId } from '../data/towers.ts';
 import { t, tParams, type Locale } from '../i18n/locales.ts';
 import type { SceneManager } from '../rendering/SceneManager.ts';
@@ -227,8 +227,8 @@ export class BattleView {
         <div class="hud-controls">
           <button class="tactile-sq-btn" id="bw-speed">x1</button>
           <button class="tactile-sq-btn" id="bw-pause"><span class="svg-ico">${ICONS.pause}</span></button>
-          <button class="skill-medallion-btn hero-skill-btn" id="bw-skill-hero" title="${t(loc, 'hero.boz_pence.name')}">
-            <img src="${PORTRAIT_URLS.boz_pence}" alt="${t(loc, 'hero.boz_pence.name')}" />
+          <button class="skill-medallion-btn hero-skill-btn" id="bw-skill-hero" title="${t(loc, HEROES[sim.heroId].nameKey)}">
+            <img src="${PORTRAIT_URLS[sim.heroId]}" alt="${t(loc, HEROES[sim.heroId].nameKey)}" />
             <span class="hero-skill-lvl" id="bw-hero-lvl">${t(loc, 'cards.level')}1</span>
             <span class="hero-skill-hp"><span class="hero-skill-hp-fill" id="bw-hero-hp" style="width:100%"></span></span>
             <span class="cd-badge" id="bw-hero-cd" style="display:none;"></span>
@@ -318,16 +318,31 @@ export class BattleView {
     if (this.heroBtnEl) {
       this.heroBtnEl.onclick = () => {
         if (sim.hero.dead || sim.hero.skillCooldown > 0) return;
+        const loc = this.saveManager.get().settings.locale;
+        if (sim.heroId === 'kizil_kuyruk') {
+          this.targetingSkill = this.targetingSkill === 'hero_leap' ? null : 'hero_leap';
+          if (this.targetingSkill === 'hero_leap') {
+            this.showBanner(t(loc, 'skill.hero.foxHint'), 2.5);
+          }
+          return;
+        }
+        if (sim.heroId === 'kaya_dis') {
+          this.targetingSkill = this.targetingSkill === 'hero_leap' ? null : 'hero_leap';
+          if (this.targetingSkill === 'hero_leap') {
+            this.showBanner(t(loc, 'skill.hero.boarHint'), 2.5);
+          }
+          return;
+        }
         const variant = resolveHeroVisualVariant(sim.heroClass, sim.hero.level);
         if (variant === 'viking') {
           this.targetingSkill = this.targetingSkill === 'hero_leap' ? null : 'hero_leap';
           if (this.targetingSkill === 'hero_leap') {
-            this.showBanner(t(this.saveManager.get().settings.locale, 'skill.hero.leapHint'), 2.5);
+            this.showBanner(t(loc, 'skill.hero.leapHint'), 2.5);
           }
         } else {
           this.targetingSkill = null;
           sim.dispatch({ type: 'CAST_HERO_ULTIMATE' });
-          this.showBanner(t(this.saveManager.get().settings.locale, `skill.hero.${variant}`), 2.0);
+          this.showBanner(t(loc, `skill.hero.${variant}`), 2.0);
         }
       };
     }
@@ -487,8 +502,13 @@ export class BattleView {
       if (sim.magnetCooldown > 0) this.magnetCdEl.textContent = `${Math.ceil(sim.magnetCooldown)}`;
     }
     if (this.heroBtnEl) {
-      const variant = resolveHeroVisualVariant(sim.heroClass, sim.hero.level);
-      this.heroBtnEl.title = t(loc, `skill.hero.${variant}`);
+      const skillKey =
+        sim.heroId === 'kizil_kuyruk'
+          ? 'skill.hero.fox_storm'
+          : sim.heroId === 'kaya_dis'
+            ? 'skill.hero.boar_charge'
+            : `skill.hero.${resolveHeroVisualVariant(sim.heroClass, sim.hero.level)}`;
+      this.heroBtnEl.title = t(loc, skillKey);
       this.heroBtnEl.classList.toggle(
         'active',
         this.targetingSkill === 'hero_leap' || sim.hero.skillActiveTimer > 0,

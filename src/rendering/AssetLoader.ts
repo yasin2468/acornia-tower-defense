@@ -34,6 +34,8 @@ export const MODEL_NAMES = [
   'hero_bear',
   'hero_bear_viking',
   'hero_bear_royal',
+  'hero_fox',
+  'hero_boar',
   'hat_pirate',
   'hat_chef',
   'hat_wizard',

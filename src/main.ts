@@ -7,7 +7,7 @@ import {
   VICTORY_OAK_REWARD,
   type SimEvent,
 } from './core/SimulationEngine.ts';
-import { ENEMIES } from './data/enemies.ts';
+import { ENEMIES, HEROES } from './data/enemies.ts';
 import { LEVELS } from './data/levels.ts';
 import { t, tParams } from './i18n/locales.ts';
 import { SoundEngine } from './audio/SoundEngine.ts';
@@ -16,6 +16,7 @@ import {
   getLevelModelDependencies,
   preloadBootModels,
   warmRemainingModelsInBackground,
+  type ModelName,
 } from './rendering/AssetLoader.ts';
 import { SceneManager } from './rendering/SceneManager.ts';
 import {
@@ -25,6 +26,7 @@ import {
   RemoteConfigService,
 } from './services/CommercialServices.ts';
 import { NetworkService } from './services/NetworkService.ts';
+import { grantCampaignHeroUnlocks } from './services/ProgressionService.ts';
 import { SaveManager } from './services/SaveManager.ts';
 import { BattleView } from './ui/BattleView.ts';
 import { MetaView } from './ui/MetaView.ts';
@@ -165,17 +167,21 @@ async function startLevel(
   juice.reset();
 
   const save = saveManager.get();
-  const deps = getLevelModelDependencies(
-    spec,
-    ['hero_bear', 'hero_bear_viking', 'hero_bear_royal'],
-    save.equippedHat,
-  );
+  const heroId = save.selectedHero ?? 'boz_pence';
+  const heroModels: ModelName[] =
+    heroId === 'kizil_kuyruk'
+      ? ['hero_fox']
+      : heroId === 'kaya_dis'
+        ? ['hero_boar']
+        : ['hero_bear', 'hero_bear_viking', 'hero_bear_royal'];
+  const deps = getLevelModelDependencies(spec, heroModels, save.equippedHat);
   await ensureModelsLoaded(deps);
 
   activeSim = new SimulationEngine(spec, {
     seed: customSeed,
     ironMode,
     cardLevels: save.cardLevels,
+    heroId,
     heroClass: save.heroClass,
     talents: isMultiMatch ? undefined : save.talents,
     extraStartGold: isMultiMatch ? 0 : remoteConfig.get().startGoldDelta,
@@ -186,7 +192,7 @@ async function startLevel(
   }
 
   syncAudioAndCameraSettings();
-  sceneMgr.loadLevel(spec, save.equippedHat, save.heroClass);
+  sceneMgr.loadLevel(spec, save.equippedHat, save.heroClass, heroId);
   battleView.resetForLevel(spec.id);
   mode = 'battle';
   analytics.track('level_start', { levelId: spec.id, ironMode });
@@ -248,7 +254,7 @@ function processBattleEvents(events: SimEvent[]): void {
       sound.playExplosion(true);
     } else if (ev.type === 'HERO_LEVELED') {
       sound.playUpgrade();
-      if (activeSim?.heroClass === 'auto' && (ev.level === 2 || ev.level === 4)) {
+      if (activeSim?.heroId === 'boz_pence' && activeSim.heroClass === 'auto' && (ev.level === 2 || ev.level === 4)) {
         battleView.showBanner(`${t(loc, 'hero.evolvedBanner')} (Sv.${ev.level})`, 2.6);
       }
     } else if (ev.type === 'BOSS_PHASE_TWO') {
@@ -270,6 +276,12 @@ function processBattleEvents(events: SimEvent[]): void {
         d.oakCoins += VICTORY_OAK_REWARD;
         d.emeraldGems += VICTORY_GEM_REWARD;
       });
+      const newlyUnlocked = grantCampaignHeroUnlocks(saveManager, currentLevelId);
+      if (newlyUnlocked.length > 0) {
+        metaView.statusNotice = tParams(loc, 'hero.select.unlockedToast', {
+          name: t(loc, HEROES[newlyUnlocked[0]].nameKey),
+        });
+      }
       analytics.track('level_win', { levelId: currentLevelId, stars: ev.stars });
     } else if (ev.type === 'GAME_LOST') {
       analytics.track('level_fail', { levelId: currentLevelId, wave: (activeSim?.currentWaveIndex ?? 0) + 1 });

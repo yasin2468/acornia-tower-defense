@@ -210,8 +210,16 @@ export const ENEMY_LIST: EnemySpec[] = Object.values(ENEMIES);
 export type HeroId = 'boz_pence' | 'kizil_kuyruk' | 'kaya_dis';
 
 export interface HeroSpec {
-  id: 'boz_pence';
+  id: HeroId;
   nameKey: string;
+  roleKey: string;
+  descKey: string;
+  canHitAir: boolean;
+  isRanged: boolean;
+  attackRange: number;
+  armor: number;
+  unlockLevel: number;
+  gemUnlockCost: number;
   maxHp: number;
   damage: number;
   attackInterval: number;
@@ -291,18 +299,77 @@ export function resolveHeroVisualVariant(heroClass: HeroClassId, heroLevel: numb
   return 'classic';
 }
 
-export const BEAR_HERO_SPEC: HeroSpec = {
-  id: 'boz_pence',
-  nameKey: 'hero.boz_pence.name',
-  maxHp: 280,
-  damage: 20,
-  attackInterval: 0.85,
-  moveSpeed: 5.2,
-  blockCap: 3,
-  engageRange: 2.1,
-  respawnSeconds: 15,
-  regenPerSecond: 14,
-  clawShockInterval: 8,
-  clawShockDamage: 35,
-  clawShockRadius: 2.7,
+export const HEROES: Record<HeroId, HeroSpec> = {
+  boz_pence: {
+    id: 'boz_pence',
+    nameKey: 'hero.boz_pence.name',
+    roleKey: 'hero.boz_pence.role',
+    descKey: 'hero.boz_pence.desc',
+    canHitAir: false,
+    isRanged: false,
+    attackRange: 2.1,
+    armor: 0,
+    unlockLevel: 1,
+    gemUnlockCost: 0,
+    maxHp: 280,
+    damage: 20,
+    attackInterval: 0.85,
+    moveSpeed: 5.2,
+    blockCap: 3,
+    engageRange: 2.1,
+    respawnSeconds: 15,
+    regenPerSecond: 14,
+    clawShockInterval: 8,
+    clawShockDamage: 35,
+    clawShockRadius: 2.7,
+  },
+  kizil_kuyruk: {
+    id: 'kizil_kuyruk',
+    nameKey: 'hero.kizil_kuyruk.name',
+    roleKey: 'hero.kizil_kuyruk.role',
+    descKey: 'hero.kizil_kuyruk.desc',
+    canHitAir: true,
+    isRanged: true,
+    attackRange: 5.8,
+    armor: 0,
+    unlockLevel: 4,
+    gemUnlockCost: 150,
+    maxHp: 195,
+    damage: 24,
+    attackInterval: 0.9,
+    moveSpeed: 5.8,
+    blockCap: 1,
+    engageRange: 1.7,
+    respawnSeconds: 13,
+    regenPerSecond: 16,
+    clawShockInterval: 10,
+    clawShockDamage: 0,
+    clawShockRadius: 6.0,
+  },
+  kaya_dis: {
+    id: 'kaya_dis',
+    nameKey: 'hero.kaya_dis.name',
+    roleKey: 'hero.kaya_dis.role',
+    descKey: 'hero.kaya_dis.desc',
+    canHitAir: false,
+    isRanged: false,
+    attackRange: 2.3,
+    armor: 0.3,
+    unlockLevel: 7,
+    gemUnlockCost: 220,
+    maxHp: 370,
+    damage: 18,
+    attackInterval: 0.95,
+    moveSpeed: 4.9,
+    blockCap: 4,
+    engageRange: 2.3,
+    respawnSeconds: 16,
+    regenPerSecond: 18,
+    clawShockInterval: 10,
+    clawShockDamage: 42,
+    clawShockRadius: 2.9,
+  },
 };
+
+export const HERO_LIST: HeroSpec[] = Object.values(HEROES);
+export const BEAR_HERO_SPEC: HeroSpec = HEROES.boz_pence;

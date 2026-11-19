@@ -1,15 +1,18 @@
+import type { HeroId } from '../data/enemies.ts';
 import type { TowerId } from '../data/towers.ts';
 
 function resolvePublicUrl(relPath: string): string {
   return `./${relPath}`;
 }
 
-export const PORTRAIT_URLS: Record<TowerId | 'boz_pence', string> = {
+export const PORTRAIT_URLS: Record<TowerId | HeroId, string> = {
   squirrel: resolvePublicUrl('ui/portrait_squirrel.png'),
   beaver: resolvePublicUrl('ui/portrait_beaver.png'),
   owl: resolvePublicUrl('ui/portrait_owl.png'),
   hedgehog: resolvePublicUrl('ui/portrait_hedgehog.png'),
   boz_pence: resolvePublicUrl('ui/portrait_bear.png'),
+  kizil_kuyruk: resolvePublicUrl('ui/portrait_fox.png'),
+  kaya_dis: resolvePublicUrl('ui/portrait_boar.png'),
 };
 
 export const UI_ICON_URLS = {
