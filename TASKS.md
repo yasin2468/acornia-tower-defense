@@ -29,6 +29,7 @@ aynı anda değiştirmez. Durumlar: `planlandi` → `devam` → `dogrulaniyor` �
 | F3-5 | 14 Günlük PvP Kupa Ligi, Harita Pin/Emoji, 30 Kademeli Sezonluk Orman Bileti & Haptics/SDK kancaları | Carbon | dogrulandi | `season.ts` + `wsRelay`/`NetworkService` `SOCIAL_PING` + `CommercialServices` `HapticsService`/SDK köprüsü + `tests/faz3.test.ts` & `multiplayer.test.ts` (93/93 pass) + build ✓ |
 | GF-2 | Vuruş hissiyatı, katmanlı ses miksajı, kahraman kesiş izi, parabolik ölüm ve kale hasar geri bildirimi | Carbon | dogrulandi | `SimulationEngine`/`JuiceController`/`SceneManager`/`SoundEngine`/`CameraController`/`ModelFactory`/`BattleView`/`main.ts` + `tests/gamefeel.test.ts` (95/95 pass) + build + canlı ?promo=1 tarayıcı QA (0 hata) ✓ |
 | UI-1 | "Ulu Meşe Parşömeni" ana menü yenilemesi, Kenney Adventure UI (CC0) 9-slice çerçeveler ve 5'li alt navigasyon | Carbon | dogrulandi | `public/ui/kenney/*` (CC0) + `MetaView`/`styles.css`/`icons.ts`/`theme.ts`/`locales.ts`/`main.ts` + `tests/menu_ui.test.ts` (99/99 pass) + build + canlı tarayıcı QA (0 hata) ✓ |
+| UI-1B | Konsept 1'e birebir görsel sadakat yenilemesi (tam ekran boyama harita, 13 RGBA ikon/bot rozeti, kalkan düğümler & pirinç köşe çerçeveler) | Carbon | dogrulandi | `public/ui/oak/*` (world_map_oak + 13 RGBA PNG) + `MetaView`/`styles.css`/`icons.ts`/`locales.ts` + `tests/menu_ui.test.ts` (99/99 pass) + build + canlı tarayıcı QA (0 hata) ✓ |
 
 ## Kuyruk (Carbon doldurur)
 

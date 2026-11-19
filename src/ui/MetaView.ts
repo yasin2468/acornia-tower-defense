@@ -70,7 +70,7 @@ import {
   upgradeTalent,
 } from '../services/ProgressionService.ts';
 import type { CardUnitId, SaveManager } from '../services/SaveManager.ts';
-import { ICONS, KENNEY_UI_URLS, PORTRAIT_URLS, UI_ICON_URLS } from './icons.ts';
+import { getEnemyBadgeUrl, ICONS, OAK_UI_URLS, PORTRAIT_URLS, UI_ICON_URLS } from './icons.ts';
 
 export type MetaTab = 'map' | 'multi' | 'cards' | 'journal' | 'shop';
 export type CardsSubTab = 'towers' | 'heroes' | 'talents';
@@ -212,18 +212,33 @@ export class MetaView {
       text ? `<span class="nav-pip ${variant}" aria-hidden="true">${text}</span>` : '';
 
     container.innerHTML = `
-      <div class="meta-screen" data-kenney-skin="oak-parchment">
+      <div class="meta-screen ${this.activeTab === 'map' ? 'is-map-tab' : ''}" data-kenney-skin="oak-parchment">
         <header class="meta-header">
           <div class="oak-brand-plaque">
-            <div class="brand-title">${t(loc, 'app.title')}</div>
-            <div class="brand-sub">${t(loc, 'app.subtitle')}</div>
+            <span class="brass-rivet tl" aria-hidden="true"></span>
+            <span class="brass-rivet tr" aria-hidden="true"></span>
+            <span class="brass-rivet bl" aria-hidden="true"></span>
+            <span class="brass-rivet br" aria-hidden="true"></span>
+            <div class="brand-title-stack">
+              <span>${t(loc, 'app.titleLine1')}</span>
+              <span>${t(loc, 'app.titleLine2')}</span>
+            </div>
           </div>
           <div class="wallet-row">
-            <span class="oak-stat-slot gold"><img src="${UI_ICON_URLS.acornCoins}" alt="" /><span>${save.oakCoins}</span></span>
-            <span class="oak-stat-slot gem"><img src="${UI_ICON_URLS.gems}" alt="" /><span>${save.emeraldGems}</span></span>
-            <span class="oak-stat-slot star"><span class="svg-ico" style="width:14px;height:14px;">${ICONS.star}</span><span>${totalStars}</span></span>
+            <div class="oak-stat-col gold">
+              <img src="${UI_ICON_URLS.acornCoins}" alt="" />
+              <span>${save.oakCoins}</span>
+            </div>
+            <div class="oak-stat-col gem">
+              <img src="${UI_ICON_URLS.gems}" alt="" />
+              <span>${save.emeraldGems}</span>
+            </div>
+            <div class="oak-stat-col star">
+              <img src="${OAK_UI_URLS.star3d}" alt="" />
+              <span>${totalStars}</span>
+            </div>
             <button class="oak-gear-btn" id="btn-settings" aria-label="${t(loc, 'settings.title')}">
-              <span class="svg-ico">${ICONS.gear}</span>
+              <img src="${OAK_UI_URLS.gearWood}" alt="" />
             </button>
           </div>
         </header>
@@ -234,27 +249,27 @@ export class MetaView {
         <nav class="bottom-nav" aria-label="Menu">
           <button class="nav-tab ${this.activeTab === 'map' ? 'active' : ''}" data-tab="map">
             ${navBadgeHtml(badges.map, 'green')}
-            <span class="svg-ico nav-ico">${ICONS.navMap}</span>
+            <img class="nav-art-ico" src="${OAK_UI_URLS.navMap}" alt="" />
             <span class="nav-label">${t(loc, 'nav.map')}</span>
           </button>
           <button class="nav-tab ${this.activeTab === 'multi' ? 'active' : ''}" data-tab="multi">
             ${navBadgeHtml(badges.multi, 'red')}
-            <span class="svg-ico nav-ico">${ICONS.navArena}</span>
+            <img class="nav-art-ico" src="${OAK_UI_URLS.navArena}" alt="" />
             <span class="nav-label">${t(loc, 'nav.arena')}</span>
           </button>
           <button class="nav-tab ${this.activeTab === 'cards' ? 'active' : ''}" data-tab="cards">
             ${navBadgeHtml(badges.cards, 'green')}
-            <span class="svg-ico nav-ico">${ICONS.navUnits}</span>
+            <img class="nav-art-ico" src="${OAK_UI_URLS.navUnits}" alt="" />
             <span class="nav-label">${t(loc, 'nav.units')}</span>
           </button>
           <button class="nav-tab ${this.activeTab === 'journal' ? 'active' : ''}" data-tab="journal">
             ${navBadgeHtml(badges.journal, 'green')}
-            <span class="svg-ico nav-ico">${ICONS.navJournal}</span>
+            <img class="nav-art-ico" src="${OAK_UI_URLS.navJournal}" alt="" />
             <span class="nav-label">${t(loc, 'nav.journal')}</span>
           </button>
           <button class="nav-tab ${this.activeTab === 'shop' ? 'active' : ''}" data-tab="shop">
             ${navBadgeHtml(badges.shop, 'red')}
-            <span class="svg-ico nav-ico">${ICONS.navShop}</span>
+            <img class="nav-art-ico" src="${OAK_UI_URLS.navShop}" alt="" />
             <span class="nav-label">${t(loc, 'nav.shopShort')}</span>
           </button>
         </nav>
@@ -309,6 +324,78 @@ export class MetaView {
     return list;
   }
 
+  private renderShieldPinSvg(
+    state: 'cleared' | 'frontier' | 'unlocked' | 'locked',
+    isBoss: boolean,
+    id: number,
+    stars: number,
+  ): string {
+    const rimHi = state === 'frontier' ? '#fff4b8' : state === 'cleared' ? '#eff5fa' : '#d2a266';
+    const rimLo = state === 'frontier' ? '#cf8814' : state === 'cleared' ? '#8c9fb0' : '#734721';
+    let bodyTop = '#996c45';
+    let bodyBot = '#613c1d';
+    let numFill = '#f8e6c6';
+    if (isBoss && state !== 'cleared') {
+      bodyTop = '#d9483b';
+      bodyBot = '#7b1713';
+      numFill = '#ffe8a8';
+    } else if (state === 'cleared') {
+      bodyTop = '#56cf52';
+      bodyBot = '#217d28';
+      numFill = '#ffffff';
+    } else if (state === 'frontier' || state === 'unlocked') {
+      bodyTop = '#ffde59';
+      bodyBot = '#d67e0e';
+      numFill = '#2f1902';
+    }
+
+    const uid = `sh-${id}-${state}`;
+    const showBossHorns = isBoss && (id === 12 || state !== 'cleared');
+    const hornsHtml = showBossHorns
+      ? `<path d="M9 14c-4-3-5-8-2-11 2 3 4 5 7 6M39 14c4-3 5-8 2-11-2 3-4 5-7 6" fill="#d9c6a3" stroke="#2a1405" stroke-width="2" stroke-linejoin="round"/>
+         <circle cx="24" cy="19" r="6.2" fill="#f2dfc2" stroke="#2a1405" stroke-width="1.6"/>
+         <circle cx="21.8" cy="18.2" r="1.4" fill="#2a1405"/><circle cx="26.2" cy="18.2" r="1.4" fill="#2a1405"/>`
+      : '';
+    const swordsHtml =
+      state === 'frontier'
+        ? `<path d="M10 38L38 10M38 38L10 10" stroke="#f0f6fc" stroke-width="2.4" stroke-linecap="round"/>`
+        : '';
+    const starRow =
+      stars > 0
+        ? Array.from({ length: 3 }, (_, idx) => {
+            const cx = 17 + idx * 7;
+            const on = idx < stars;
+            return `<path d="M${cx} 42.5l1 2 2.2.3-1.6 1.5.4 2.2-2-1-2 1 .4-2.2-1.6-1.5 2.2-.3z" fill="${on ? '#ffd94f' : '#4a2b13'}" stroke="#2a1405" stroke-width="0.9"/>`;
+          }).join('')
+        : '';
+
+    return `
+      <svg class="shield-pin-svg" viewBox="0 0 48 52" aria-hidden="true">
+        <defs>
+          <linearGradient id="${uid}-rim" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="${rimHi}"/><stop offset="100%" stop-color="${rimLo}"/>
+          </linearGradient>
+          <linearGradient id="${uid}-body" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="${bodyTop}"/><stop offset="100%" stop-color="${bodyBot}"/>
+          </linearGradient>
+        </defs>
+        <ellipse cx="24" cy="43.5" rx="17.5" ry="6.2" fill="#6b3e1b" stroke="#2a1405" stroke-width="2.2"/>
+        <ellipse cx="24" cy="41.8" rx="15.5" ry="4.8" fill="#a86d37" stroke="#3c200a" stroke-width="1.4"/>
+        ${swordsHtml}
+        ${hornsHtml}
+        <path d="M9 11.5L24 7l15 4.5v13.5c0 9.6-6.2 16.5-15 20.2C15.2 41.5 9 34.6 9 25V11.5z" fill="url(#${uid}-rim)" stroke="#2a1405" stroke-width="2.3" stroke-linejoin="round"/>
+        <path d="M12.2 14L24 10.4 35.8 14v10.5c0 7.7-4.7 13.4-11.8 16.6-7.1-3.2-11.8-8.9-11.8-16.6V14z" fill="url(#${uid}-body)" stroke="#2a1405" stroke-width="1.4" stroke-linejoin="round"/>
+        ${
+          isBoss && state !== 'cleared'
+            ? `<rect x="15.5" y="29" width="17" height="10" rx="4.5" fill="#2a1405" stroke="#ffd86b" stroke-width="1.2"/>
+               <text x="24" y="36.6" text-anchor="middle" font-size="9.5" font-weight="900" fill="${numFill}">${id}</text>`
+            : `<text x="24" y="31.5" text-anchor="middle" font-size="14.5" font-weight="900" fill="${numFill}" stroke="#2a1405" stroke-width="2.6" paint-order="stroke">${id}</text>`
+        }
+        ${starRow}
+      </svg>
+    `;
+  }
+
   private renderMapTab(loc: Locale): string {
     const save = this.saveManager.get();
     const afk = calculateAfkAccumulation(save);
@@ -325,8 +412,26 @@ export class MetaView {
       if (isLevelUnlocked(n.id, save.levelStars)) maxUnlockedIdx = idx;
     });
 
-    const padY = (y: number): number => Number((11 + ((y - 6.8) * (88 - 11)) / (91 - 6.8)).toFixed(2));
-    const displayNodes = WORLD_MAP_NODES.map((n) => ({ ...n, yPct: padY(n.yPct) }));
+    const OAK_MAP_TRAIL: ReadonlyArray<{ xPct: number; yPct: number }> = [
+      { xPct: 54, yPct: 61.5 },
+      { xPct: 31, yPct: 58.5 },
+      { xPct: 20, yPct: 51.5 },
+      { xPct: 27, yPct: 44.5 },
+      { xPct: 43, yPct: 39.5 },
+      { xPct: 63, yPct: 38 },
+      { xPct: 72, yPct: 33.5 },
+      { xPct: 61, yPct: 29.5 },
+      { xPct: 38, yPct: 25 },
+      { xPct: 52, yPct: 21 },
+      { xPct: 43, yPct: 16.5 },
+      { xPct: 51, yPct: 13 },
+    ];
+
+    const displayNodes = WORLD_MAP_NODES.map((n, idx) => ({
+      ...n,
+      xPct: OAK_MAP_TRAIL[idx]?.xPct ?? n.xPct,
+      yPct: OAK_MAP_TRAIL[idx]?.yPct ?? n.yPct,
+    }));
     const fullPathD = this.buildSmoothTrailPath(displayNodes);
     const unlockedPathD = this.buildSmoothTrailPath(displayNodes.slice(0, maxUnlockedIdx + 1));
 
@@ -336,33 +441,17 @@ export class MetaView {
       const isSelected = n.id === this.selectedLevelId;
       const isFrontier = frontierNode?.id === n.id;
 
-      const stateClass = stars > 0 ? 'cleared' : unlocked ? 'unlocked' : 'locked';
-      const iconSvg = n.isBossStage
-        ? ICONS.skullCrown
-        : !unlocked
-          ? ICONS.lock
-          : stars > 0
-            ? ICONS.bastion
-            : ICONS.swords;
-
-      const starPips =
-        stars > 0
-          ? `<span class="stage-pin-stars">${[1, 2, 3].map((idx) => `<span class="${idx <= stars ? 'on' : ''}">★</span>`).join('')}</span>`
-          : '';
+      const pinState = stars > 0 ? 'cleared' : isFrontier ? 'frontier' : unlocked ? 'unlocked' : 'locked';
 
       return `
         <button
           type="button"
-          class="stage-pin biome-${n.biome} ${stateClass} ${n.isBossStage ? 'boss' : ''} ${isFrontier ? 'frontier' : ''} ${isSelected ? 'selected' : ''}"
+          class="stage-pin biome-${n.biome} ${pinState} ${n.isBossStage ? 'boss' : ''} ${isSelected ? 'selected' : ''}"
           style="left: ${n.xPct}%; top: ${n.yPct}%;"
           data-level="${n.id}"
           aria-label="${n.id}. ${t(loc, n.nameKey)}"
         >
-          <span class="stage-crest">
-            <span class="svg-ico stage-crest-ico">${iconSvg}</span>
-          </span>
-          <span class="stage-pin-ribbon">${n.id}</span>
-          ${starPips}
+          ${this.renderShieldPinSvg(pinState, n.isBossStage, n.id, stars)}
         </button>
       `;
     }).join('');
@@ -372,6 +461,7 @@ export class MetaView {
       .map((eid) => {
         const spec = ENEMIES[eid];
         const enemyName = t(loc, spec.nameKey);
+        const badgeUrl = getEnemyBadgeUrl(eid, spec.isBoss);
         return `
           <button
             type="button"
@@ -380,9 +470,7 @@ export class MetaView {
             title="${enemyName}"
             aria-label="${enemyName}"
           >
-            <span class="threat-medallion-core" style="background: radial-gradient(circle at 35% 30%, ${spec.accentColor} 0%, ${spec.color} 100%);">
-              <span class="svg-ico" style="width:13px;height:13px;color:#fff7e6;">${spec.isBoss ? ICONS.skullCrown : ICONS.swords}</span>
-            </span>
+            <img class="threat-portrait-img" src="${badgeUrl}" alt="${enemyName}" />
             ${spec.isBoss ? `<span class="threat-boss-mini">${t(loc, 'map.bossTag')}</span>` : ''}
           </button>
         `;
@@ -394,69 +482,75 @@ export class MetaView {
       : '';
 
     return `
-      <div class="world-map-box map-full">
+      <div class="world-map-box map-full" style="background-image: url('${OAK_UI_URLS.worldMap}');">
         <svg class="world-map-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
-          <path d="${fullPathD}" fill="none" stroke="rgba(42, 24, 10, 0.62)" stroke-width="2.6" stroke-linecap="round" />
-          <path d="${fullPathD}" fill="none" stroke="rgba(248, 232, 198, 0.45)" stroke-width="1.2" stroke-dasharray="1.1 2.3" stroke-linecap="round" />
-          <path d="${unlockedPathD}" fill="none" stroke="#ffd86b" stroke-width="1.7" stroke-dasharray="1.4 2.2" stroke-linecap="round" />
+          <path d="${fullPathD}" fill="none" stroke="rgba(42, 22, 8, 0.42)" stroke-width="1.8" stroke-linecap="round" />
+          <path d="${unlockedPathD}" fill="none" stroke="rgba(255, 224, 114, 0.78)" stroke-width="1.1" stroke-dasharray="1.3 2.1" stroke-linecap="round" />
         </svg>
 
         <button type="button" class="map-medallion patrol ${afk.oakCoins >= 1 ? 'ready' : ''}" id="btn-open-patrol">
-          <span class="medallion-disc">
-            <img class="medallion-disc-bg" src="${KENNEY_UI_URLS.roundBrownDark}" alt="" />
-            <img class="medallion-disc-icon" src="${UI_ICON_URLS.chestFree}" alt="" />
-            ${afk.oakCoins >= 1 ? `<span class="medallion-pip">${tParams(loc, 'map.afk.ready', { coins: afk.oakCoins })}</span>` : ''}
+          <span class="medallion-ring">
+            <img class="medallion-art-img" src="${UI_ICON_URLS.chestFree}" alt="" />
+            ${afk.oakCoins >= 1 ? `<span class="medallion-star-seal" title="${tParams(loc, 'map.afk.ready', { coins: afk.oakCoins })}"><img src="${OAK_UI_URLS.star3d}" alt="" /></span>` : ''}
           </span>
-          <span class="medallion-ribbon">${t(loc, 'map.afk.short')}</span>
+          <span class="medallion-label-stack">
+            <span>${t(loc, 'map.afk.line1')}</span>
+            <span>${t(loc, 'map.afk.line2')}</span>
+          </span>
         </button>
 
         <div class="map-medallion-col">
           <button type="button" class="map-medallion rogue ${run ? 'active' : ''}" id="btn-open-expedition">
-            <span class="medallion-disc">
-              <img class="medallion-disc-bg" src="${KENNEY_UI_URLS.roundBrownDark}" alt="" />
-              <span class="svg-ico medallion-svg-icon">${ICONS.roguePortal}</span>
+            <span class="medallion-ring">
+              <img class="medallion-art-img" src="${OAK_UI_URLS.roguePortal}" alt="" />
               ${rogueBadge}
             </span>
-            <span class="medallion-ribbon">${t(loc, 'map.rogueShort')}</span>
+            <span class="medallion-label-stack">
+              <span>${t(loc, 'map.rogue.line1')}</span>
+              <span>${t(loc, 'map.rogue.line2')}</span>
+            </span>
           </button>
           <button type="button" class="map-medallion atlas" id="btn-open-bestiary">
-            <span class="medallion-disc">
-              <img class="medallion-disc-bg" src="${KENNEY_UI_URLS.roundBrownDark}" alt="" />
-              <span class="svg-ico medallion-svg-icon">${ICONS.atlasBook}</span>
+            <span class="medallion-ring">
+              <img class="medallion-art-img" src="${OAK_UI_URLS.atlasBook}" alt="" />
             </span>
-            <span class="medallion-ribbon">${t(loc, 'map.atlasShort')} · ${ENEMY_LIST.length}</span>
+            <span class="medallion-label-stack">
+              <span>${t(loc, 'map.atlasShort')}</span>
+            </span>
           </button>
         </div>
 
-        <div class="biome-tag biome-tag-snow" style="top: 86px; left: 8px;">IV · ${t(loc, 'map.biome.snow')}</div>
-        <div class="biome-tag biome-tag-cavern" style="top: 32%; left: 8px;">III · ${t(loc, 'map.biome.cavern')}</div>
-        <div class="biome-tag biome-tag-canyon" style="top: 60%; left: 8px;">II · ${t(loc, 'map.biome.canyon')}</div>
-        <div class="biome-tag biome-tag-forest" style="bottom: 10px; left: 8px;">I · ${t(loc, 'map.biome.forest')}</div>
         ${nodesHtml}
       </div>
 
       <section class="parchment-drawer">
+        <span class="brass-corner tl" aria-hidden="true"></span>
+        <span class="brass-corner tr" aria-hidden="true"></span>
+        <span class="brass-corner bl" aria-hidden="true"></span>
+        <span class="brass-corner br" aria-hidden="true"></span>
         <div class="drawer-head">
           <div class="drawer-stage-meta">
-            <div class="drawer-stage-pills">
-              <span class="stage-biome-pill biome-${selLevel.biome}">${t(loc, `map.biome.${selLevel.biome}`)}</span>
-              ${selLevel.isBossStage ? `<span class="stage-boss-pill">${t(loc, 'map.bossStage')}</span>` : ''}
-            </div>
             <div class="drawer-stage-title">${selLevel.id}. ${t(loc, selLevel.nameKey)}</div>
-            <div class="drawer-stage-sub">${selLevel.waves.length} ${t(loc, 'hud.wave')} · ${selLevel.startGold} ${t(loc, 'cur.oak')}</div>
+            <div class="drawer-stage-sub">${t(loc, `map.biome.${selLevel.biome}`)} · ${selLevel.waves.length} ${t(loc, 'hud.wave')}</div>
           </div>
           <div class="drawer-threats" aria-label="${t(loc, 'map.threats')}">${threatsHtml}</div>
         </div>
 
-        <div class="oak-mode-toggle" role="group" aria-label="${t(loc, 'map.mode.normal')} / ${t(loc, 'map.mode.iron')}">
-          <button type="button" class="oak-mode-btn ${!this.ironMode ? 'active normal' : ''}" id="btn-mode-normal" ${selUnlocked ? '' : 'disabled'}>${t(loc, 'map.mode.normal')}</button>
-          <button type="button" class="oak-mode-btn ${this.ironMode ? 'active iron' : ''}" id="btn-mode-iron" ${selUnlocked && hasCleared ? '' : 'disabled'}>${t(loc, 'map.mode.iron')}</button>
+        <div class="oak-mode-bar" role="group" aria-label="${t(loc, 'map.mode.normal')} / ${t(loc, 'map.mode.iron')}">
+          <button type="button" class="oak-switch-track ${this.ironMode ? 'iron' : 'normal'}" id="btn-mode-toggle" ${selUnlocked && hasCleared ? '' : 'disabled'} aria-label="${t(loc, 'map.mode.iron')}">
+            <span class="oak-switch-knob"></span>
+          </button>
+          <button type="button" class="oak-mode-tab ${!this.ironMode ? 'active' : ''}" id="btn-mode-normal" ${selUnlocked ? '' : 'disabled'}>${t(loc, 'map.mode.normal')}</button>
+          <span class="oak-mode-sep" aria-hidden="true">|</span>
+          <button type="button" class="oak-mode-tab ${this.ironMode ? 'active iron' : ''}" id="btn-mode-iron" ${selUnlocked && hasCleared ? '' : 'disabled'}>${t(loc, 'map.mode.iron')}</button>
         </div>
 
-        <button class="btn btn-oak-play ${selUnlocked ? 'btn-primary' : ''}" id="btn-start-level" ${selUnlocked ? '' : 'disabled'}>
-          <span class="svg-ico">${selUnlocked ? ICONS.play : ICONS.lock}</span>
-          <span>${selUnlocked ? t(loc, 'map.play') : t(loc, 'map.lockedHint')}</span>
-        </button>
+        <div class="oak-cta-well">
+          <button class="btn btn-oak-play ${selUnlocked ? 'btn-primary' : ''}" id="btn-start-level" ${selUnlocked ? '' : 'disabled'}>
+            ${selUnlocked ? '' : `<span class="svg-ico">${ICONS.lock}</span>`}
+            <span>${selUnlocked ? t(loc, 'map.play') : t(loc, 'map.lockedHint')}</span>
+          </button>
+        </div>
       </section>
     `;
   }
@@ -467,6 +561,10 @@ export class MetaView {
     return `
       <div class="modal-backdrop" data-modal-backdrop="patrol">
         <div class="modal-card oak-parchment-modal">
+          <span class="brass-corner tl" aria-hidden="true"></span>
+          <span class="brass-corner tr" aria-hidden="true"></span>
+          <span class="brass-corner bl" aria-hidden="true"></span>
+          <span class="brass-corner br" aria-hidden="true"></span>
           <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
             <div class="modal-oak-title">${t(loc, 'map.afk.title')}</div>
             <button class="btn btn-sm" id="btn-close-patrol" type="button">${t(loc, 'map.close')}</button>
@@ -600,6 +698,10 @@ export class MetaView {
     return `
       <div class="modal-backdrop" data-modal-backdrop="bestiary">
         <div class="modal-card bestiary-modal oak-parchment-modal">
+          <span class="brass-corner tl" aria-hidden="true"></span>
+          <span class="brass-corner tr" aria-hidden="true"></span>
+          <span class="brass-corner bl" aria-hidden="true"></span>
+          <span class="brass-corner br" aria-hidden="true"></span>
           <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
             <div>
               <div class="modal-oak-title">${t(loc, 'map.bestiary')} (${ENEMY_LIST.length})</div>
@@ -1224,8 +1326,10 @@ export class MetaView {
 
     const normalBtn = container.querySelector<HTMLButtonElement>('#btn-mode-normal');
     const ironBtn = container.querySelector<HTMLButtonElement>('#btn-mode-iron');
+    const toggleBtn = container.querySelector<HTMLButtonElement>('#btn-mode-toggle');
     if (normalBtn) normalBtn.onclick = () => { this.ironMode = false; this.callbacks.onRefresh(); };
     if (ironBtn) ironBtn.onclick = () => { this.ironMode = true; this.callbacks.onRefresh(); };
+    if (toggleBtn) toggleBtn.onclick = () => { this.ironMode = !this.ironMode; this.callbacks.onRefresh(); };
 
     const afkClaim = container.querySelector<HTMLButtonElement>('#btn-afk-claim');
     if (afkClaim) {

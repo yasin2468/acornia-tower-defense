@@ -341,6 +341,12 @@ const DICT: Record<Locale, Record<string, string>> = {
     'cards.sub.towers': 'Kuleler',
     'cards.sub.heroes': 'Kahramanlar',
     'cards.sub.talents': 'Yetenekler',
+    'app.titleLine1': 'Palamut',
+    'app.titleLine2': 'Kalesi',
+    'map.afk.line1': 'Devriye',
+    'map.afk.line2': 'Sandığı',
+    'map.rogue.line1': 'Kayıp',
+    'map.rogue.line2': 'Orman',
   },
   en: {
     'app.title': 'Acorn Bastion',
@@ -682,6 +688,12 @@ const DICT: Record<Locale, Record<string, string>> = {
     'cards.sub.towers': 'Towers',
     'cards.sub.heroes': 'Heroes',
     'cards.sub.talents': 'Talents',
+    'app.titleLine1': 'Acorn',
+    'app.titleLine2': 'Bastion',
+    'map.afk.line1': 'Patrol',
+    'map.afk.line2': 'Chest',
+    'map.rogue.line1': 'Lost',
+    'map.rogue.line2': 'Forest',
   },
 };
 

@@ -1,4 +1,4 @@
-import type { HeroId } from '../data/enemies.ts';
+import type { EnemyId, HeroId } from '../data/enemies.ts';
 import type { TowerId } from '../data/towers.ts';
 
 function resolvePublicUrl(relPath: string): string {
@@ -39,6 +39,32 @@ export const KENNEY_UI_URLS = {
   roundBrownDark: resolvePublicUrl('ui/kenney/round_brown_dark.png'),
   progressGreen: resolvePublicUrl('ui/kenney/progress_green.png'),
 };
+
+export const OAK_UI_URLS = {
+  worldMap: resolvePublicUrl('ui/oak/world_map_oak.jpg'),
+  navMap: resolvePublicUrl('ui/oak/nav_map.png'),
+  navArena: resolvePublicUrl('ui/oak/nav_arena.png'),
+  navUnits: resolvePublicUrl('ui/oak/nav_units.png'),
+  navJournal: resolvePublicUrl('ui/oak/nav_journal.png'),
+  navShop: resolvePublicUrl('ui/oak/nav_shop.png'),
+  roguePortal: resolvePublicUrl('ui/oak/icon_rogue_portal.png'),
+  atlasBook: resolvePublicUrl('ui/oak/icon_atlas_book.png'),
+  star3d: resolvePublicUrl('ui/oak/icon_star_3d.png'),
+  gearWood: resolvePublicUrl('ui/oak/icon_gear_wood.png'),
+  botScout: resolvePublicUrl('ui/oak/bot_scout.png'),
+  botSaw: resolvePublicUrl('ui/oak/bot_saw.png'),
+  botShield: resolvePublicUrl('ui/oak/bot_shield.png'),
+  botBoss: resolvePublicUrl('ui/oak/bot_boss.png'),
+};
+
+export function getEnemyBadgeUrl(enemyId: EnemyId, isBoss?: boolean): string {
+  if (isBoss || enemyId === 'mega_harvester' || enemyId === 'cryo_colossus') return OAK_UI_URLS.botBoss;
+  if (enemyId === 'shield_loader' || enemyId === 'crystal_golem') return OAK_UI_URLS.botShield;
+  if (enemyId === 'swarm_saw' || enemyId === 'chomp_brute' || enemyId === 'turbo_hopper') {
+    return OAK_UI_URLS.botSaw;
+  }
+  return OAK_UI_URLS.botScout;
+}
 
 export const ICONS = {
   waveSword: `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">

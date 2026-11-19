@@ -56,8 +56,8 @@ function makeMockStorage() {
   };
 }
 
-describe('UI-1 — Ulu Mese Parsomeni menu ve Kenney CC0 varliklari', () => {
-  it('Kenney Adventure UI PNG dosyalari gecerli baslik ve LICENSE.txt icerir', () => {
+describe('UI-1 — Ulu Mese Parsomeni menu ve Kenney CC0 + boyama ozel varliklari', () => {
+  it('Kenney Adventure UI ve boyama ozel oak UI dosyalari gecerli baslik ve LICENSE.txt icerir', () => {
     const dir = path.resolve('public/ui/kenney');
     assert.ok(fs.existsSync(path.join(dir, 'LICENSE.txt')), 'LICENSE.txt eksik');
     const pngs = [
@@ -79,16 +79,43 @@ describe('UI-1 — Ulu Mese Parsomeni menu ve Kenney CC0 varliklari', () => {
       assert.ok(buf.length > 100, `${file} boyutu gecersiz`);
       assert.equal(buf.subarray(12, 16).toString('ascii'), 'IHDR', `${file} gecerli PNG degil`);
     }
+
+    const oakDir = path.resolve('public/ui/oak');
+    const mapBuf = fs.readFileSync(path.join(oakDir, 'world_map_oak.jpg'));
+    assert.ok(mapBuf.length > 10_000, 'world_map_oak.jpg boyutu gecersiz');
+    assert.equal(mapBuf[0], 0xff, 'world_map_oak.jpg JPEG basligi hatali');
+    assert.equal(mapBuf[1], 0xd8, 'world_map_oak.jpg JPEG basligi hatali');
+
+    const oakPngs = [
+      'nav_map.png',
+      'nav_arena.png',
+      'nav_units.png',
+      'nav_journal.png',
+      'nav_shop.png',
+      'icon_rogue_portal.png',
+      'icon_atlas_book.png',
+      'icon_star_3d.png',
+      'icon_gear_wood.png',
+      'bot_scout.png',
+      'bot_saw.png',
+      'bot_shield.png',
+      'bot_boss.png',
+    ];
+    for (const file of oakPngs) {
+      const buf = fs.readFileSync(path.join(oakDir, file));
+      assert.ok(buf.length > 500, `oak/${file} boyutu gecersiz`);
+      assert.equal(buf.subarray(12, 16).toString('ascii'), 'IHDR', `oak/${file} gecerli PNG degil`);
+    }
   });
 
-  it('.bottom-nav 5 sutunlu tek satir olarak tanimlanmis ve eski repeat(4, 1fr) kaldirilmis', () => {
+  it('.bottom-nav 5 sutunlu tek satir olarak tanimlanmis, soguk gri border-image kaldirilmis', () => {
     const css = fs.readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
     const bottomNavMatch = css.match(/\.bottom-nav\s*\{[^}]*\}/);
     assert.ok(bottomNavMatch, '.bottom-nav kurali bulunamadi');
     assert.ok(bottomNavMatch[0].includes('repeat(5'), '.bottom-nav repeat(5 kullanmiyor');
     assert.ok(!bottomNavMatch[0].includes('repeat(4, 1fr)'), 'eski kirik repeat(4, 1fr) hala mevcut');
-    assert.ok(css.includes('/ui/kenney/panel_brown_corners_a.png'), 'parsomen 9-slice cercevesi eksik');
-    assert.ok(css.includes('/ui/kenney/panel_border_brown_detail.png'), 'mese 9-slice cercevesi eksik');
+    assert.ok(!css.includes('panel_brown_corners_a.png'), 'soguk gri kose border-image hala css icinde');
+    assert.ok(css.includes('.brass-corner') && css.includes('.parchment-drawer'), 'altin-pirinc kose & drawer eksik');
   });
 
   it('parsomen ve koyu mese panellerinde WCAG AA (>= 4.5:1) kontrast saglanir', () => {
@@ -143,6 +170,11 @@ describe('UI-1 — Ulu Mese Parsomeni menu ve Kenney CC0 varliklari', () => {
         'id="btn-open-patrol"',
         'id="btn-open-expedition"',
         'id="btn-open-bestiary"',
+        'id="btn-mode-toggle"',
+        'ui/oak/world_map_oak.jpg',
+        'ui/oak/nav_map.png',
+        'shield-pin-svg',
+        'brass-corner',
         'data-tab="map"',
         'data-tab="multi"',
         'data-tab="cards"',
