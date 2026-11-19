@@ -360,8 +360,8 @@ export class MetaView {
   }
 
   private computeMapPanPct(xPct: number): number {
-    // Track width is 360% of viewport: center target xPct at 50% viewport, clamped to [0, -72.2222]%.
-    return Math.max(-72.2222, Math.min(0, 13.8889 - xPct));
+    // Track width is 520% of viewport: center target xPct at 50% viewport, clamped to [0, -80.7692]%.
+    return Math.max(-80.7692, Math.min(0, 9.6154 - xPct));
   }
 
   private getStageUniqueEnemies(level: LevelSpec): EnemyId[] {
@@ -467,22 +467,30 @@ export class MetaView {
     });
 
     const OAK_HORIZ_TRAIL: ReadonlyArray<{ xPct: number; yPct: number }> = [
-      { xPct: 5.5, yPct: 43.0 },
-      { xPct: 11.4, yPct: 37.0 },
-      { xPct: 17.3, yPct: 46.0 },
-      { xPct: 23.3, yPct: 39.0 },
-      { xPct: 29.2, yPct: 45.0 },
-      { xPct: 35.1, yPct: 37.5 },
-      { xPct: 41.1, yPct: 45.5 },
-      { xPct: 47.0, yPct: 36.5 },
-      { xPct: 53.0, yPct: 44.5 },
-      { xPct: 58.9, yPct: 38.0 },
-      { xPct: 64.8, yPct: 46.0 },
-      { xPct: 70.8, yPct: 36.5 },
-      { xPct: 76.7, yPct: 45.0 },
-      { xPct: 82.6, yPct: 37.5 },
-      { xPct: 88.6, yPct: 44.5 },
-      { xPct: 94.5, yPct: 38.5 },
+      { xPct: 3.80, yPct: 43.0 },
+      { xPct: 7.82, yPct: 37.0 },
+      { xPct: 11.83, yPct: 45.5 },
+      { xPct: 15.85, yPct: 38.5 },
+      { xPct: 19.87, yPct: 45.0 },
+      { xPct: 23.89, yPct: 37.5 },
+      { xPct: 27.90, yPct: 45.5 },
+      { xPct: 31.92, yPct: 36.5 },
+      { xPct: 35.94, yPct: 44.5 },
+      { xPct: 39.96, yPct: 38.0 },
+      { xPct: 43.97, yPct: 45.5 },
+      { xPct: 47.99, yPct: 36.5 },
+      { xPct: 52.01, yPct: 45.0 },
+      { xPct: 56.03, yPct: 37.5 },
+      { xPct: 60.04, yPct: 44.5 },
+      { xPct: 64.06, yPct: 38.0 },
+      { xPct: 68.08, yPct: 45.0 },
+      { xPct: 72.10, yPct: 37.0 },
+      { xPct: 76.11, yPct: 45.5 },
+      { xPct: 80.13, yPct: 36.5 },
+      { xPct: 84.15, yPct: 44.5 },
+      { xPct: 88.17, yPct: 37.5 },
+      { xPct: 92.18, yPct: 45.0 },
+      { xPct: 96.20, yPct: 38.0 },
     ];
 
     const displayNodes = WORLD_MAP_NODES.map((n, idx) => ({
@@ -519,16 +527,18 @@ export class MetaView {
     }).join('');
 
     const regionBannersHtml = [
-      { xPct: 11.4, biome: 'forest' as const, range: '1–3' },
-      { xPct: 29.2, biome: 'canyon' as const, range: '4–6' },
-      { xPct: 47.0, biome: 'cavern' as const, range: '7–9' },
-      { xPct: 64.8, biome: 'snow' as const, range: '10–12' },
-      { xPct: 85.6, biome: 'foundry' as const, range: '13–16' },
+      { xPct: 7.82, biome: 'forest' as const, labelKey: 'map.biome.forest', range: '1–3' },
+      { xPct: 19.87, biome: 'canyon' as const, labelKey: 'map.biome.canyon', range: '4–6' },
+      { xPct: 31.92, biome: 'cavern' as const, labelKey: 'map.biome.cavern', range: '7–9' },
+      { xPct: 43.97, biome: 'snow' as const, labelKey: 'map.biome.snow', range: '10–12' },
+      { xPct: 58.04, biome: 'foundry' as const, labelKey: 'map.biome.foundry', range: '13–16' },
+      { xPct: 74.10, biome: 'forest' as const, labelKey: 'map.region.shadowfen', range: '17–20' },
+      { xPct: 90.18, biome: 'cavern' as const, labelKey: 'map.region.astral', range: '21–24' },
     ]
       .map(
         (r) => `
         <div class="biome-region-banner biome-${r.biome}" style="left: ${r.xPct}%;">
-          <span>${t(loc, `map.biome.${r.biome}`)}</span>
+          <span>${t(loc, r.labelKey)}</span>
           <span class="biome-region-range">${r.range}</span>
         </div>
       `,
@@ -602,6 +612,8 @@ export class MetaView {
             <div class="map-horiz-bg-tile mirrored" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
             <div class="map-horiz-bg-tile" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
             <div class="map-horiz-bg-tile mirrored" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
+            <div class="map-horiz-bg-tile" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
+            <div class="map-horiz-bg-tile mirrored" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
             <div class="map-biome-wash"></div>
           </div>
 
@@ -667,10 +679,10 @@ export class MetaView {
               <div class="drawer-stage-title">${selLevel.id}. ${t(loc, selLevel.nameKey)}</div>
               <button type="button" class="drawer-step-btn" id="btn-drawer-next" ${hasNext ? '' : 'disabled'} aria-label="${t(loc, 'map.nextStage')}">▶</button>
             </div>
-            <div class="drawer-concept-row">
-              <span class="stage-concept-pill">${t(loc, `level.${selLevel.id}.concept`)}</span>
-              <span class="drawer-stage-sub">${t(loc, `map.biome.${selLevel.biome}`)} · ${selLevel.waves.length} ${t(loc, 'hud.wave')}</span>
-            </div>
+              <div class="drawer-concept-row">
+                <span class="stage-concept-pill">${t(loc, `level.${selLevel.id}.concept`)}</span>
+                <span class="drawer-stage-sub">${t(loc, selLevel.regionKey ?? `map.biome.${selLevel.biome}`)} · ${selLevel.waves.length} ${t(loc, 'hud.wave')}</span>
+              </div>
             <div class="drawer-concept-desc">${t(loc, `level.${selLevel.id}.sub`)}</div>
             <div class="drawer-threats" aria-label="${t(loc, 'map.threats')}">${threatsHtml}</div>
           </div>

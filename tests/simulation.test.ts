@@ -113,18 +113,19 @@ describe('Palamut Kalesi deterministic simulation & economy', () => {
     assert.equal(sim.slots.get('slot_1')!.tower!.smokedTimer, 0);
   });
 
-  it('validates 16 campaign levels across 5 biomes with clean road/slot clearances', () => {
-    assert.equal(LEVELS.length, 16);
-    for (const biome of ['forest', 'canyon', 'cavern', 'snow'] as const) {
-      assert.equal(LEVELS.filter((l) => l.biome === biome).length, 3, `biome ${biome}`);
-    }
-    assert.equal(LEVELS.filter((l) => l.biome === 'foundry').length, 4, 'biome foundry');
+  it('validates 24 campaign levels across 5 biomes with clean road/slot clearances', () => {
+    assert.equal(LEVELS.length, 24);
+    assert.equal(LEVELS.filter((l) => l.biome === 'forest').length, 5, 'biome forest');
+    assert.equal(LEVELS.filter((l) => l.biome === 'canyon').length, 4, 'biome canyon');
+    assert.equal(LEVELS.filter((l) => l.biome === 'cavern').length, 5, 'biome cavern');
+    assert.equal(LEVELS.filter((l) => l.biome === 'snow').length, 4, 'biome snow');
+    assert.equal(LEVELS.filter((l) => l.biome === 'foundry').length, 6, 'biome foundry');
 
     assert.equal(isLevelUnlocked(1, {}), true);
     assert.equal(isLevelUnlocked(10, {}), true);
     assert.equal(isLevelUnlocked(11, {}), false);
     assert.equal(isLevelUnlocked(11, { 10: 2 }), true);
-    assert.equal(isLevelUnlocked(16, { 15: 1 }), true);
+    assert.equal(isLevelUnlocked(24, { 23: 1 }), true);
 
     const distSeg = (px: number, pz: number, ax: number, az: number, bx: number, bz: number) => {
       const vx = bx - ax;

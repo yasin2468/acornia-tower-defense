@@ -426,6 +426,59 @@ function buildRoadCurbstones(curve: THREE.CatmullRomCurve3, concept: StageConcep
       extraStride = 4;
       break;
     }
+    case 'shadowfen_lantern_bog':
+    case 'eclipse_oak_bastion': {
+      curbGeo = new THREE.CylinderGeometry(0.11, 0.14, 0.34, 7);
+      curbMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.84, metalness: 0.1 });
+      palette =
+        concept === 'eclipse_oak_bastion'
+          ? [new THREE.Color('#6b3a44'), new THREE.Color('#47242c')]
+          : [new THREE.Color('#3f5e48'), new THREE.Color('#2d4534')];
+      break;
+    }
+    case 'sunken_totem_ruins':
+    case 'chrono_prism_vault': {
+      curbGeo = new THREE.BoxGeometry(0.24, 0.18, 0.36);
+      curbMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.38, metalness: 0.48 });
+      palette =
+        concept === 'chrono_prism_vault'
+          ? [new THREE.Color('#8694e0'), new THREE.Color('#5a62b5')]
+          : [new THREE.Color('#d4a656'), new THREE.Color('#a67834')];
+      break;
+    }
+    case 'venom_alchemist_marsh':
+    case 'starfall_glacier_bridge': {
+      curbGeo = new THREE.OctahedronGeometry(0.16, 0);
+      curbGeo.scale(0.95, 1.45, 0.95);
+      curbMat = new THREE.MeshStandardMaterial({
+        color: '#ffffff',
+        emissive: concept === 'venom_alchemist_marsh' ? '#127a3f' : '#1b6dc4',
+        emissiveIntensity: 0.45,
+        roughness: 0.25,
+      });
+      palette =
+        concept === 'venom_alchemist_marsh'
+          ? [new THREE.Color('#62f2a0'), new THREE.Color('#38b56c')]
+          : [new THREE.Color('#a8e2ff'), new THREE.Color('#66b5ff')];
+      break;
+    }
+    case 'solar_plasma_reactor':
+    case 'astral_nexus_throne': {
+      curbGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.42, 8);
+      curbGeo.rotateX(Math.PI / 2);
+      curbMat = new THREE.MeshStandardMaterial({
+        color: '#ffffff',
+        emissive: concept === 'solar_plasma_reactor' ? '#7a2b06' : '#123e7a',
+        emissiveIntensity: 0.4,
+        roughness: 0.3,
+        metalness: 0.72,
+      });
+      palette =
+        concept === 'solar_plasma_reactor'
+          ? [new THREE.Color('#f59e3d'), new THREE.Color('#663e2e')]
+          : [new THREE.Color('#70d6ff'), new THREE.Color('#3d4c85')];
+      break;
+    }
     default: {
       curbGeo = new RoundedBoxGeometry(0.26, 0.12, 0.35, 2, 0.05);
       curbMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.88, metalness: 0.02 });

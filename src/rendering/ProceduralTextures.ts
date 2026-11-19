@@ -260,6 +260,94 @@ const MEADOW_PALETTES: Record<TextureKey, MeadowPalette> = {
     fleckLight: 'rgba(255, 224, 114, 0.26)',
     fleckDark: 'rgba(14, 10, 14, 0.30)',
   },
+  // 17. Shadowfen Lantern Bog
+  shadowfen_lantern_bog: {
+    gradInner: '#3a5948',
+    gradMid: '#2a4236',
+    gradOuter: '#1b2c24',
+    patchA: 'rgba(96, 232, 152, 0.22)',
+    patchB: 'rgba(66, 168, 134, 0.20)',
+    patchC: 'rgba(20, 36, 28, 0.32)',
+    fleckLight: 'rgba(176, 255, 156, 0.24)',
+    fleckDark: 'rgba(16, 28, 22, 0.28)',
+  },
+  // 18. Sunken Totem Ruins
+  sunken_totem_ruins: {
+    gradInner: '#8a6443',
+    gradMid: '#6b4c32',
+    gradOuter: '#4a3320',
+    patchA: 'rgba(242, 190, 92, 0.26)',
+    patchB: 'rgba(178, 122, 64, 0.24)',
+    patchC: 'rgba(54, 34, 20, 0.30)',
+    fleckLight: 'rgba(255, 220, 128, 0.26)',
+    fleckDark: 'rgba(42, 26, 14, 0.26)',
+  },
+  // 19. Venom Alchemist Marsh
+  venom_alchemist_marsh: {
+    gradInner: '#333b59',
+    gradMid: '#252b42',
+    gradOuter: '#171b2b',
+    patchA: 'rgba(94, 255, 148, 0.22)',
+    patchB: 'rgba(154, 102, 232, 0.22)',
+    patchC: 'rgba(18, 22, 36, 0.34)',
+    fleckLight: 'rgba(130, 255, 186, 0.24)',
+    fleckDark: 'rgba(16, 18, 30, 0.28)',
+  },
+  // 20. Eclipse Oak Bastion
+  eclipse_oak_bastion: {
+    gradInner: '#473145',
+    gradMid: '#342333',
+    gradOuter: '#211521',
+    patchA: 'rgba(240, 108, 72, 0.24)',
+    patchB: 'rgba(156, 86, 142, 0.22)',
+    patchC: 'rgba(26, 16, 26, 0.34)',
+    fleckLight: 'rgba(255, 168, 120, 0.25)',
+    fleckDark: 'rgba(22, 14, 22, 0.30)',
+  },
+  // 21. Starfall Glacier Bridge
+  starfall_glacier_bridge: {
+    gradInner: '#98bce3',
+    gradMid: '#769cc4',
+    gradOuter: '#53769c',
+    patchA: 'rgba(224, 244, 255, 0.34)',
+    patchB: 'rgba(110, 186, 255, 0.24)',
+    patchC: 'rgba(64, 96, 134, 0.28)',
+    fleckLight: 'rgba(240, 250, 255, 0.34)',
+    fleckDark: 'rgba(54, 82, 118, 0.22)',
+  },
+  // 22. Chrono Prism Vault
+  chrono_prism_vault: {
+    gradInner: '#363466',
+    gradMid: '#27254d',
+    gradOuter: '#191836',
+    patchA: 'rgba(122, 224, 255, 0.22)',
+    patchB: 'rgba(208, 140, 255, 0.22)',
+    patchC: 'rgba(20, 18, 42, 0.34)',
+    fleckLight: 'rgba(184, 240, 255, 0.26)',
+    fleckDark: 'rgba(16, 16, 36, 0.28)',
+  },
+  // 23. Solar Plasma Reactor
+  solar_plasma_reactor: {
+    gradInner: '#5e3428',
+    gradMid: '#45241c',
+    gradOuter: '#2b1612',
+    patchA: 'rgba(255, 162, 54, 0.28)',
+    patchB: 'rgba(255, 102, 42, 0.24)',
+    patchC: 'rgba(32, 16, 14, 0.34)',
+    fleckLight: 'rgba(255, 212, 110, 0.28)',
+    fleckDark: 'rgba(24, 12, 10, 0.28)',
+  },
+  // 24. Astral Nexus Throne
+  astral_nexus_throne: {
+    gradInner: '#2e2b59',
+    gradMid: '#201e42',
+    gradOuter: '#14122b',
+    patchA: 'rgba(94, 224, 255, 0.24)',
+    patchB: 'rgba(162, 132, 255, 0.24)',
+    patchC: 'rgba(16, 14, 34, 0.36)',
+    fleckLight: 'rgba(182, 244, 255, 0.28)',
+    fleckDark: 'rgba(12, 12, 28, 0.30)',
+  },
 };
 
 const ROAD_PALETTES: Record<TextureKey, RoadPalette> = {
@@ -284,6 +372,14 @@ const ROAD_PALETTES: Record<TextureKey, RoadPalette> = {
   clockwork_gear_bridge: { mortar: '#6a4b29', stones: ['#cca470', '#ba905a', '#dab480', '#aa804c'] },
   magma_crucible_arena: { mortar: '#5e2116', stones: ['#946c62', '#825a50', '#a67c72', '#704a42'] },
   iron_core_citadel: { mortar: '#443d48', stones: ['#9e9ca8', '#8c8a96', '#b0aebc', '#7a7886'] },
+  shadowfen_lantern_bog: { mortar: '#2b4738', stones: ['#73947a', '#63846a', '#82a389', '#55735c'] },
+  sunken_totem_ruins: { mortar: '#755331', stones: ['#d6b078', '#c89f64', '#e4c18b', '#b88e54'] },
+  venom_alchemist_marsh: { mortar: '#2c3d40', stones: ['#71968f', '#60857e', '#82a8a1', '#51736c'] },
+  eclipse_oak_bastion: { mortar: '#4d2b35', stones: ['#9c7580', '#8c6570', '#ad8691', '#7a5660'] },
+  starfall_glacier_bridge: { mortar: '#5980a8', stones: ['#cde6fc', '#bad8f4', '#e0f0ff', '#a8cbe8'] },
+  chrono_prism_vault: { mortar: '#3d3c73', stones: ['#999be0', '#8789d0', '#abadeb', '#7577bf'] },
+  solar_plasma_reactor: { mortar: '#6b381e', stones: ['#c4885a', '#b3774a', '#d4996a', '#a1663c'] },
+  astral_nexus_throne: { mortar: '#2c3563', stones: ['#839ce0', '#728bd0', '#96aff0', '#627abf'] },
 };
 
 /** Stage-concept-themed valley ground texture so every stage looks immediately distinct. */
@@ -971,6 +1067,52 @@ export function createStageRoadTextures(concept: StageConceptId): StageRoadTextu
       emissiveIntensity: 0.65,
       roughness: 0.68,
       metalness: 0.14,
+    };
+  }
+
+  if (
+    concept === 'shadowfen_lantern_bog' ||
+    concept === 'sunken_totem_ruins' ||
+    concept === 'venom_alchemist_marsh' ||
+    concept === 'eclipse_oak_bastion' ||
+    concept === 'starfall_glacier_bridge' ||
+    concept === 'chrono_prism_vault' ||
+    concept === 'solar_plasma_reactor' ||
+    concept === 'astral_nexus_throne'
+  ) {
+    const rp = ROAD_PALETTES[concept];
+    ctx.fillStyle = rp.mortar;
+    ctx.fillRect(0, 0, size, size);
+    const segH = size / 4;
+    for (let r = 0; r < 4; r++) {
+      const y = r * segH + 8;
+      ctx.fillStyle = rp.stones[r % rp.stones.length];
+      ctx.beginPath();
+      ctx.roundRect(18, y, size - 36, segH - 16, 10);
+      ctx.fill();
+    }
+    const glowHex =
+      concept === 'shadowfen_lantern_bog' || concept === 'venom_alchemist_marsh'
+        ? '#54f097'
+        : concept === 'sunken_totem_ruins' || concept === 'solar_plasma_reactor'
+          ? '#ffb338'
+          : concept === 'eclipse_oak_bastion'
+            ? '#ff6b52'
+            : '#72e3ff';
+    ectx.fillStyle = '#000000';
+    ectx.fillRect(0, 0, size, size);
+    for (const targetCtx of [ctx, ectx]) {
+      targetCtx.fillStyle = glowHex;
+      targetCtx.fillRect(8, 0, 7, size);
+      targetCtx.fillRect(size - 15, 0, 7, size);
+    }
+    return {
+      map: finishTex(c),
+      emissiveMap: finishTex(ec),
+      emissive: '#ffffff',
+      emissiveIntensity: 0.72,
+      roughness: 0.44,
+      metalness: 0.42,
     };
   }
 

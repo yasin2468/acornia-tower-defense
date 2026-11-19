@@ -206,7 +206,7 @@ describe('UI-1 — Ulu Mese Parsomeni menu ve Kenney CC0 + boyama ozel varliklar
       );
 
       const pinMatches = [...container.innerHTML.matchAll(/class="stage-pin[^"]*"\s+style="left:\s*([\d.]+)%;\s*top:\s*([\d.]+)%;"/g)];
-      assert.equal(pinMatches.length, 16, '16 yatay kalkan pini render edilmeli');
+      assert.equal(pinMatches.length, 24, '24 yatay kalkan pini render edilmeli');
       let prevX = -1;
       for (const m of pinMatches) {
         const xPct = Number(m[1]);

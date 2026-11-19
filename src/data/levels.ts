@@ -46,11 +46,20 @@ export type StageConceptId =
   | 'cinder_slag_canal'
   | 'clockwork_gear_bridge'
   | 'magma_crucible_arena'
-  | 'iron_core_citadel';
+  | 'iron_core_citadel'
+  | 'shadowfen_lantern_bog'
+  | 'sunken_totem_ruins'
+  | 'venom_alchemist_marsh'
+  | 'eclipse_oak_bastion'
+  | 'starfall_glacier_bridge'
+  | 'chrono_prism_vault'
+  | 'solar_plasma_reactor'
+  | 'astral_nexus_throne';
 
 export interface LevelSpec {
   id: number;
   biome: 'forest' | 'canyon' | 'cavern' | 'snow' | 'foundry';
+  regionKey?: string;
   concept: StageConceptId;
   nameKey: string;
   unlocked: boolean;
@@ -69,7 +78,7 @@ export interface LevelSpec {
   waves: WaveSpec[];
 }
 
-export const LEVELS: LevelSpec[] = [
+const BASE_LEVELS: LevelSpec[] = [
   {
     id: 1,
     biome: 'forest',
@@ -1227,6 +1236,220 @@ export const LEVELS: LevelSpec[] = [
     ],
   },
 ];
+
+function cloneGeometryMirrored(
+  tpl: LevelSpec,
+  mirrorX: boolean,
+  extraRunes: string[] = [],
+): Pick<LevelSpec, 'path' | 'secondaryPath' | 'slots' | 'lanterns' | 'heroStart' | 'barrels' | 'iceZones'> {
+  const fx = (x: number) => (mirrorX ? (x === 0 ? 0 : -x) : x);
+  const flipVec = (v: Vec2): Vec2 => ({ x: fx(v.x), z: v.z });
+  return {
+    path: tpl.path.map(flipVec),
+    secondaryPath: tpl.secondaryPath?.map(flipVec),
+    slots: tpl.slots.map((s) => ({
+      ...s,
+      x: fx(s.x),
+      runeSlot: Boolean(s.runeSlot || extraRunes.includes(s.id)),
+      stumpClearCost: s.stumpClearCost ? s.stumpClearCost + 5 : undefined,
+    })),
+    lanterns: tpl.lanterns.map(flipVec),
+    heroStart: flipVec(tpl.heroStart),
+    barrels: tpl.barrels?.map((b) => ({ ...b, x: fx(b.x) })),
+    iceZones: tpl.iceZones?.map((iz) => ({ ...iz, x: fx(iz.x) })),
+  };
+}
+
+function buildScaledWaves(
+  baseWaves: WaveSpec[],
+  hpMult: number,
+  bonusMult: number,
+  enemySwaps: Partial<Record<EnemyId, EnemyId>> = {},
+): WaveSpec[] {
+  return baseWaves.map((w) => ({
+    waveNumber: w.waveNumber,
+    clearBonus: Math.round(w.clearBonus * bonusMult),
+    announceEnemy: w.announceEnemy ? (enemySwaps[w.announceEnemy] ?? w.announceEnemy) : undefined,
+    groups: w.groups.map((g) => ({
+      ...g,
+      enemyId: enemySwaps[g.enemyId] ?? g.enemyId,
+      hpOverride: g.hpOverride !== undefined ? Math.round(g.hpOverride * hpMult) : undefined,
+      bountyOverride:
+        g.bountyOverride !== undefined ? Math.round(g.bountyOverride * 1.12) : undefined,
+    })),
+  }));
+}
+
+function createExtendedLevels(base: LevelSpec[]): LevelSpec[] {
+  const byId = (id: number) => base.find((l) => l.id === id) ?? base[base.length - 1];
+  const waveTpl = byId(16).waves;
+
+  const defs: Array<{
+    id: number;
+    biome: LevelSpec['biome'];
+    regionKey: string;
+    concept: StageConceptId;
+    tplId: number;
+    mirrorX: boolean;
+    extraRunes: string[];
+    isBossStage?: boolean;
+    mapPin: { xPct: number; yPct: number };
+    startGold: number;
+    killZoneMeters: number;
+    hpMult: number;
+    bonusMult: number;
+    addBarrels?: Array<{ id: string; x: number; z: number }>;
+    swaps?: Partial<Record<EnemyId, EnemyId>>;
+  }> = [
+    // BÖLÜM VI — ALACAKARANLIK BATAKLIĞI (17–20)
+    {
+      id: 17,
+      biome: 'forest',
+      regionKey: 'map.region.shadowfen',
+      concept: 'shadowfen_lantern_bog',
+      tplId: 13,
+      mirrorX: true,
+      extraRunes: ['slot_2'],
+      mapPin: { xPct: 72, yPct: 40 },
+      startGold: 700,
+      killZoneMeters: 19.5,
+      hpMult: 1.08,
+      bonusMult: 1.22,
+      swaps: { turbo_hopper: 'chomp_brute' },
+    },
+    {
+      id: 18,
+      biome: 'canyon',
+      regionKey: 'map.region.shadowfen',
+      concept: 'sunken_totem_ruins',
+      tplId: 14,
+      mirrorX: true,
+      extraRunes: ['slot_2', 'slot_4'],
+      mapPin: { xPct: 76, yPct: 40 },
+      startGold: 730,
+      killZoneMeters: 19.8,
+      hpMult: 1.15,
+      bonusMult: 1.3,
+      addBarrels: [
+        { id: 'barrel_1', x: -1.6, z: 2.0 },
+        { id: 'barrel_2', x: 1.6, z: 2.0 },
+      ],
+      swaps: { hover_drone: 'repair_drone' },
+    },
+    {
+      id: 19,
+      biome: 'cavern',
+      regionKey: 'map.region.shadowfen',
+      concept: 'venom_alchemist_marsh',
+      tplId: 15,
+      mirrorX: true,
+      extraRunes: ['slot_2', 'slot_4'],
+      mapPin: { xPct: 80, yPct: 40 },
+      startGold: 760,
+      killZoneMeters: 20.0,
+      hpMult: 1.22,
+      bonusMult: 1.38,
+      swaps: { swarm_saw: 'turbo_hopper' },
+    },
+    {
+      id: 20,
+      biome: 'forest',
+      regionKey: 'map.region.shadowfen',
+      concept: 'eclipse_oak_bastion',
+      tplId: 12,
+      mirrorX: true,
+      extraRunes: ['slot_2', 'slot_3'],
+      isBossStage: true,
+      mapPin: { xPct: 84, yPct: 40 },
+      startGold: 800,
+      killZoneMeters: 20.5,
+      hpMult: 1.3,
+      bonusMult: 1.47,
+      swaps: { cryo_colossus: 'magma_overlord' },
+    },
+    // BÖLÜM VII — YILDIZ ÇEKİRDEĞİ HİSARI (21–24)
+    {
+      id: 21,
+      biome: 'snow',
+      regionKey: 'map.region.astral',
+      concept: 'starfall_glacier_bridge',
+      tplId: 10,
+      mirrorX: true,
+      extraRunes: ['slot_2', 'slot_4'],
+      mapPin: { xPct: 87, yPct: 40 },
+      startGold: 830,
+      killZoneMeters: 20.8,
+      hpMult: 1.38,
+      bonusMult: 1.56,
+    },
+    {
+      id: 22,
+      biome: 'cavern',
+      regionKey: 'map.region.astral',
+      concept: 'chrono_prism_vault',
+      tplId: 9,
+      mirrorX: true,
+      extraRunes: ['slot_4', 'slot_5'],
+      mapPin: { xPct: 90, yPct: 40 },
+      startGold: 860,
+      killZoneMeters: 21.0,
+      hpMult: 1.47,
+      bonusMult: 1.66,
+      swaps: { hover_drone: 'repair_drone' },
+    },
+    {
+      id: 23,
+      biome: 'foundry',
+      regionKey: 'map.region.astral',
+      concept: 'solar_plasma_reactor',
+      tplId: 13,
+      mirrorX: false,
+      extraRunes: ['slot_1', 'slot_4'],
+      mapPin: { xPct: 93, yPct: 40 },
+      startGold: 900,
+      killZoneMeters: 21.2,
+      hpMult: 1.56,
+      bonusMult: 1.77,
+    },
+    {
+      id: 24,
+      biome: 'foundry',
+      regionKey: 'map.region.astral',
+      concept: 'astral_nexus_throne',
+      tplId: 16,
+      mirrorX: false,
+      extraRunes: ['slot_1', 'slot_2', 'slot_3'],
+      isBossStage: true,
+      mapPin: { xPct: 96, yPct: 40 },
+      startGold: 950,
+      killZoneMeters: 21.5,
+      hpMult: 1.66,
+      bonusMult: 1.9,
+    },
+  ];
+
+  return defs.map((d) => {
+    const geom = cloneGeometryMirrored(byId(d.tplId), d.mirrorX, d.extraRunes);
+    return {
+      id: d.id,
+      biome: d.biome,
+      regionKey: d.regionKey,
+      concept: d.concept,
+      nameKey: `level.${d.id}.name`,
+      unlocked: false,
+      ...(d.isBossStage ? { isBossStage: true } : {}),
+      mapPin: d.mapPin,
+      startGold: d.startGold,
+      baseHp: 150,
+      killZoneMeters: d.killZoneMeters,
+      ...geom,
+      ...(d.addBarrels ? { barrels: d.addBarrels } : {}),
+      waves: buildScaledWaves(waveTpl, d.hpMult, d.bonusMult, d.swaps),
+    };
+  });
+}
+
+export const LEVELS: LevelSpec[] = [...BASE_LEVELS, ...createExtendedLevels(BASE_LEVELS)];
 
 export function isLevelUnlocked(levelId: number, levelStars: Record<number, number>): boolean {
   if (levelId <= 10) return true;

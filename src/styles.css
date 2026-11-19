@@ -1345,7 +1345,7 @@ body,
   top: 0;
   left: 0;
   bottom: 0;
-  width: 360%;
+  width: 520%;
   transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
   will-change: transform;
 }
@@ -1358,7 +1358,7 @@ body,
 }
 
 .map-horiz-bg-tile {
-  flex: 1 1 25%;
+  flex: 1 1 16.6667%;
   height: 100%;
   background-size: cover;
   background-position: center;
@@ -1376,15 +1376,14 @@ body,
   background: linear-gradient(
     90deg,
     rgba(30, 74, 46, 0.24) 0%,
-    rgba(30, 74, 46, 0.14) 18%,
-    rgba(168, 86, 36, 0.30) 26%,
-    rgba(168, 86, 36, 0.22) 38%,
-    rgba(42, 34, 92, 0.42) 45%,
-    rgba(36, 68, 96, 0.32) 56%,
-    rgba(130, 184, 224, 0.36) 64%,
-    rgba(110, 168, 214, 0.28) 76%,
-    rgba(128, 38, 20, 0.44) 84%,
-    rgba(92, 24, 16, 0.46) 100%
+    rgba(30, 74, 46, 0.14) 12%,
+    rgba(168, 86, 36, 0.28) 18%,
+    rgba(42, 34, 92, 0.38) 31%,
+    rgba(110, 168, 214, 0.30) 44%,
+    rgba(128, 38, 20, 0.42) 58%,
+    rgba(28, 92, 66, 0.38) 74%,
+    rgba(34, 42, 108, 0.44) 90%,
+    rgba(26, 28, 88, 0.46) 100%
   );
 }
 

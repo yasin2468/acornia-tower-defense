@@ -321,6 +321,6 @@ describe('Paket 5 — 16 benzersiz bölüm konsepti, 3B sahne kurgusu ve TR/EN y
         assert.notEqual(t(loc, sKey), sKey, `${loc} eksik: ${sKey}`);
       }
     }
-    assert.equal(concepts.size, 16, '16 bölümün konsept kimlikleri birbirinden tamamen farklı olmalı');
+    assert.equal(concepts.size, 24, '24 bölümün konsept kimlikleri birbirinden tamamen farklı olmalı');
   });
 });
