@@ -1,8 +1,7 @@
 import { easeOutCubic, GhostHpTracker, popScale } from '../core/JuiceController.ts';
 import {
   computeBattleStars,
-  VICTORY_GEM_REWARD,
-  VICTORY_OAK_REWARD,
+  computeVictoryRewards,
   type SimulationEngine,
 } from '../core/SimulationEngine.ts';
 import { ENEMIES, HEROES, resolveHeroVisualVariant, type EnemyId } from '../data/enemies.ts';
@@ -953,7 +952,7 @@ export class BattleView {
     const prioBtn = host.querySelector<HTMLButtonElement>('#btn-cycle-prio');
     if (prioBtn && this.selectedSlotId) {
       prioBtn.onclick = () => {
-        const order: TargetingPriority[] = ['first', 'strongest', 'weakest', 'closest'];
+        const order: TargetingPriority[] = ['first', 'smart', 'strongest', 'weakest', 'closest'];
         const cur = sim.slots.get(this.selectedSlotId!)?.tower?.priority ?? 'first';
         const next = order[(order.indexOf(cur) + 1) % order.length];
         sim.dispatch({ type: 'SET_TARGETING', slotId: this.selectedSlotId!, priority: next });
@@ -1001,6 +1000,7 @@ export class BattleView {
 
     if (sim.status === 'won') {
       const stars = computeBattleStars(sim.baseHp, sim.ironMode);
+      const rewards = computeVictoryRewards(sim.level.id, stars, sim.ironMode);
       const isExpedition = sim.level.id > 100;
       const expStage = Math.max(1, sim.level.id - 100);
       const isExpeditionMid = isExpedition && expStage < 5;
@@ -1011,7 +1011,7 @@ export class BattleView {
         ? t(loc, 'rogue.pickTitle')
         : isExpedition
           ? `+${EXPEDITION_CLEAR_OAK} ${t(loc, 'cur.oak')} · +${EXPEDITION_CLEAR_GEMS} ${t(loc, 'cur.gem')}`
-          : `+${VICTORY_OAK_REWARD} ${t(loc, 'cur.oak')} · +${VICTORY_GEM_REWARD} ${t(loc, 'cur.gem')}`;
+          : `+${rewards.oak} ${t(loc, 'cur.oak')} · +${rewards.gems} ${t(loc, 'cur.gem')}`;
       return `
         <div class="modal-backdrop">
           <div class="modal-card">
@@ -1083,9 +1083,11 @@ export class BattleView {
     if (doubleBtn) {
       doubleBtn.onclick = async () => {
         await this.adService.showRewarded('victory_2x');
+        const stars = computeBattleStars(sim.baseHp, sim.ironMode);
+        const rewards = computeVictoryRewards(sim.level.id, stars, sim.ironMode);
         this.saveManager.update((d) => {
-          d.oakCoins += VICTORY_OAK_REWARD;
-          d.emeraldGems += VICTORY_GEM_REWARD;
+          d.oakCoins += rewards.oak;
+          d.emeraldGems += rewards.gems;
         });
         this.callbacks.onExitToMap();
       };

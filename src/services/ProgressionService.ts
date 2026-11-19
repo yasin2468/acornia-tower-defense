@@ -12,6 +12,8 @@ import {
   computeTotalEarnedStars,
   createInitialTalents,
   getNextTalentCost,
+  getTalentSpec,
+  isTalentNodeUnlocked,
   type TalentBranchId,
 } from '../data/talents.ts';
 import { CARD_MAX_LEVEL, TOWER_LIST, type HatId } from '../data/towers.ts';
@@ -157,8 +159,10 @@ export function openForestChest(
 
 export function upgradeTalent(saveManager: SaveManager, branchId: TalentBranchId): boolean {
   const s = saveManager.get();
-  const curRank = clampTalentRank(s.talents[branchId]);
-  const cost = getNextTalentCost(curRank);
+  const spec = getTalentSpec(branchId);
+  if (!spec || !isTalentNodeUnlocked(branchId, s.talents)) return false;
+  const curRank = clampTalentRank(s.talents[branchId], spec.maxRank);
+  const cost = getNextTalentCost(curRank, branchId);
   if (cost === null) return false;
   const available = computeAvailableTalentStars(s.levelStars, s.ironCleared, s.talents);
   if (available < cost) return false;

@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { SoundEngine } from '../src/audio/SoundEngine.ts';
-import { FIXED_DT, SimulationEngine } from '../src/core/SimulationEngine.ts';
+import { computeVictoryRewards, FIXED_DT, SimulationEngine } from '../src/core/SimulationEngine.ts';
 import { ENEMY_LIST, HEROES } from '../src/data/enemies.ts';
 import { getEnemyBadgeUrl } from '../src/ui/icons.ts';
 import { LEVELS } from '../src/data/levels.ts';
-import { TOWERS } from '../src/data/towers.ts';
+import { TOWER_LIST, TOWERS } from '../src/data/towers.ts';
 import {
   advanceExpeditionStage,
   buildExpeditionLevelSpec,
@@ -29,10 +29,13 @@ import {
 } from '../src/data/season.ts';
 import { BillingService, HapticsService, type NativeBridgeHooks } from '../src/services/CommercialServices.ts';
 import {
+  TALENT_BRANCHES,
   computeAvailableTalentStars,
   computeTalentModifiers,
   computeTotalEarnedStars,
+  isTalentNodeUnlocked,
 } from '../src/data/talents.ts';
+import { NetworkService } from '../src/services/NetworkService.ts';
 import { MODEL_NAMES } from '../src/rendering/AssetLoader.ts';
 import {
   claimAchievement,
@@ -512,5 +515,157 @@ describe('F3-5 & F4-Hazırlık — 14 Günlük Kupa Ligi, 30 Kademeli Orman Bile
     }
     assert.equal(claimDailyQuestBonus(sm, NOW), true);
     assert.ok(sm.get().emeraldGems >= gemsBeforeBonus + DAILY_QUEST_BONUS_GEMS);
+  });
+});
+
+describe('F5 — 10 Düğümlü Ulu Meşe Yetenek Ağacı, Akıllı Yapay Zeka, Ekonomi ve Birim Matematiği', () => {
+  it('10 yetenek düğümü ikonları/ağaç arka planı mevcut ve ebeveyn kilidi/çarpanları doğru çalışır', () => {
+    assert.equal(TALENT_BRANCHES.length, 10);
+    assert.ok(fs.existsSync(path.resolve('public/ui/oak/talent_tree_bg.jpg')));
+    for (const branch of TALENT_BRANCHES) {
+      const p = path.resolve(`public/ui/oak/talent_${branch.id}.png`);
+      assert.ok(fs.existsSync(p), `talent_${branch.id}.png eksik`);
+      const hdr = fs.readFileSync(p).subarray(12, 16).toString('ascii');
+      assert.equal(hdr, 'IHDR');
+    }
+
+    const sm = new SaveManager(NOW);
+    sm.update((s) => {
+      s.levelStars = { 1: 3, 2: 3, 3: 3, 4: 3, 5: 3 }; // 15 yıldız
+    });
+    assert.equal(isTalentNodeUnlocked('siege_ordnance', sm.get().talents), false);
+    assert.equal(upgradeTalent(sm, 'siege_ordnance'), false, 'tower_power < 2 iken kilitli olmalı');
+
+    assert.equal(upgradeTalent(sm, 'tower_power'), true);
+    assert.equal(upgradeTalent(sm, 'tower_power'), true); // Sv.2 -> siege_ordnance açılır
+    assert.equal(isTalentNodeUnlocked('siege_ordnance', sm.get().talents), true);
+    assert.equal(upgradeTalent(sm, 'siege_ordnance'), true);
+    assert.equal(upgradeTalent(sm, 'siege_ordnance'), true); // Sv.2 -> apex_warlord açılır
+    assert.equal(isTalentNodeUnlocked('apex_warlord', sm.get().talents), true);
+    assert.equal(upgradeTalent(sm, 'apex_warlord'), true);
+
+    const richTalents = {
+      tower_power: 2,
+      hero_soul: 2,
+      forest_magic: 2,
+      start_economy: 2,
+      siege_ordnance: 3,
+      pack_warden: 3,
+      frost_alchemy: 3,
+      war_logistics: 3,
+      apex_warlord: 2,
+      world_tree_aegis: 3,
+    };
+    const sim = new SimulationEngine(LEVELS[0], { seed: 9101, talents: richTalents });
+    assert.equal(sim.maxBaseHp, LEVELS[0].baseHp + 54, 'world_tree_aegis +54 kale canı eklemeli');
+    const lockedStump = Array.from(sim.slots.values()).find((s) => s.stumpLocked)!;
+    assert.ok(lockedStump.stumpClearCost < 40, 'war_logistics kütük açma maliyetini düşürmeli');
+
+    sim.gold = 500;
+    sim.dispatch({ type: 'BUILD_TOWER', slotId: 'slot_1', towerId: 'beaver' }, 'p1', 0);
+    sim.step(FIXED_DT);
+    const beaver = sim.slots.get('slot_1')!.tower!;
+    assert.ok((sim.getTowerStats(beaver).aoeRadius ?? 0) > TOWERS.beaver.tier1.aoeRadius!, 'siege_ordnance AoE artırmalı');
+
+    const barrel = sim.barrels.values().next().value;
+    if (barrel) {
+      const bot = sim.spawnEnemy('crystal_golem', 500, 0.01, 18, { x: barrel.x, z: barrel.z, wpIndex: 2, progress: 5 });
+      sim.dispatch({ type: 'DETONATE_BARREL', barrelId: barrel.id }, 'p1', 0);
+      sim.step(FIXED_DT);
+      assert.ok(bot.hp < 430, 'siege_ordnance fıçı hasarını artırmalı');
+    }
+
+    assert.equal(resetTalents(sm), true);
+  });
+
+  it('akıllı hedefleme (cluster + smart şifacı önceliği), Gümüş Kurt pasif yavaşlatması ve SmartBotDirector çalışır', () => {
+    // 1. Cluster havan AI: önde tekil robot yerine gerideki 3'lü kümeyi bombalar
+    const simCluster = new SimulationEngine(LEVELS[0], { seed: 9201 });
+    simCluster.gold = 300;
+    simCluster.dispatch({ type: 'BUILD_TOWER', slotId: 'slot_3', towerId: 'beaver' }, 'p1', 0);
+    simCluster.step(FIXED_DT);
+    const frontSolo = simCluster.spawnEnemy('scout_bot', 100, 0.01, 5, { x: -2.5, z: -2.0, wpIndex: 7, progress: 22 });
+    const pack1 = simCluster.spawnEnemy('swarm_saw', 50, 0.01, 3, { x: 0.4, z: 0.5, wpIndex: 4, progress: 12 });
+    simCluster.spawnEnemy('swarm_saw', 50, 0.01, 3, { x: 0.6, z: 0.6, wpIndex: 4, progress: 12 });
+    simCluster.spawnEnemy('swarm_saw', 50, 0.01, 3, { x: 0.3, z: 0.7, wpIndex: 4, progress: 12 });
+    const beaver = simCluster.slots.get('slot_3')!.tower!;
+    const clusterPicked = simCluster.selectTarget(beaver);
+    assert.notEqual(clusterPicked?.uid, frontSolo.uid);
+    assert.equal(Math.hypot(clusterPicked!.x - pack1.x, clusterPicked!.z - pack1.z) < 0.6, true);
+
+    // 2. Smart mod Şahin: onarım dronunu (şifacı + uçan) standart izciye göre önceliklendirir
+    const simSmart = new SimulationEngine(LEVELS[0], { seed: 9202 });
+    simSmart.gold = 300;
+    simSmart.dispatch({ type: 'BUILD_TOWER', slotId: 'slot_3', towerId: 'falcon' }, 'p1', 0);
+    simSmart.step(FIXED_DT);
+    simSmart.spawnEnemy('scout_bot', 80, 0.01, 5, { x: -0.5, z: 0.2, wpIndex: 5, progress: 16 });
+    const healerDrone = simSmart.spawnEnemy('repair_drone', 92, 0.01, 9, { x: 0.2, z: 0.4, wpIndex: 4, progress: 13 });
+    const falcon = simSmart.slots.get('slot_3')!.tower!;
+    assert.equal(falcon.priority, 'smart');
+    assert.equal(simSmart.selectTarget(falcon)?.uid, healerDrone.uid);
+
+    // 3. Gümüş Kurt pasif pençe şoku ayaz yavaşlatması uygular
+    const simWolf = new SimulationEngine(LEVELS[0], { seed: 9203, heroId: 'ay_kurdu' });
+    const runner = simWolf.spawnEnemy('scout_bot', 250, 0.01, 5, {
+      x: simWolf.hero.x + 0.5,
+      z: simWolf.hero.z,
+      wpIndex: 2,
+      progress: 5,
+    });
+    simWolf.hero.clawShockCooldown = 0.01;
+    simWolf.step(FIXED_DT);
+    assert.ok(runner.slowTimer > 0 && runner.slowPct >= 0.3, 'Gümüş Kurt pasif şoku ayaz yavaşlatması uygulamalı');
+
+    // 4. SmartBotDirector: duman temizleme + çeşitli kule kurma + yükseltme
+    const net = new NetworkService('ws://localhost:0');
+    (net as unknown as { state: string; isBotMatch: boolean; mode: string; botTimer: number }).state = 'in_match';
+    (net as unknown as { isBotMatch: boolean }).isBotMatch = true;
+    (net as unknown as { mode: string }).mode = 'coop';
+    const simCoop = new SimulationEngine(LEVELS[6], { seed: 9204, extraStartGold: 600 });
+    net.stepBot(10, simCoop); // açılış +25 altın hediyesi
+    simCoop.step(FIXED_DT);
+    assert.equal(simCoop.gold, LEVELS[6].startGold + 600 + 25);
+
+    (net as unknown as { botTimer: number }).botTimer = 0;
+    net.stepBot(1, simCoop); // dalgaya göre 1. kule inşa
+    simCoop.step(FIXED_DT);
+    (net as unknown as { botTimer: number }).botTimer = 0;
+    net.stepBot(1, simCoop); // 2. rol kule inşa
+    simCoop.step(FIXED_DT);
+    const built = Array.from(simCoop.slots.values()).filter((s) => s.tower);
+    assert.ok(built.length >= 2, 'SmartBotDirector birden fazla stratejik kule kurmalı');
+
+    built[0].tower!.smokedTimer = 4.0;
+    net.stepBot(0.1, simCoop);
+    simCoop.step(FIXED_DT);
+    assert.equal(built[0].tower!.smokedTimer, 0, 'SmartBotDirector dumanı hemen dağıtmalı');
+  });
+
+  it('8 kulenin tamamında pozitif kademe artışı ve bölüm ölçekli zafer ekonomisi geçerlidir', () => {
+    const rawDps = (d: number, r: number, critC = 0, critM = 2) =>
+      d * r * (1 + critC * (critM - 1));
+
+    for (const tw of TOWER_LIST) {
+      const dps1 = rawDps(tw.tier1.damage, tw.tier1.fireRate, tw.tier1.critChance, tw.tier1.critMultiplier);
+      const dps2 = rawDps(tw.tier2.damage, tw.tier2.fireRate, tw.tier2.critChance, tw.tier2.critMultiplier);
+      assert.ok(dps2 > dps1, `${tw.id} T2 DPS > T1 DPS olmalı`);
+      for (const evo of tw.evolutions) {
+        const s = evo.stats;
+        const dps3 =
+          rawDps(s.damage, s.fireRate, s.critChance, s.critMultiplier) *
+          (s.chainCount ? 1.35 : 1) +
+          (s.resinDps ?? 0) * 0.5;
+        assert.ok(dps3 > dps2, `${evo.id} Kademe 3 efektif güç T2 üstünde olmalı`);
+      }
+    }
+
+    const r1 = computeVictoryRewards(1, 3, false);
+    const r8 = computeVictoryRewards(8, 3, false);
+    const r16 = computeVictoryRewards(16, 3, false);
+    const r16Iron = computeVictoryRewards(16, 3, true);
+    assert.equal(r1.oak, 120);
+    assert.equal(r1.gems, 15);
+    assert.ok(r8.oak > r1.oak && r16.oak > r8.oak, 'Palamut zafer ödülü bölüme göre monoton artmalı');
+    assert.ok(r16Iron.oak > r16.oak && r16Iron.gems > r16.gems, 'Demir Mod ek ödül vermeli');
   });
 });

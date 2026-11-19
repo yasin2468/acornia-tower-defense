@@ -1,6 +1,7 @@
 import type { GameCommandInput } from '../core/CommandBus.ts';
 import type { SimulationEngine } from '../core/SimulationEngine.ts';
-import type { EnemyId } from '../data/enemies.ts';
+import { ENEMIES, type EnemyId } from '../data/enemies.ts';
+import { TOWERS, type TowerId } from '../data/towers.ts';
 import type { MultiMode, PlayerRole, SocialEmoteId, WsClientMessage, WsServerMessage } from '../server/wsRelay.ts';
 
 export type { SocialEmoteId };
@@ -48,6 +49,7 @@ export class NetworkService {
   private pendingJoinResolve: ((ok: boolean) => void) | null = null;
   private botTimer = 6.5;
   private botEmoteSentWave3 = false;
+  private botActionCount = 0;
 
   constructor(wsUrl?: string) {
     if (wsUrl) {
@@ -330,6 +332,7 @@ export class NetworkService {
     this.peerMaxBaseHp = 150;
     this.botTimer = 6.5;
     this.botEmoteSentWave3 = false;
+    this.botActionCount = 0;
     this.onStateChange?.();
     this.onMatchStart?.({
       roomCode: this.roomCode,
@@ -406,23 +409,124 @@ export class NetworkService {
       this.botEmoteSentWave3 = true;
       this.onSocialPing?.('laugh_beaver', 'p2');
     }
+
+    const slots = Array.from(sim.slots.values());
+    const smokedSlot = slots.find((s) => s.tower && s.tower.smokedTimer > 0);
+    if (smokedSlot) {
+      sim.dispatchRemote({ type: 'CLEAR_SMOKE', slotId: smokedSlot.id }, 'p2');
+      return;
+    }
+
     this.botTimer -= dt;
     if (this.botTimer > 0) return;
 
     if (this.mode === 'coop') {
-      this.botTimer = 9.0;
-      if (sim.coopReserves.p2 >= 25) {
+      this.botTimer = 6.0;
+      if (this.botActionCount === 0 && sim.coopReserves.p2 >= 25) {
+        this.botActionCount += 1;
         sim.dispatchRemote({ type: 'COOP_GIFT_GOLD', fromRole: 'p2', amount: 25 }, 'p2');
-      } else {
-        const freeSlot = Array.from(sim.slots.values()).find((s) => !s.stumpLocked && !s.tower);
-        if (freeSlot && sim.gold >= 130) {
-          sim.dispatchRemote({ type: 'BUILD_TOWER', slotId: freeSlot.id, towerId: 'squirrel' }, 'p2');
+        return;
+      }
+      const curWave = sim.level.waves[Math.max(0, sim.currentWaveIndex)];
+      const nextWave = sim.level.waves[Math.min(sim.level.waves.length - 1, Math.max(0, sim.currentWaveIndex + 1))];
+      const inspectGroups = [...(curWave?.groups ?? []), ...(nextWave?.groups ?? [])];
+      const hasFlying = inspectGroups.some((g) => ENEMIES[g.enemyId].isFlying);
+      const hasArmor = inspectGroups.some((g) => ENEMIES[g.enemyId].armor >= 0.3);
+      const hasSwarm = inspectGroups.some((g) => g.count >= 16);
+
+      const allowed = new Set<TowerId>(
+        sim.allowedTowers ?? ['squirrel', 'beaver', 'owl', 'hedgehog', 'badger', 'falcon', 'tortoise', 'lynx'],
+      );
+      const builtTowers = slots.map((s) => s.tower).filter((t): t is NonNullable<typeof t> => Boolean(t));
+      const freeSlot = slots.find((s) => !s.stumpLocked && !s.tower);
+      const countByTower = (id: TowerId): number => builtTowers.filter((t) => t.towerId === id).length;
+
+      // 1. Öncelik: Hava/Zırh/Sürü tehditlerini incele ve eksik karşı rolü boş slota inşa et
+      const pickBestTower = (): TowerId => {
+        const candidates: TowerId[] = [];
+        if (hasFlying && countByTower('falcon') + countByTower('squirrel') < 2) {
+          candidates.push('falcon', 'squirrel', 'owl');
+        }
+        if (hasArmor && countByTower('hedgehog') + countByTower('badger') < 2) {
+          candidates.push('hedgehog', 'badger', 'lynx');
+        }
+        if (hasSwarm && countByTower('beaver') + countByTower('tortoise') < 2) {
+          candidates.push('beaver', 'tortoise', 'badger');
+        }
+        candidates.push('falcon', 'badger', 'beaver', 'hedgehog', 'owl', 'lynx', 'tortoise', 'squirrel');
+        const valid = candidates.filter((id) => allowed.has(id));
+        const unbuilt = valid.find((id) => countByTower(id) === 0);
+        return unbuilt ?? valid[this.botActionCount % Math.max(1, valid.length)] ?? 'squirrel';
+      };
+
+      if (freeSlot && (builtTowers.length < 3 || sim.currentWaveIndex <= 1)) {
+        const chosen = pickBestTower();
+        const cost = TOWERS[chosen].tier1.cost;
+        if (sim.gold >= cost) {
+          this.botActionCount += 1;
+          sim.dispatchRemote({ type: 'BUILD_TOWER', slotId: freeSlot.id, towerId: chosen }, 'p2');
+          return;
         }
       }
+
+      // 2. Kademe 1 veya Kademe 2 mevcut kuleyi yükselt / evrimleştir
+      const t2Candidate = builtTowers.find((t) => t.tier === 2);
+      if (t2Candidate) {
+        const spec = TOWERS[t2Candidate.towerId];
+        const branch =
+          hasArmor && spec.evolutions[1] ? spec.evolutions[1] : spec.evolutions[this.botActionCount % 2] ?? spec.evolutions[0];
+        if (sim.gold >= branch.stats.cost) {
+          this.botActionCount += 1;
+          sim.dispatchRemote(
+            { type: 'EVOLVE_TOWER', slotId: t2Candidate.slotId, branchId: branch.id },
+            'p2',
+          );
+          return;
+        }
+      }
+
+      const t1Candidate = builtTowers.find((t) => t.tier === 1 && sim.gold >= TOWERS[t.towerId].tier2.cost);
+      if (t1Candidate) {
+        this.botActionCount += 1;
+        sim.dispatchRemote({ type: 'UPGRADE_TOWER', slotId: t1Candidate.slotId }, 'p2');
+        return;
+      }
+
+      if (freeSlot) {
+        const chosen = pickBestTower();
+        if (sim.gold >= TOWERS[chosen].tier1.cost) {
+          this.botActionCount += 1;
+          sim.dispatchRemote({ type: 'BUILD_TOWER', slotId: freeSlot.id, towerId: chosen }, 'p2');
+          return;
+        }
+      }
+
+      const stumpSlot = slots.find((s) => s.stumpLocked && sim.gold >= s.stumpClearCost + 50);
+      if (stumpSlot) {
+        this.botActionCount += 1;
+        sim.dispatchRemote({ type: 'CLEAR_STUMP', slotId: stumpSlot.id }, 'p2');
+        return;
+      }
+
+      if (sim.gold < 75 && sim.coopReserves.p2 >= 25) {
+        this.botActionCount += 1;
+        sim.dispatchRemote({ type: 'COOP_GIFT_GOLD', fromRole: 'p2', amount: 25 }, 'p2');
+      }
     } else {
-      this.botTimer = 11.0;
-      const merc: EnemyId = sim.currentWaveIndex >= 2 ? 'shield_loader' : 'scout_bot';
+      this.botTimer = 9.5;
+      this.botActionCount += 1;
+      const w = Math.max(0, sim.currentWaveIndex);
+      const mercPool: EnemyId[] =
+        w >= 3
+          ? ['shield_loader', 'chomp_brute', 'turbo_hopper']
+          : w >= 1
+            ? ['turbo_hopper', 'shield_loader', 'scout_bot']
+            : ['scout_bot', 'turbo_hopper'];
+      const merc = mercPool[this.botActionCount % mercPool.length];
       this.onPvpIncoming?.(merc, 'p2');
+      if (this.botActionCount % 3 === 0) {
+        this.onSocialPing?.('cool_squirrel', 'p2');
+      }
     }
   }
 

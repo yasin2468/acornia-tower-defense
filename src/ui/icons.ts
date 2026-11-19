@@ -1,5 +1,6 @@
 import type { AuraId, BannerId } from '../data/accessories.ts';
 import type { EnemyId, HeroId } from '../data/enemies.ts';
+import type { TalentBranchId } from '../data/talents.ts';
 import type { HatId, TowerId } from '../data/towers.ts';
 
 function resolvePublicUrl(relPath: string): string {
@@ -49,6 +50,19 @@ export const BANNER_ICON_URLS: Record<BannerId, string> = {
   crimson_flame: resolvePublicUrl('ui/oak/acc_banner_crimson_flame.png'),
 };
 
+export const TALENT_ICON_URLS: Record<TalentBranchId, string> = {
+  tower_power: resolvePublicUrl('ui/oak/talent_tower_power.png'),
+  hero_soul: resolvePublicUrl('ui/oak/talent_hero_soul.png'),
+  forest_magic: resolvePublicUrl('ui/oak/talent_forest_magic.png'),
+  start_economy: resolvePublicUrl('ui/oak/talent_start_economy.png'),
+  siege_ordnance: resolvePublicUrl('ui/oak/talent_siege_ordnance.png'),
+  pack_warden: resolvePublicUrl('ui/oak/talent_pack_warden.png'),
+  frost_alchemy: resolvePublicUrl('ui/oak/talent_frost_alchemy.png'),
+  war_logistics: resolvePublicUrl('ui/oak/talent_war_logistics.png'),
+  apex_warlord: resolvePublicUrl('ui/oak/talent_apex_warlord.png'),
+  world_tree_aegis: resolvePublicUrl('ui/oak/talent_world_tree_aegis.png'),
+};
+
 export const UI_ICON_URLS = {
   castleShield: resolvePublicUrl('ui/icon_castle_shield.png'),
   acornCoins: resolvePublicUrl('ui/icon_acorn_coins.png'),
@@ -76,6 +90,7 @@ export const KENNEY_UI_URLS = {
 
 export const OAK_UI_URLS = {
   worldMap: resolvePublicUrl('ui/oak/world_map_oak.jpg'),
+  talentTreeBg: resolvePublicUrl('ui/oak/talent_tree_bg.jpg'),
   navMap: resolvePublicUrl('ui/oak/nav_map.png'),
   navArena: resolvePublicUrl('ui/oak/nav_arena.png'),
   navUnits: resolvePublicUrl('ui/oak/nav_units.png'),

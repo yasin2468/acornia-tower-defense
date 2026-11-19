@@ -3,8 +3,7 @@ import { JuiceController } from './core/JuiceController.ts';
 import {
   FIXED_DT,
   SimulationEngine,
-  VICTORY_GEM_REWARD,
-  VICTORY_OAK_REWARD,
+  computeVictoryRewards,
   type SimEvent,
 } from './core/SimulationEngine.ts';
 import { getBannerSpec } from './data/accessories.ts';
@@ -514,11 +513,12 @@ function processBattleEvents(events: SimEvent[]): void {
         }
         analytics.track('expedition_stage_win', { levelId: currentLevelId, stars: ev.stars });
       } else {
+        const rewards = computeVictoryRewards(currentLevelId, ev.stars, currentIronMode);
         saveManager.update((d) => {
           d.levelStars[currentLevelId] = Math.max(d.levelStars[currentLevelId] ?? 0, ev.stars);
           if (currentIronMode) d.ironCleared[currentLevelId] = true;
-          d.oakCoins += VICTORY_OAK_REWARD;
-          d.emeraldGems += VICTORY_GEM_REWARD;
+          d.oakCoins += rewards.oak;
+          d.emeraldGems += rewards.gems;
         });
         const newlyUnlocked = grantCampaignHeroUnlocks(saveManager, currentLevelId);
         if (newlyUnlocked.length > 0) {

@@ -41,10 +41,11 @@ import {
 } from '../data/season.ts';
 import {
   TALENT_BRANCHES,
-  TALENT_MAX_RANK,
+  TALENT_MAP,
   computeAvailableTalentStars,
   computeSpentTalentStars,
   getNextTalentCost,
+  isTalentNodeUnlocked,
   type TalentBranchId,
 } from '../data/talents.ts';
 import { TOWER_LIST, TOWERS, type HatId, type TowerId } from '../data/towers.ts';
@@ -96,6 +97,7 @@ import {
   ICONS,
   OAK_UI_URLS,
   PORTRAIT_URLS,
+  TALENT_ICON_URLS,
   UI_ICON_URLS,
   getEnemyBadgeUrl,
   getJournalEntryPortraitUrl,
@@ -137,6 +139,7 @@ export class MetaView {
   showPatrolModal = false;
   showExpeditionModal = false;
   selectedJournalId = 'boz_pence';
+  selectedTalentId: TalentBranchId = 'tower_power';
   multiMode: MultiMode = 'coop';
   roomCode = '';
   statusNotice = '';
@@ -207,7 +210,8 @@ export class MetaView {
     const availableStars = computeAvailableTalentStars(save.levelStars, save.ironCleared, save.talents);
     let talentsSub = 0;
     for (const b of TALENT_BRANCHES) {
-      const cost = getNextTalentCost(save.talents[b.id] ?? 0);
+      if (!isTalentNodeUnlocked(b.id, save.talents)) continue;
+      const cost = getNextTalentCost(save.talents[b.id] ?? 0, b.id);
       if (cost !== null && availableStars >= cost) {
         talentsSub += 1;
       }
@@ -1166,47 +1170,147 @@ export class MetaView {
     } else if (this.cardsSubTab === 'accessories') {
       bodyHtml = this.renderAccessoriesSubTab(loc);
     } else {
-      const availableStars = computeAvailableTalentStars(save.levelStars, save.ironCleared, save.talents);
-      const spentStars = computeSpentTalentStars(save.talents);
-      const talentsHtml = TALENT_BRANCHES.map((b) => {
-        const rank = save.talents[b.id] ?? 0;
-        const cost = getNextTalentCost(rank);
-        const canBuy = cost !== null && availableStars >= cost;
-        const pips = Array.from({ length: TALENT_MAX_RANK }, (_, idx) => `<span class="talent-pip ${idx < rank ? 'on' : ''}"></span>`).join('');
-        return `
-          <div class="talent-branch-card">
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
-              <div style="font-size:12.5px; font-weight:900; color:#fff7e6;">${t(loc, b.nameKey)}</div>
-              <span class="collector-level-badge" style="position:static;">${rank}/${TALENT_MAX_RANK}</span>
-            </div>
-            <div style="font-size:10.5px; color:var(--text-muted); font-weight:700;">${t(loc, b.descKey)}</div>
-            <div style="font-size:10px; color:var(--accent-cyan); font-weight:700;">${t(loc, b.capKey)}</div>
-            <div class="talent-pips">${pips}</div>
-            <button class="btn btn-sm ${canBuy ? 'btn-gold' : ''}" data-talent-up="${b.id}" ${canBuy ? '' : 'disabled'}>
-              ${cost === null ? t(loc, 'talent.maxed') : tParams(loc, 'talent.upgradeCost', { cost })}
-            </button>
-          </div>
-        `;
-      }).join('');
-
-      bodyHtml = `
-        <div class="card-panel" style="display:flex; flex-direction:column; gap:8px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
-            <div>
-              <div style="font-size:13.5px; font-weight:900; color:#ffe17a;">${t(loc, 'talent.title')}</div>
-              <div style="font-size:11px; color:var(--accent-gold); font-weight:800;">${tParams(loc, 'talent.available', { stars: availableStars })}</div>
-            </div>
-            <button class="btn btn-sm" id="btn-talent-reset" ${spentStars > 0 ? '' : 'disabled'}>${t(loc, 'talent.reset')}</button>
-          </div>
-          <div class="talent-grid">${talentsHtml}</div>
-        </div>
-      `;
+      bodyHtml = this.renderTalentsSubTab(loc);
     }
 
     return `
       <div class="oak-section-title">${t(loc, 'cards.title')}</div>
       ${subNavHtml}
       ${bodyHtml}
+    `;
+  }
+
+  private renderTalentsSubTab(loc: Locale): string {
+    const save = this.saveManager.get();
+    const availableStars = computeAvailableTalentStars(save.levelStars, save.ironCleared, save.talents);
+    const spentStars = computeSpentTalentStars(save.talents);
+
+    const toX = (pct: number): number => Number(((pct / 100) * 380).toFixed(1));
+    const toY = (pct: number): number => Number(((pct / 100) * 390).toFixed(1));
+
+    const branchPaths: string[] = [];
+    for (const b of TALENT_BRANCHES) {
+      const rank = save.talents[b.id] ?? 0;
+      const unlocked = isTalentNodeUnlocked(b.id, save.talents);
+      const x2 = toX(b.treePos.xPct);
+      const y2 = toY(b.treePos.yPct);
+
+      if (b.parents.length === 0) {
+        const x1 = 190;
+        const y1 = 12;
+        const cy = Number(((y1 + y2) * 0.5).toFixed(1));
+        const cls = rank > 0 ? 'active' : 'unlocked';
+        const d = `M ${x1} ${y1} C ${x1} ${cy}, ${x2} ${cy}, ${x2} ${y2}`;
+        branchPaths.push(`<path class="talent-branch-glow ${cls}" d="${d}" />`);
+        branchPaths.push(`<path class="talent-branch-line ${cls}" d="${d}" />`);
+      } else {
+        for (const pId of b.parents) {
+          const parent = TALENT_MAP[pId];
+          const pRank = save.talents[pId] ?? 0;
+          const x1 = toX(parent.treePos.xPct);
+          const y1 = toY(parent.treePos.yPct);
+          const cy = Number(((y1 + y2) * 0.5).toFixed(1));
+          const cls = rank > 0 && pRank >= b.reqParentRank ? 'active' : unlocked && pRank >= b.reqParentRank ? 'unlocked' : 'locked';
+          const d = `M ${x1} ${y1} C ${x1} ${cy}, ${x2} ${cy}, ${x2} ${y2}`;
+          branchPaths.push(`<path class="talent-branch-glow ${cls}" d="${d}" />`);
+          branchPaths.push(`<path class="talent-branch-line ${cls}" d="${d}" />`);
+        }
+      }
+    }
+
+    const nodesHtml = TALENT_BRANCHES.map((b) => {
+      const rank = save.talents[b.id] ?? 0;
+      const unlocked = isTalentNodeUnlocked(b.id, save.talents);
+      const cost = getNextTalentCost(rank, b.id);
+      const maxed = cost === null;
+      const canBuy = unlocked && cost !== null && availableStars >= cost;
+      const selected = this.selectedTalentId === b.id;
+      const stateCls = !unlocked ? 'locked' : maxed ? 'maxed' : canBuy ? 'can-buy' : rank > 0 ? 'invested' : 'unlocked';
+      const badgeInner = !unlocked
+        ? `<span class="talent-lock-ico">${ICONS.lock}</span><span>${rank}/${b.maxRank}</span>`
+        : `${rank}/${b.maxRank}`;
+      return `
+        <button
+          type="button"
+          class="talent-tree-node tier-${b.tier} ${stateCls} ${selected ? 'selected' : ''}"
+          data-select-talent="${b.id}"
+          style="left:${b.treePos.xPct}%; top:${b.treePos.yPct}%; --node-accent:${b.accentHex};"
+          aria-label="${t(loc, b.nameKey)}"
+        >
+          <span class="talent-node-ring">
+            <img src="${TALENT_ICON_URLS[b.id]}" alt="${t(loc, b.nameKey)}" />
+          </span>
+          <span class="talent-node-rank">${badgeInner}</span>
+          <span class="talent-node-label">${t(loc, b.nameKey)}</span>
+        </button>
+      `;
+    }).join('');
+
+    const sel = TALENT_MAP[this.selectedTalentId] ?? TALENT_BRANCHES[0];
+    const selRank = save.talents[sel.id] ?? 0;
+    const selUnlocked = isTalentNodeUnlocked(sel.id, save.talents);
+    const selCost = getNextTalentCost(selRank, sel.id);
+    const selCanBuy = selUnlocked && selCost !== null && availableStars >= selCost;
+    const parentNames = sel.parents.map((pId) => t(loc, TALENT_MAP[pId].nameKey)).join(' / ');
+    const pipsHtml = Array.from(
+      { length: sel.maxRank },
+      (_, idx) => `<span class="talent-pip ${idx < selRank ? 'on' : ''}"></span>`,
+    ).join('');
+    const actionLabel = !selUnlocked
+      ? t(loc, 'talent.lockedBtn')
+      : selCost === null
+        ? t(loc, 'talent.maxed')
+        : tParams(loc, 'talent.upgradeCost', { cost: selCost });
+
+    return `
+      <div class="card-panel talent-tree-panel" id="talent-tree-panel">
+        <div class="talent-tree-header">
+          <div style="min-width:0;">
+            <div style="font-size:13.5px; font-weight:900; color:#ffe17a;">${t(loc, 'talent.title')}</div>
+            <div style="font-size:10.5px; color:var(--text-muted); font-weight:700;">${t(loc, 'talent.subTitle')}</div>
+          </div>
+          <div class="talent-star-controls">
+            <span class="talent-star-pill">${tParams(loc, 'talent.available', { stars: availableStars })}</span>
+            <button class="btn btn-sm" id="btn-talent-reset" ${spentStars > 0 ? '' : 'disabled'}>${t(loc, 'talent.reset')}</button>
+          </div>
+        </div>
+
+        <div class="talent-tree-canvas" style="background-image:url('${OAK_UI_URLS.talentTreeBg}');">
+          <div class="talent-tree-scrim"></div>
+          <svg class="talent-tree-svg" viewBox="0 0 380 390" preserveAspectRatio="none" aria-hidden="true">
+            ${branchPaths.join('')}
+          </svg>
+          ${nodesHtml}
+        </div>
+
+        <div class="talent-inspector-card" id="talent-inspector">
+          <div class="talent-inspector-head">
+            <div class="talent-inspector-icon" style="--node-accent:${sel.accentHex};">
+              <img src="${TALENT_ICON_URLS[sel.id]}" alt="${t(loc, sel.nameKey)}" />
+            </div>
+            <div style="flex:1; min-width:0;">
+              <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
+                <span class="talent-tier-chip">${t(loc, `talent.tier.${sel.tier}`)}</span>
+                <span style="font-size:10.5px; font-weight:800; color:var(--accent-gold);">${selRank}/${sel.maxRank} · ${tParams(loc, 'talent.spentSummary', { spent: spentStars })}</span>
+              </div>
+              <div style="font-size:14px; font-weight:900; color:#fff7e6; margin-top:2px;">${t(loc, sel.nameKey)}</div>
+            </div>
+          </div>
+          <div class="talent-pips">${pipsHtml}</div>
+          <div style="font-size:11.5px; color:#f7ebd6; font-weight:700; line-height:1.35;">${t(loc, sel.descKey)}</div>
+          <div style="font-size:10.5px; color:var(--accent-cyan); font-weight:700;">${t(loc, sel.capKey)}</div>
+          ${
+            !selUnlocked && sel.parents.length > 0
+              ? `<div class="talent-req-banner">${tParams(loc, 'talent.reqParent', { rank: sel.reqParentRank, parents: parentNames })}</div>`
+              : ''
+          }
+          <div style="display:flex; justify-content:flex-end; align-items:center; gap:8px;">
+            <button class="btn btn-sm ${selCanBuy ? 'btn-gold' : ''}" data-talent-up="${sel.id}" ${selCanBuy ? '' : 'disabled'}>
+              ${actionLabel}
+            </button>
+          </div>
+        </div>
+      </div>
     `;
   }
 
@@ -1920,9 +2024,21 @@ export class MetaView {
       };
     });
 
+    container.querySelectorAll<HTMLElement>('[data-select-talent]').forEach((btn) => {
+      btn.onclick = () => {
+        const tid = btn.dataset.selectTalent as TalentBranchId;
+        if (tid && TALENT_MAP[tid]) {
+          this.selectedTalentId = tid;
+          this.callbacks.onRefresh();
+        }
+      };
+    });
+
     container.querySelectorAll<HTMLElement>('[data-talent-up]').forEach((btn) => {
       btn.onclick = () => {
-        upgradeTalent(this.saveManager, btn.dataset.talentUp as TalentBranchId);
+        const tid = btn.dataset.talentUp as TalentBranchId;
+        this.selectedTalentId = tid;
+        upgradeTalent(this.saveManager, tid);
         this.callbacks.onRefresh();
       };
     });

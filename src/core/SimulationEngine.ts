@@ -28,6 +28,22 @@ export const STAR_2_HP_THRESHOLD = 80;
 export const VICTORY_OAK_REWARD = 120;
 export const VICTORY_GEM_REWARD = 15;
 
+export function computeVictoryRewards(
+  levelId: number,
+  stars: number,
+  ironMode = false,
+): { oak: number; gems: number } {
+  const stageIdx = Math.max(0, Math.min(15, Math.floor(levelId) - 1));
+  const isBossStage = levelId === 3 || levelId === 6 || levelId === 9 || levelId === 12 || levelId === 16;
+  const starMult = stars >= 3 ? 1.0 : stars === 2 ? 0.9 : 0.8;
+  const rawOak = VICTORY_OAK_REWARD + stageIdx * 12 + (isBossStage ? 30 : 0) + (ironMode ? 45 : 0);
+  const rawGems = VICTORY_GEM_REWARD + Math.floor(stageIdx * 1.2) + (isBossStage ? 5 : 0) + (ironMode ? 8 : 0);
+  return {
+    oak: Math.round(rawOak * starMult),
+    gems: Math.round(rawGems * starMult),
+  };
+}
+
 export function computeBattleStars(baseHp: number, ironMode: boolean): 1 | 2 | 3 {
   if (ironMode) return 3;
   if (baseHp >= STAR_3_HP_THRESHOLD) return 3;
@@ -308,18 +324,19 @@ export class SimulationEngine {
     };
 
     this.gold = level.startGold + (options.extraStartGold ?? 0) + this.talentMods.extraStartGold;
-    this.maxBaseHp = this.ironMode ? 1 : level.baseHp;
+    this.maxBaseHp = this.ironMode ? 1 : level.baseHp + this.talentMods.extraBaseHp;
     this.baseHp = options.initialBaseHp !== undefined
       ? Math.max(1, Math.min(this.maxBaseHp, options.initialBaseHp))
       : this.maxBaseHp;
 
     for (const s of level.slots) {
+      const baseStumpCost = s.stumpClearCost ?? 40;
       this.slots.set(s.id, {
         id: s.id,
         x: s.x,
         z: s.z,
         stumpLocked: Boolean(s.lockedByStump),
-        stumpClearCost: s.stumpClearCost ?? 40,
+        stumpClearCost: Math.max(15, Math.round(baseStumpCost * this.talentMods.stumpCostMult)),
         runeSlot: Boolean(s.runeSlot),
         tower: null,
       });
@@ -529,13 +546,14 @@ export class SimulationEngine {
         const barrel = this.barrels.get(cmd.barrelId);
         if (!barrel || barrel.exploded) return;
         barrel.exploded = true;
+        const barrelDmg = Math.round(115 * this.talentMods.barrelDamageMult);
         let hits = 0;
         for (const e of [...this.enemies]) {
           if (e.hp <= 0) continue;
           if (Math.hypot(e.x - barrel.x, e.z - barrel.z) <= 3.2) {
             hits += 1;
             e.stunTimer = Math.max(e.stunTimer, 1.1);
-            this.damageEnemy(e, 115, 0.35, false, false, false, {
+            this.damageEnemy(e, barrelDmg, 0.35, false, false, false, {
               dirX: e.x - barrel.x,
               dirZ: e.z - barrel.z,
               heavy: true,
@@ -573,8 +591,9 @@ export class SimulationEngine {
         const fromX = h.x;
         const fromZ = h.z;
         const giantDmgMult = this.relics.includes('giant_hero') ? 1.35 : 1.0;
-        const lvlMult = 1 + (h.level - 1) * 0.12;
+        const lvlMult = 1 + (h.level - 1) * 0.14;
         const cardMult = cardLevelMultiplier(this.cardLevels[this.heroId]);
+        const heroCd = (baseSec: number) => Number((baseSec * this.talentMods.heroSkillCooldownMult).toFixed(2));
         let hits = 0;
 
         if (this.heroId === 'kizil_kuyruk') {
@@ -588,7 +607,7 @@ export class SimulationEngine {
           if (Math.hypot(tx - h.x, tz - h.z) > 0.05) {
             h.facingAngle = Math.atan2(tx - h.x, tz - h.z);
           }
-          h.skillCooldown = 18;
+          h.skillCooldown = heroCd(18);
           h.skillActiveTimer = 7.0;
           h.alchemyAuraTimer = Math.max(h.alchemyAuraTimer, 7.0);
           const dmg = Math.round(75 * lvlMult * cardMult * this.talentMods.heroDamageMult * giantDmgMult);
@@ -599,7 +618,7 @@ export class SimulationEngine {
               const hadArmor = e.armor > 0;
               e.armor = Math.max(0, e.armor * 0.7);
               e.slowPct = Math.max(e.slowPct, 0.35);
-              e.slowTimer = Math.max(e.slowTimer, 2.2);
+              e.slowTimer = Math.max(e.slowTimer, 2.2 * this.talentMods.statusDurationMult);
               this.damageEnemy(e, dmg, 0.25, false, false, hadArmor, {
                 dirX: e.x - tx,
                 dirZ: e.z - tz,
@@ -627,7 +646,7 @@ export class SimulationEngine {
           h.targetX = tx;
           h.targetZ = tz;
           h.repositionTimer = 0;
-          h.skillCooldown = 17;
+          h.skillCooldown = heroCd(17);
           h.skillActiveTimer = 6.0;
           h.activeBuff = 'ironhide';
           const dmg = Math.round(90 * lvlMult * cardMult * this.talentMods.heroDamageMult * giantDmgMult);
@@ -649,7 +668,7 @@ export class SimulationEngine {
         }
 
         if (this.heroId === 'ay_kurdu') {
-          h.skillCooldown = 18;
+          h.skillCooldown = heroCd(18);
           h.skillActiveTimer = 6.5;
           h.activeBuff = 'banner';
           h.hp = Math.min(h.maxHp, h.hp + Math.round(h.maxHp * 0.2));
@@ -660,7 +679,7 @@ export class SimulationEngine {
               hits += 1;
               e.stunTimer = Math.max(e.stunTimer, 1.4);
               e.slowPct = Math.max(e.slowPct, 0.35);
-              e.slowTimer = Math.max(e.slowTimer, 3.0);
+              e.slowTimer = Math.max(e.slowTimer, 3.0 * this.talentMods.statusDurationMult);
               this.damageEnemy(e, dmg, 0.3, true, false, false, {
                 dirX: e.x - h.x,
                 dirZ: e.z - h.z,
@@ -675,7 +694,7 @@ export class SimulationEngine {
         const variant = resolveHeroVisualVariant(this.heroClass, h.level);
 
         if (variant === 'classic') {
-          h.skillCooldown = 18;
+          h.skillCooldown = heroCd(18);
           h.hp = Math.min(h.maxHp, h.hp + Math.round(h.maxHp * 0.25));
           const dmg = Math.round(65 * lvlMult * cardMult * this.talentMods.heroDamageMult * giantDmgMult);
           for (const e of [...this.enemies]) {
@@ -707,7 +726,7 @@ export class SimulationEngine {
           h.targetX = tx;
           h.targetZ = tz;
           h.repositionTimer = 0;
-          h.skillCooldown = 16;
+          h.skillCooldown = heroCd(16);
           h.skillActiveTimer = 6.0;
           h.activeBuff = 'berserk';
           const dmg = Math.round(85 * lvlMult * cardMult * this.talentMods.heroDamageMult * giantDmgMult);
@@ -724,7 +743,7 @@ export class SimulationEngine {
             }
           }
         } else {
-          h.skillCooldown = 20;
+          h.skillCooldown = heroCd(20);
           h.skillActiveTimer = 8.0;
           h.activeBuff = 'banner';
           h.hp = Math.min(h.maxHp, h.hp + Math.round(h.maxHp * 0.35));
@@ -771,12 +790,13 @@ export class SimulationEngine {
       case 'CAST_ACORN_MAGNET': {
         if (this.magnetCooldown > 0) return;
         this.magnetCooldown = Number((30 * this.talentMods.spellCooldownMult).toFixed(2));
-        this.magnetActiveTimer = 8;
+        const magnetDuration = 8 + this.talentMods.magnetBonusDurationSec;
+        this.magnetActiveTimer = magnetDuration;
         this.events.push({
           type: 'ACORN_MAGNET',
           x: this.hero.dead ? 0 : this.hero.x,
           z: this.hero.dead ? 0 : this.hero.z,
-          duration: 8,
+          duration: magnetDuration,
         });
         break;
       }
@@ -825,7 +845,9 @@ export class SimulationEngine {
   getEarlyWaveBonus(): number {
     if (this.waveInProgress || this.currentWaveIndex < 0) return 0;
     if (this.currentWaveIndex + 1 >= this.level.waves.length) return 0;
-    return Math.min(30, Math.max(4, Math.floor(Math.max(0, this.waveCountdown) * 2.5)));
+    const waveScale = 1 + Math.max(0, this.currentWaveIndex) * 0.08;
+    const baseBonus = Math.min(36, Math.max(4, Math.floor(Math.max(0, this.waveCountdown) * 2.5 * waveScale)));
+    return Math.round(baseBonus * this.talentMods.earlyWaveBonusMult);
   }
 
   private updateWaves(dt: number): void {
@@ -855,7 +877,9 @@ export class SimulationEngine {
     } else if (this.enemies.length === 0) {
       const finishedWave = this.level.waves[this.currentWaveIndex];
       if (finishedWave) {
-        this.gold += finishedWave.clearBonus + (this.relics.includes('emerald_bounty') ? 20 : 0);
+        this.gold +=
+          Math.round(finishedWave.clearBonus * this.talentMods.waveClearBonusMult) +
+          (this.relics.includes('emerald_bounty') ? 20 : 0);
       }
       this.waveInProgress = false;
       if (this.currentWaveIndex + 1 < this.level.waves.length) {
@@ -875,6 +899,9 @@ export class SimulationEngine {
     if (index > 0) {
       this.coopReserves.p1 = Math.min(100, this.coopReserves.p1 + 15);
       this.coopReserves.p2 = Math.min(100, this.coopReserves.p2 + 15);
+      if (!this.ironMode && this.talentMods.waveHealBaseHp > 0) {
+        this.baseHp = Math.min(this.maxBaseHp, this.baseHp + this.talentMods.waveHealBaseHp);
+      }
     }
     if (earlyBonus > 0) this.gold += earlyBonus;
 
@@ -979,12 +1006,17 @@ export class SimulationEngine {
 
     const heroSpec = HEROES[this.heroId];
     const cls = this.heroId === 'boz_pence' ? HERO_CLASSES[this.heroClass] : HERO_CLASSES.classic;
-    const effectiveBlockCap = this.heroId === 'boz_pence' ? cls.blockCap : heroSpec.blockCap;
-    const HERO_LEASH_RANGE = 4.2;
+    const effectiveBlockCap =
+      (this.heroId === 'boz_pence' ? cls.blockCap : heroSpec.blockCap) + this.talentMods.heroExtraBlockCap;
+    const HERO_LEASH_RANGE = 4.5;
+    const threatScore = (e: EnemyInstance): number => {
+      const eSpec = ENEMIES[e.enemyId];
+      return e.progress + (eSpec.healAura ? 3.0 : 0) + (e.speed >= 3.0 ? 2.0 : 0) + (e.engagedByHero ? 0 : 1.2);
+    };
     for (const e of this.enemies) e.engagedByHero = false;
     const nearbyGround = this.enemies
       .filter((e) => !e.isFlying && e.hp > 0 && Math.hypot(e.x - h.x, e.z - h.z) <= heroSpec.engageRange)
-      .sort((a, b) => b.progress - a.progress)
+      .sort((a, b) => threatScore(b) - threatScore(a))
       .slice(0, effectiveBlockCap);
 
     for (const e of nearbyGround) {
@@ -999,7 +1031,16 @@ export class SimulationEngine {
         h.repositionTimer = 0;
       }
     }
-    if (h.repositionTimer <= 0 && nearbyGround.length > 0 && !heroSpec.isRanged) {
+    if (h.repositionTimer <= 0 && heroSpec.isRanged && h.hp < h.maxHp * 0.45) {
+      const closeThreat = nearbyGround.find((e) => !e.isBoss && Math.hypot(e.x - h.x, e.z - h.z) <= 1.45);
+      if (closeThreat) {
+        const rx = h.x - closeThreat.x;
+        const rz = h.z - closeThreat.z;
+        const rlen = Math.hypot(rx, rz) || 1;
+        destX = Math.max(-4.5, Math.min(4.5, h.x + (rx / rlen) * 1.4));
+        destZ = Math.max(-8.0, Math.min(8.6, h.z + (rz / rlen) * 1.4));
+      }
+    } else if (h.repositionTimer <= 0 && nearbyGround.length > 0 && !heroSpec.isRanged) {
       const lead = nearbyGround[0];
       destX = Math.hypot(lead.x - h.x, lead.z - h.z) > 0.78 ? lead.x : h.x;
       destZ = Math.hypot(lead.x - h.x, lead.z - h.z) > 0.78 ? lead.z : h.z;
@@ -1010,9 +1051,9 @@ export class SimulationEngine {
             !e.isFlying &&
             e.hp > 0 &&
             (Math.hypot(e.x - h.targetX, e.z - h.targetZ) <= HERO_LEASH_RANGE ||
-              (h.repositionTimer <= 0 && Math.hypot(e.x - h.x, e.z - h.z) <= 2.4)),
+              (h.repositionTimer <= 0 && Math.hypot(e.x - h.x, e.z - h.z) <= 2.6)),
         )
-        .sort((a, b) => b.progress - a.progress)[0];
+        .sort((a, b) => threatScore(b) - threatScore(a))[0];
       if (chaseTarget) {
         destX = chaseTarget.x;
         destZ = chaseTarget.z;
@@ -1048,7 +1089,7 @@ export class SimulationEngine {
     }
 
     const giantDmgMult = this.relics.includes('giant_hero') ? 1.35 : 1.0;
-    const lvlMult = 1 + (h.level - 1) * 0.12;
+    const lvlMult = 1 + (h.level - 1) * 0.14;
     const cardMult = cardLevelMultiplier(this.cardLevels[this.heroId]);
 
     if (heroSpec.isRanged) {
@@ -1063,7 +1104,13 @@ export class SimulationEngine {
       }
       const rangedTarget = this.enemies
         .filter((e) => e.hp > 0 && (heroSpec.canHitAir || !e.isFlying) && Math.hypot(e.x - h.x, e.z - h.z) <= heroSpec.attackRange)
-        .sort((a, b) => b.progress - a.progress)[0];
+        .sort((a, b) => {
+          const aSpec = ENEMIES[a.enemyId];
+          const bSpec = ENEMIES[b.enemyId];
+          const scoreA = a.progress + (aSpec.healAura ? 4.5 : 0) + (a.isFlying ? 4.5 : 0);
+          const scoreB = b.progress + (bSpec.healAura ? 4.5 : 0) + (b.isFlying ? 4.5 : 0);
+          return scoreB - scoreA;
+        })[0];
       if (rangedTarget && h.attackCooldown <= 0) {
         h.attackCooldown = heroSpec.attackInterval;
         const dmg = Math.round(heroSpec.damage * lvlMult * cardMult * this.talentMods.heroDamageMult * giantDmgMult);
@@ -1073,7 +1120,7 @@ export class SimulationEngine {
           const dSplash = Math.hypot(e.x - rangedTarget.x, e.z - rangedTarget.z);
           if (e.uid === rangedTarget.uid || dSplash <= 1.4) {
             e.slowPct = Math.max(e.slowPct, 0.2);
-            e.slowTimer = Math.max(e.slowTimer, 1.2);
+            e.slowTimer = Math.max(e.slowTimer, 1.2 * this.talentMods.statusDurationMult);
             this.damageEnemy(e, e.uid === rangedTarget.uid ? dmg : Math.round(dmg * 0.5), 0.2, false, false, false, {
               dirX: rangedTarget.x - h.x,
               dirZ: rangedTarget.z - h.z,
@@ -1111,8 +1158,11 @@ export class SimulationEngine {
               if (this.heroId === 'kaya_dis') {
                 e.stunTimer = Math.max(e.stunTimer, 0.7);
                 this.pushEnemyBack(e, 0.9);
+              } else if (this.heroId === 'ay_kurdu') {
+                e.slowPct = Math.max(e.slowPct, 0.35);
+                e.slowTimer = Math.max(e.slowTimer, 2.4 * this.talentMods.statusDurationMult);
               }
-              this.damageEnemy(e, shockDmg, 0.2, false, false, false, {
+              this.damageEnemy(e, shockDmg, this.heroId === 'ay_kurdu' ? 0.25 : 0.2, false, false, false, {
                 dirX: e.x - h.x,
                 dirZ: e.z - h.z,
                 heavy: true,
@@ -1141,8 +1191,13 @@ export class SimulationEngine {
       }
 
       const buffScale = h.activeBuff === 'ironhide' ? 0.5 : h.activeBuff === 'banner' ? 0.65 : 1.0;
-      const dmgTakenScale = buffScale * (1 - heroSpec.armor);
-      const incomingDps = nearbyGround.reduce((acc, e) => acc + (e.isBoss ? 22 : 7), 0) * dmgTakenScale;
+      const dmgTakenScale = buffScale * (1 - heroSpec.armor) * this.talentMods.heroDamageTakenMult;
+      const incomingDps =
+        nearbyGround.reduce(
+          (acc, e) =>
+            acc + (e.isBoss ? 16 + e.baseDamage * 0.14 : Math.max(4.5, Math.min(14.5, 2.5 + e.baseDamage * 0.38))),
+          0,
+        ) * dmgTakenScale;
       h.hp -= incomingDps * dt;
       if (h.hp <= 0) {
         h.hp = 0;
@@ -1157,7 +1212,7 @@ export class SimulationEngine {
     } else {
       h.outOfCombatTimer += dt;
       if (h.outOfCombatTimer >= 4.0 && h.hp < h.maxHp) {
-        h.hp = Math.min(h.maxHp, h.hp + heroSpec.regenPerSecond * cls.regenMult * dt);
+        h.hp = Math.min(h.maxHp, h.hp + heroSpec.regenPerSecond * cls.regenMult * this.talentMods.heroRegenMult * dt);
       }
     }
   }
@@ -1294,8 +1349,14 @@ export class SimulationEngine {
         tower.towerId === 'tortoise')
         ? 1.0
         : 0;
-    if (rangeMult !== 1.0 || relicAdd > 0) {
-      return { ...base, range: Number((base.range * rangeMult + relicAdd).toFixed(2)) };
+    const nextRange =
+      rangeMult !== 1.0 || relicAdd > 0 ? Number((base.range * rangeMult + relicAdd).toFixed(2)) : base.range;
+    const nextAoe =
+      base.aoeRadius && this.talentMods.aoeRadiusPct > 0
+        ? Number((base.aoeRadius * (1 + this.talentMods.aoeRadiusPct)).toFixed(2))
+        : base.aoeRadius;
+    if (nextRange !== base.range || nextAoe !== base.aoeRadius) {
+      return { ...base, range: nextRange, ...(nextAoe !== undefined ? { aoeRadius: nextAoe } : {}) };
     }
     return base;
   }
@@ -1311,15 +1372,87 @@ export class SimulationEngine {
     });
     if (inRange.length === 0) return null;
 
+    if (tower.priority === 'smart') {
+      const maxProg = Math.max(1, inRange.reduce((m, e) => Math.max(m, e.progress), 1));
+      let best = inRange[0];
+      let bestScore = -Infinity;
+      for (const e of inRange) {
+        const eSpec = ENEMIES[e.enemyId];
+        const progNorm = e.progress / maxProg;
+        const healerBonus = eSpec.healAura ? 0.55 : 0;
+        const airBonus = (stats.airBonusPct ?? 0) > 0 && e.isFlying ? 0.45 : 0;
+        let clusterBonus = 0;
+        if (stats.aoeRadius && inRange.length > 1) {
+          let crowd = 0;
+          for (const other of inRange) {
+            if (!other.isFlying && Math.hypot(other.x - e.x, other.z - e.z) <= stats.aoeRadius) {
+              crowd += 1;
+            }
+          }
+          clusterBonus = Math.max(0, crowd - 1) * 0.45;
+        }
+        const slowBonus =
+          (stats.slowPct ?? 0) > 0 && e.slowTimer <= 0.15 ? 0.4 + (e.speed >= 2.8 ? 0.25 : 0) : 0;
+        const armorMatch =
+          ((stats.armorPiercePct ?? 0) > 0 || (stats.armorBreakPct ?? 0) > 0 || Boolean(stats.permanentArmorHalve)) &&
+          e.armor >= 0.2;
+        const armorBonus = armorMatch
+          ? stats.permanentArmorHalve && !e.armorHalved
+            ? 0.55
+            : e.armor * 0.9
+          : 0;
+        const score = progNorm + healerBonus + airBonus + clusterBonus + slowBonus + armorBonus;
+        if (score > bestScore || (score === bestScore && e.progress > best.progress)) {
+          bestScore = score;
+          best = e;
+        }
+      }
+      return best;
+    }
+
     if (tower.priority === 'first') {
       if (spec.smartModeHint === 'unslowed_first') {
-        const unslowed = inRange.filter((e) => e.slowTimer <= 0);
+        const unslowed = inRange.filter((e) => e.slowTimer <= 0.15);
         const pool = unslowed.length > 0 ? unslowed : inRange;
+        return pool.reduce((best, cur) => (cur.progress > best.progress ? cur : best));
+      }
+      if (spec.smartModeHint === 'cluster' && stats.aoeRadius && inRange.length > 1) {
+        const maxProg = Math.max(1, inRange.reduce((m, e) => Math.max(m, e.progress), 1));
+        let best = inRange[0];
+        let bestScore = -Infinity;
+        for (const e of inRange) {
+          let neighbors = 0;
+          for (const other of inRange) {
+            if (!other.isFlying && Math.hypot(other.x - e.x, other.z - e.z) <= stats.aoeRadius) {
+              neighbors += 1;
+            }
+          }
+          const score = neighbors * 1.35 + e.progress / maxProg;
+          if (score > bestScore || (score === bestScore && e.progress > best.progress)) {
+            bestScore = score;
+            best = e;
+          }
+        }
+        return best;
+      }
+      if (spec.smartModeHint === 'armored_first') {
+        const armored = inRange.filter((e) => e.armor >= 0.2);
+        const pool = armored.length > 0 ? armored : inRange;
         return pool.reduce((best, cur) => (cur.progress > best.progress ? cur : best));
       }
       return inRange.reduce((best, cur) => (cur.progress > best.progress ? cur : best));
     }
     if (tower.priority === 'strongest') {
+      if (spec.smartModeHint === 'armored_first') {
+        const ehp = (e: EnemyInstance) => e.hp / Math.max(0.15, 1 - e.armor);
+        const pool = stats.permanentArmorHalve
+          ? (() => {
+              const unhalved = inRange.filter((e) => !e.armorHalved && e.armor >= 0.2);
+              return unhalved.length > 0 ? unhalved : inRange;
+            })()
+          : inRange;
+        return pool.reduce((best, cur) => (ehp(cur) > ehp(best) ? cur : best));
+      }
       return inRange.reduce((best, cur) => (cur.hp * (1 + cur.armor) > best.hp * (1 + best.armor) ? cur : best));
     }
     if (tower.priority === 'weakest') {
@@ -1351,7 +1484,7 @@ export class SimulationEngine {
       if (!target) continue;
 
       const stats = this.getTowerStats(tower);
-      let effectiveFireRate = stats.fireRate;
+      let effectiveFireRate = stats.fireRate * this.talentMods.towerFireRateMult;
       if (
         this.relics.includes('twin_mortar') &&
         (tower.towerId === 'beaver' ||
@@ -1363,13 +1496,14 @@ export class SimulationEngine {
       }
       if (!this.hero.dead) {
         const distHero = Math.hypot(this.hero.x - tower.x, this.hero.z - tower.z);
-        if (this.hero.activeBuff === 'banner' && distHero <= 4.5) {
+        const auraBonus = this.talentMods.heroAuraRadiusBonus;
+        if (this.hero.activeBuff === 'banner' && distHero <= 4.5 + auraBonus) {
           effectiveFireRate *= 1.3;
-        } else if (this.hero.alchemyAuraTimer > 0 && distHero <= 6.0) {
+        } else if (this.hero.alchemyAuraTimer > 0 && distHero <= 6.0 + auraBonus) {
           effectiveFireRate *= this.hero.skillActiveTimer > 0 ? 1.3 : 1.2;
         } else if (
           this.heroId === 'boz_pence' &&
-          distHero <= 4.5 &&
+          distHero <= 4.5 + auraBonus &&
           resolveHeroVisualVariant(this.heroClass, this.hero.level) === 'royal'
         ) {
           effectiveFireRate *= 1.12;
@@ -1381,11 +1515,16 @@ export class SimulationEngine {
 
       const cardMult = cardLevelMultiplier(this.cardLevels[tower.towerId]);
       const globalBonus = 1 + this.towerDamageBonusPct + this.talentMods.towerDamagePct;
-      const runeDmgBonus = slot.runeSlot ? 1.18 : 1.0;
+      const runeDmgBonus = slot.runeSlot ? 1.18 + this.talentMods.runeSlotBonusPct : 1.0;
       let dmg = stats.damage * cardMult * globalBonus * runeDmgBonus;
       let isCrit = false;
 
-      if (stats.critChance && this.rng.next() < stats.critChance) {
+      const critBonus =
+        tower.towerId === 'squirrel' || tower.towerId === 'falcon' || tower.towerId === 'lynx'
+          ? this.talentMods.critChanceBonus
+          : 0;
+      const effectiveCritChance = (stats.critChance ?? 0) + critBonus;
+      if (effectiveCritChance > 0 && this.rng.next() < effectiveCritChance) {
         dmg *= stats.critMultiplier ?? 2.0;
         isCrit = true;
       }
@@ -1551,9 +1690,9 @@ export class SimulationEngine {
               x: impactX,
               z: impactZ,
               radius: p.stats.aoeRadius * 0.9,
-              dps: p.stats.resinDps,
+              dps: p.stats.resinDps * this.talentMods.resinDpsMult,
               slowPct: p.stats.resinSlowPct ?? 0.2,
-              timer: p.stats.resinDuration,
+              timer: p.stats.resinDuration * this.talentMods.statusDurationMult,
             });
           }
         } else if (target) {
@@ -1613,6 +1752,9 @@ export class SimulationEngine {
     if (enemy.isBoss && stats.bossBonusPct) {
       dmg *= 1 + stats.bossBonusPct;
     }
+    if (enemy.isFlying && (stats.airBonusPct || this.talentMods.airDamageBonusPct > 0)) {
+      dmg *= 1 + (stats.airBonusPct ?? 0) + this.talentMods.airDamageBonusPct;
+    }
 
     let armorBroken = false;
     if (stats.permanentArmorHalve && !enemy.armorHalved) {
@@ -1627,7 +1769,7 @@ export class SimulationEngine {
 
     if (stats.slowPct && stats.slowDuration) {
       enemy.slowPct = Math.max(enemy.slowPct, stats.slowPct);
-      enemy.slowTimer = Math.max(enemy.slowTimer, stats.slowDuration);
+      enemy.slowTimer = Math.max(enemy.slowTimer, stats.slowDuration * this.talentMods.statusDurationMult);
     }
     if (isFourthShot && stats.freezeDuration) {
       enemy.stunTimer = Math.max(enemy.stunTimer, stats.freezeDuration);
@@ -1722,9 +1864,10 @@ export class SimulationEngine {
       enemy.hp = 0;
       this.totalKills += 1;
       const magnetMult = (this.magnetActiveTimer > 0 ? 1.5 : 1.0) * (this.relics.includes('emerald_bounty') ? 1.3 : 1.0);
-      const earned = Math.round(enemy.bounty * magnetMult);
+      const eliteMult = enemy.isBoss || enemy.bounty >= 11 ? this.talentMods.eliteBountyMult : 1.0;
+      const earned = Math.round(enemy.bounty * magnetMult * eliteMult);
       this.gold += earned;
-      this.grantHeroXp(enemy.isBoss ? 80 : 18);
+      this.grantHeroXp(enemy.isBoss ? 90 : Math.max(12, Math.min(34, Math.round(10 + enemy.bounty * 1.15))));
       const split = ENEMIES[enemy.enemyId].splitOnDeath;
       if (split) {
         const half = (split.count - 1) * 0.5;

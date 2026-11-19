@@ -1,6 +1,6 @@
 import type { AuraId, BannerId } from '../data/accessories.ts';
 import type { HeroClassId, HeroId } from '../data/enemies.ts';
-import { clampTalentRank, createInitialTalents, type TalentBranchId } from '../data/talents.ts';
+import { clampTalentRank, createInitialTalents, TALENT_BRANCHES, type TalentBranchId } from '../data/talents.ts';
 import type { HatId, TowerId } from '../data/towers.ts';
 import { detectLocale, type Locale } from '../i18n/locales.ts';
 import { VIP_MONTHLY_DURATION_MS } from './CommercialServices.ts';
@@ -211,16 +211,15 @@ export function migrateSave(parsed: Partial<SaveState>, nowMs = Date.now()): { s
   const base = createInitialSave(nowMs);
   const prevVersion = typeof parsed.version === 'number' ? parsed.version : 1;
   const rawTalents = (parsed.talents ?? {}) as Partial<Record<TalentBranchId, number>>;
+  const talents = createInitialTalents();
+  for (const branch of TALENT_BRANCHES) {
+    talents[branch.id] = clampTalentRank(rawTalents[branch.id], branch.maxRank);
+  }
   const state: SaveState = {
     ...base,
     ...parsed,
     version: SAVE_VERSION,
-    talents: {
-      tower_power: clampTalentRank(rawTalents.tower_power),
-      hero_soul: clampTalentRank(rawTalents.hero_soul),
-      forest_magic: clampTalentRank(rawTalents.forest_magic),
-      start_economy: clampTalentRank(rawTalents.start_economy),
-    },
+    talents,
     cardLevels: {
       ...base.cardLevels,
       ...(parsed.cardLevels ?? {}),
