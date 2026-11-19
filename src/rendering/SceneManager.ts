@@ -41,6 +41,8 @@ import {
   createStumpProp,
   createTowerRig,
   createTreeProp,
+  triggerHeroAttack,
+  triggerTowerRecoil,
   updateEnemyAnimation,
   updateHeroAnimation,
   updateTowerAnimation,
@@ -924,6 +926,8 @@ export class SceneManager {
   private scorches: ScorchDecal[] = [];
   private trails: TrailItem[] = [];
   private ringGeo = new THREE.RingGeometry(0.8, 1.0, 44);
+  private poolFillGeo = new THREE.CircleGeometry(1, 22);
+  private poolRimGeo = new THREE.RingGeometry(0.86, 1.0, 22);
   private flashCoreGeo = new THREE.IcosahedronGeometry(0.2, 0);
   private flashStarGeo = new THREE.OctahedronGeometry(0.3, 0);
   private lastSim: SimulationEngine | null = null;
@@ -935,7 +939,7 @@ export class SceneManager {
   onChainZap?: () => void;
   /** Fired on each railgun / pierce-line shot. */
   onRailgunFire?: () => void;
-  private poolMeshes: THREE.Mesh[] = [];
+  private poolMeshes: Array<{ group: THREE.Group; fillMat: THREE.MeshBasicMaterial; rimMat: THREE.MeshBasicMaterial }> = [];
   private lodTrees: Array<{ lod: THREE.LOD; phase: number }> = [];
   private batterySaver = false;
   private heroRig: HeroRig | null = null;
@@ -1650,8 +1654,30 @@ export class SceneManager {
       }),
     );
 
+    const roadSamplesForEnv = curves.flatMap((c) => c.getSpacedPoints(72));
+    const resolveClearEnvPos = (
+      rawX: number,
+      rawZ: number,
+      minSlotDist: number,
+      minRoadDist: number,
+    ): [number, number] | null => {
+      const checkClear = (px: number, pz: number): boolean => {
+        if (level.slots.some((sl) => Math.hypot(sl.x - px, sl.z - pz) < minSlotDist)) return false;
+        if ((level.barrels ?? []).some((b) => Math.hypot(b.x - px, b.z - pz) < 1.25)) return false;
+        if (roadSamplesForEnv.some((pt) => Math.hypot(pt.x - px, pt.z - pz) < minRoadDist)) return false;
+        return true;
+      };
+      if (checkClear(rawX, rawZ)) return [rawX, rawZ];
+      const outDir = rawX >= 0 ? 1 : -1;
+      for (const shift of [0.55, 0.95]) {
+        const nx = Math.max(-5.15, Math.min(5.15, rawX + outDir * shift));
+        if (checkClear(nx, rawZ)) return [nx, rawZ];
+      }
+      return null;
+    };
+
     // Crystals ONLY in Crystal Cavern (12 clusters) and Frosted Peaks (ice-blue clusters) — InstancedMesh
-    const crystalCoords: Array<[number, number, number, number]> =
+    const rawCrystalCoords: Array<[number, number, number, number]> =
       level.biome === 'cavern'
         ? [
             [-4.2, 5.2, 1.28, 0.2],
@@ -1677,8 +1703,12 @@ export class SceneManager {
               [2.8, -8.8, 0.85, -0.5],
             ]
           : [];
-    if (crystalCoords.length > 0) {
-      const crysMats = crystalCoords.map(([cx, cz, sc, rot]) => composeMat(cx, 0, cz, rot, sc, sc, sc));
+    const crysMats: THREE.Matrix4[] = [];
+    for (const [cx, cz, sc, rot] of rawCrystalCoords) {
+      const safe = resolveClearEnvPos(cx, cz, 1.45, 1.3);
+      if (safe) crysMats.push(composeMat(safe[0], 0, safe[1], rot, sc, sc, sc));
+    }
+    if (crysMats.length > 0) {
       this.levelGroup.add(
         buildInstancedModelGroup('env_crystal', crysMats, (origMat, meshName) => {
           if ((level.biome !== 'snow' && level.biome !== 'foundry') || !(origMat instanceof THREE.MeshStandardMaterial)) return origMat;
@@ -1767,7 +1797,7 @@ export class SceneManager {
       this.levelGroup.add(bGroup);
 
       const bHit = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.74, 0.74, 0.95, 10),
+        new THREE.CylinderGeometry(0.58, 0.58, 0.9, 10),
         new THREE.MeshBasicMaterial({ visible: false }),
       );
       bHit.position.set(b.x, 0.45, b.z);
@@ -1823,7 +1853,10 @@ export class SceneManager {
             ];
       const variantMatCache = new Map<'oak' | 'pine', THREE.Material>();
       for (let i = 0; i < baseTrees.length; i++) {
-        const [tx, tz, sc, variant] = baseTrees[i];
+        const [rawTx, rawTz, sc, variant] = baseTrees[i];
+        const safeTree = resolveClearEnvPos(rawTx, rawTz, 1.45, 1.35);
+        if (!safeTree) continue;
+        const [tx, tz] = safeTree;
         const tree = createTreeProp(sc, variant);
         if (theme.canopyTint !== '#ffffff') {
           tree.traverse((obj) => {
@@ -2011,21 +2044,25 @@ export class SceneManager {
       rigRef.turretHead.rotation.y = slot.tower.angle;
       updateTowerAnimation(rigRef, this.animTime, realDt);
 
-      // Defender recoil kick: shift whole rig slightly opposite shot & tilt turret head (stone pedestal never squashes)
+      // Defender recoil kick: keep stone tower base fixed on slot pad and tilt/dip upper turret only
+      rigRef.root.position.set(slot.x, 0, slot.z);
       const punch = this.towerPunch.get(slot.id);
       if (punch) {
         punch.elapsed += realDt;
         const dur = 0.16;
         if (punch.elapsed >= dur) {
           this.towerPunch.delete(slot.id);
-          rigRef.root.position.set(slot.x, 0, slot.z);
           rigRef.turretHead.rotation.x = 0;
+          rigRef.turretHead.position.y = rigRef.baseTurretY;
         } else {
           const j = evalHitJolt(punch.elapsed, dur);
-          const back = 0.085 * j.push * (this.reducedMotion ? 0.5 : 1);
-          rigRef.root.position.set(slot.x - punch.dirX * back, 0, slot.z - punch.dirZ * back);
-          rigRef.turretHead.rotation.x = -0.18 * j.push * (this.reducedMotion ? 0.5 : 1);
+          const s = this.reducedMotion ? 0.5 : 1;
+          rigRef.turretHead.rotation.x = -0.16 * j.push * s;
+          rigRef.turretHead.position.y = rigRef.baseTurretY - 0.03 * j.push * s;
         }
+      } else {
+        rigRef.turretHead.rotation.x = 0;
+        rigRef.turretHead.position.y = rigRef.baseTurretY;
       }
     }
 
@@ -2399,14 +2436,22 @@ export class SceneManager {
         entry.mortar.smokeAccum += realDt;
         if (entry.mortar.smokeAccum >= 0.045) {
           entry.mortar.smokeAccum = 0;
-          this.spawnParticles(p.x, arcY, p.z, '#ffb86c', 1, 0.35);
+          const wakeCol =
+            p.towerId === 'badger'
+              ? p.branchId === 'badger_inferno'
+                ? '#ff7828'
+                : '#4cf596'
+              : p.towerId === 'tortoise'
+                ? '#d4a259'
+                : '#ffb86c';
+          this.spawnParticles(p.x, arcY, p.z, wakeCol, 1, 0.35);
         }
       } else {
         const heightY = 1.36 + (0.78 - 1.36) * u;
         entry.mesh.position.set(p.x, heightY, p.z);
-        if (p.towerId === 'owl') {
-          entry.mesh.rotation.y += realDt * 14;
-          entry.mesh.rotation.x += realDt * 9;
+        if (p.towerId === 'owl' || p.towerId === 'lynx') {
+          entry.mesh.rotation.y += realDt * (p.towerId === 'lynx' ? 18 : 14);
+          entry.mesh.rotation.x += realDt * 10;
         } else {
           entry.mesh.lookAt(p.targetX, 0.72, p.targetZ);
         }
@@ -2438,24 +2483,64 @@ export class SceneManager {
       }
     }
 
-    // Sync resin pools
+    // Sync elemental pools (resin amber / alchemy acid / inferno magma) with pulsing rim & rising bubbles
     while (this.poolMeshes.length < sim.resinPools.length) {
-      const m = new THREE.Mesh(
-        new THREE.CircleGeometry(1, 18),
-        new THREE.MeshBasicMaterial({ color: '#e69b35', transparent: true, opacity: 0.48, side: THREE.DoubleSide }),
-      );
-      m.rotation.x = -Math.PI / 2;
-      m.position.y = 0.06;
-      this.dynamicGroup.add(m);
-      this.poolMeshes.push(m);
+      const group = new THREE.Group();
+      const fillMat = new THREE.MeshBasicMaterial({
+        color: '#e69b35',
+        transparent: true,
+        opacity: 0.44,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      const fill = new THREE.Mesh(this.poolFillGeo, fillMat);
+      fill.rotation.x = -Math.PI / 2;
+      const rimMat = new THREE.MeshBasicMaterial({
+        color: '#ffd27a',
+        transparent: true,
+        opacity: 0.72,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      const rim = new THREE.Mesh(this.poolRimGeo, rimMat);
+      rim.rotation.x = -Math.PI / 2;
+      rim.position.y = 0.004;
+      group.add(fill, rim);
+      group.position.y = 0.058;
+      this.dynamicGroup.add(group);
+      this.poolMeshes.push({ group, fillMat, rimMat });
     }
     for (let i = 0; i < this.poolMeshes.length; i++) {
       const pool: ResinPool | undefined = sim.resinPools[i];
-      const m = this.poolMeshes[i];
-      m.visible = Boolean(pool);
+      const pm = this.poolMeshes[i];
+      pm.group.visible = Boolean(pool);
       if (pool) {
-        m.position.set(pool.x, 0.06, pool.z);
-        m.scale.setScalar(pool.radius);
+        const kind = pool.kind ?? 'resin';
+        const pulse = Math.sin(this.animTime * 6 + i * 1.3);
+        if (kind === 'acid') {
+          pm.fillMat.color.set('#22d970');
+          pm.rimMat.color.set('#80ffb8');
+          pm.fillMat.opacity = 0.46 + pulse * 0.08;
+        } else if (kind === 'inferno') {
+          pm.fillMat.color.set('#ff5218');
+          pm.rimMat.color.set('#ffc14d');
+          pm.fillMat.opacity = 0.50 + pulse * 0.10;
+        } else {
+          pm.fillMat.color.set('#e69b35');
+          pm.rimMat.color.set('#ffd27a');
+          pm.fillMat.opacity = 0.44 + pulse * 0.06;
+        }
+        const fade = Math.min(1, pool.timer / 0.45);
+        pm.fillMat.opacity *= fade;
+        pm.rimMat.opacity = 0.72 * fade;
+        pm.group.position.set(pool.x, 0.058, pool.z);
+        pm.group.scale.setScalar(pool.radius * (0.97 + pulse * 0.03));
+        if (!this.reducedMotion && kind !== 'resin' && Math.random() < realDt * 4.5) {
+          const ang = Math.random() * Math.PI * 2;
+          const rr = Math.random() * pool.radius * 0.75;
+          const bCol = kind === 'acid' ? '#70ffb2' : '#ff9838';
+          this.spawnParticles(pool.x + Math.cos(ang) * rr, 0.14, pool.z + Math.sin(ang) * rr, bCol, 1, 0.55);
+        }
       }
     }
 
@@ -2579,7 +2664,7 @@ export class SceneManager {
         const uz = dirZ / len;
         const rigRef = this.towerRigs.get(ev.slotId)?.rig;
         if (rigRef) {
-          rigRef.recoilTimer = 0.22;
+          triggerTowerRecoil(rigRef);
           this.towerPunch.set(ev.slotId, { elapsed: 0, dirX: ux, dirZ: uz });
           const flashCol =
             ev.towerId === 'owl' || ev.towerId === 'falcon'
@@ -2594,7 +2679,16 @@ export class SceneManager {
                       ? '#ffc04a'
                       : '#ffe47a';
           const big = ev.towerId === 'beaver' || ev.towerId === 'badger' || ev.towerId === 'tortoise' || Boolean(ev.isLine);
-          this.spawnMuzzleFlash(ev.fromX + ux * 0.55, 1.45, ev.fromZ + uz * 0.55, flashCol, ux, uz, big);
+          const mx = ev.fromX + ux * 0.55;
+          const mz = ev.fromZ + uz * 0.55;
+          this.spawnMuzzleFlash(mx, 1.45, mz, flashCol, ux, uz, big);
+          if (ev.towerId === 'tortoise') {
+            this.spawnShockRing(mx, mz, '#ffd166', 0.9, 0.16, 1.25);
+          } else if (ev.towerId === 'falcon') {
+            this.spawnSparks(mx, 1.45, mz, ux, 0.1, uz, '#9beeff', 4, 7.5, 0.3);
+          } else if (ev.towerId === 'lynx') {
+            this.spawnShockRing(mx, mz, '#c98aff', 0.65, 0.14, 1.35);
+          }
         }
 
         if (ev.isChain || ev.isLine) {
@@ -2632,18 +2726,46 @@ export class SceneManager {
       } else if (ev.type === 'PROJECTILE_IMPACT') {
         if (ev.aoeRadius > 0) {
           const r = Math.max(1.2, ev.aoeRadius);
-          this.spawnShockRing(ev.x, ev.z, '#ffffff', r * 0.82, 0.18);
-          this.spawnShockRing(ev.x, ev.z, '#ff9436', r * 1.35, 0.44);
-          this.spawnShockRing(ev.x, ev.z, '#ffe17d', r * 1.0, 0.32);
-          this.spawnScorch(ev.x, ev.z, r * 0.72);
-          this.spawnSparks(ev.x, 0.35, ev.z, 0, 0, 0, '#ffcf6b', 22, 10.5);
-          this.spawnSparks(ev.x, 0.3, ev.z, 0, 0, 0, '#ff7a2a', 10, 7);
-          this.spawnParticles(ev.x, 0.4, ev.z, '#ff9436', 12, 1.35);
-          this.spawnParticles(ev.x, 0.3, ev.z, '#4a3c33', 7, 1.05);
-          this.spawnImpactBurst(ev.x, 0.45, ev.z, '#ffb347', 1.35, 0, 0);
-          this.cameraCtrl.addTrauma(0.36);
-          this.cameraCtrl.addZoomPunch(1.15);
-          this.cameraCtrl.addDirectionalKick(ev.dirX, ev.dirZ, 0.14);
+          if (ev.towerId === 'badger') {
+            const isInferno = ev.branchId === 'badger_inferno';
+            const mainCol = isInferno ? '#ff5e1f' : '#38f27f';
+            const subCol = isInferno ? '#ffbe4d' : '#a6ffcb';
+            this.spawnShockRing(ev.x, ev.z, '#ffffff', r * 0.78, 0.16);
+            this.spawnShockRing(ev.x, ev.z, mainCol, r * 1.32, 0.42);
+            this.spawnShockRing(ev.x, ev.z, subCol, r * 0.96, 0.30);
+            this.spawnScorch(ev.x, ev.z, r * 0.65);
+            this.spawnSparks(ev.x, 0.38, ev.z, 0, 0, 0, subCol, 20, 9.5);
+            this.spawnParticles(ev.x, 0.42, ev.z, mainCol, 14, 1.3);
+            this.spawnImpactBurst(ev.x, 0.48, ev.z, mainCol, 1.25, 0, 0);
+            this.cameraCtrl.addTrauma(isInferno ? 0.34 : 0.28);
+            this.cameraCtrl.addZoomPunch(1.0);
+            this.cameraCtrl.addDirectionalKick(ev.dirX, ev.dirZ, 0.12);
+          } else if (ev.towerId === 'tortoise') {
+            this.spawnShockRing(ev.x, ev.z, '#ffffff', r * 0.92, 0.20);
+            this.spawnShockRing(ev.x, ev.z, '#ffd166', r * 1.45, 0.48);
+            this.spawnShockRing(ev.x, ev.z, '#b87e3c', r * 1.15, 0.38);
+            this.spawnScorch(ev.x, ev.z, r * 0.8);
+            this.spawnSparks(ev.x, 0.35, ev.z, 0, 0, 0, '#ffe38c', 24, 11.0);
+            this.spawnParticles(ev.x, 0.42, ev.z, '#d99e4e', 14, 1.4);
+            this.spawnParticles(ev.x, 0.32, ev.z, '#6b533b', 9, 1.15);
+            this.spawnImpactBurst(ev.x, 0.45, ev.z, '#ffd166', 1.45, 0, 0);
+            this.cameraCtrl.addTrauma(0.42);
+            this.cameraCtrl.addZoomPunch(1.35);
+            this.cameraCtrl.addDirectionalKick(ev.dirX, ev.dirZ, 0.16);
+          } else {
+            this.spawnShockRing(ev.x, ev.z, '#ffffff', r * 0.82, 0.18);
+            this.spawnShockRing(ev.x, ev.z, '#ff9436', r * 1.35, 0.44);
+            this.spawnShockRing(ev.x, ev.z, '#ffe17d', r * 1.0, 0.32);
+            this.spawnScorch(ev.x, ev.z, r * 0.72);
+            this.spawnSparks(ev.x, 0.35, ev.z, 0, 0, 0, '#ffcf6b', 22, 10.5);
+            this.spawnSparks(ev.x, 0.3, ev.z, 0, 0, 0, '#ff7a2a', 10, 7);
+            this.spawnParticles(ev.x, 0.4, ev.z, '#ff9436', 12, 1.35);
+            this.spawnParticles(ev.x, 0.3, ev.z, '#4a3c33', 7, 1.05);
+            this.spawnImpactBurst(ev.x, 0.45, ev.z, '#ffb347', 1.35, 0, 0);
+            this.cameraCtrl.addTrauma(0.36);
+            this.cameraCtrl.addZoomPunch(1.15);
+            this.cameraCtrl.addDirectionalKick(ev.dirX, ev.dirZ, 0.14);
+          }
           this.onMortarExplode?.();
         } else {
           const sparkHex =
@@ -2656,8 +2778,17 @@ export class SceneManager {
                   : ev.towerId === 'hedgehog' || ev.towerId === 'tortoise'
                     ? '#ffd27a'
                     : '#fff1b8';
-          const burstScale = ev.isCrit ? 1.25 : ev.towerId === 'hedgehog' ? 1.15 : 0.85;
+          const burstScale = ev.isCrit ? 1.25 : ev.towerId === 'hedgehog' ? 1.18 : ev.towerId === 'falcon' ? 1.05 : 0.88;
           this.spawnImpactBurst(ev.x, 0.85, ev.z, sparkHex, burstScale, ev.dirX, ev.dirZ);
+          if (ev.towerId === 'falcon') {
+            this.spawnShockRing(ev.x, ev.z, '#8ceeff', ev.isCrit ? 1.35 : 0.88, 0.20, 0.72);
+            this.spawnSparks(ev.x, 0.85, ev.z, ev.dirX, 0.2, ev.dirZ, '#ffd86b', 6, 8.5, 0.55);
+          } else if (ev.towerId === 'lynx') {
+            const lynxHex = ev.branchId === 'lynx_frostbite' ? '#7ef5ff' : '#c98aff';
+            this.spawnShockRing(ev.x, ev.z, lynxHex, 1.0, 0.22, 0.55);
+          } else if (ev.towerId === 'hedgehog') {
+            this.spawnSparks(ev.x, 0.85, ev.z, ev.dirX, 0.15, ev.dirZ, '#ffcf6b', 10, 10.5, 0.42);
+          }
           if (ev.isFreeze || ev.branchId === 'owl_glacier' || ev.branchId === 'lynx_frostbite') {
             this.spawnShockRing(ev.x, ev.z, '#c9f6ff', 1.65, 0.36);
             this.spawnSparks(ev.x, 0.9, ev.z, 0, 0, 0, '#dffaff', 10, 5.5);
@@ -2738,12 +2869,16 @@ export class SceneManager {
         }
 
         if (ev.resisted) {
-          this.spawnSparks(ev.x, 0.9, ev.z, -dx, 0.4, -dz, '#b8d0eb', 4, 7, 0.8);
+          this.spawnSparks(ev.x, 0.9, ev.z, -dx, 0.4, -dz, '#b8d0eb', 5, 7.5, 0.75);
         } else {
-          const sparkHex = ev.isCrit ? '#ffe85c' : ev.armorBroken ? '#68ebff' : '#ffd08a';
+          const sparkHex = ev.isCrit ? '#ffe85c' : ev.armorBroken ? '#ffd54f' : '#ffd08a';
           this.spawnSparks(ev.x, 0.85, ev.z, dx, 0.25, dz, sparkHex, heavy ? 10 : 5, heavy ? 9.5 : 7, heavy ? 0.65 : 0.48);
           if (heavy) {
             this.spawnParticles(ev.x, 0.68, ev.z, sparkHex, 6, 1.05);
+          }
+          if (ev.armorBroken) {
+            this.spawnShockRing(ev.x, ev.z, '#ffd54f', 1.35, 0.24);
+            this.spawnSparks(ev.x, 0.95, ev.z, 0, 0.4, 0, '#ffe875', 8, 8.5, 0.85);
           }
           if (ev.isCrit || ev.armorBroken) {
             this.spawnShockRing(ev.x, ev.z, '#ffffff', 0.95, 0.15, 0.72);
@@ -2810,41 +2945,95 @@ export class SceneManager {
         const lux = hx / hLen;
         const luz = hz / hLen;
         const faceAngle = Math.atan2(hx, hz);
+        const hId = ev.heroId ?? simRef?.heroId ?? 'boz_pence';
         if (this.heroRig) {
-          this.heroRig.attackTimer = 0.45;
-          this.heroRig.lungeTimer = ev.ranged ? 0 : 0.22;
-          this.heroRig.lungeDirX = lux;
-          this.heroRig.lungeDirZ = luz;
+          triggerHeroAttack(this.heroRig, lux, luz, false);
           this.heroRig.body.rotation.y = faceAngle;
         }
         if (ev.ranged) {
-          this.spawnEnergyBeam(
-            [new THREE.Vector3(ev.x, 1.0, ev.z), new THREE.Vector3(ev.targetX, 0.7, ev.targetZ)],
-            '#4ef2b0',
-            0.075,
-            0.18,
-          );
-          this.spawnShockRing(ev.targetX, ev.targetZ, '#4ef2b0', 1.45, 0.25);
-          this.spawnImpactBurst(ev.targetX, 0.7, ev.targetZ, '#78ffca', 1.05, lux, luz);
+          // Throwing parabolic emerald alchemy flask (Kızıl Kuyruk) with splash detonation
+          this.spawnMuzzleFlash(ev.x + lux * 0.4, 1.05, ev.z + luz * 0.4, '#4ef2b0', lux, luz, false);
+          const flask = this.instantiateSkillMesh('skill_alchemy_flask', '#44f0a6', 0.18);
+          flask.scale.setScalar(0.9);
+          flask.position.set(ev.x + lux * 0.35, 1.05, ev.z + luz * 0.35);
+          this.dynamicGroup.add(flask);
+          const sx = flask.position.x;
+          const sz = flask.position.z;
+          const dur = this.reducedMotion ? 0.1 : 0.18;
+          let elapsed = 0;
+          let shattered = false;
+          this.skillEffects.push({
+            update: (dt) => {
+              elapsed += dt;
+              const p = Math.min(1, elapsed / dur);
+              if (!shattered) {
+                flask.position.set(
+                  sx + (ev.targetX - sx) * p,
+                  1.05 * (1 - p) + 0.35 * p + Math.sin(p * Math.PI) * 1.15,
+                  sz + (ev.targetZ - sz) * p,
+                );
+                flask.rotation.x += dt * 15;
+                flask.rotation.z += dt * 11;
+                if (p >= 1) {
+                  shattered = true;
+                  flask.visible = false;
+                  this.spawnShockRing(ev.targetX, ev.targetZ, '#44f0a6', 1.55, 0.28);
+                  this.spawnImpactBurst(ev.targetX, 0.65, ev.targetZ, '#78ffca', 1.1, lux, luz);
+                  this.spawnParticles(ev.targetX, 0.45, ev.targetZ, '#3bf28a', 7, 1.0);
+                }
+                return true;
+              }
+              return elapsed < dur + 0.08;
+            },
+            dispose: () => this.disposeSkillObject(flask),
+          });
+        } else if (hId === 'ay_kurdu') {
+          this.spawnSlashArc(ev.x + lux * 0.45, ev.z + luz * 0.45, faceAngle + 0.18, '#6ef2ff', 1.35);
+          this.spawnSlashArc(ev.x + lux * 0.45, ev.z + luz * 0.45, faceAngle - 0.18, '#e3fcff', 1.18);
+          this.spawnImpactBurst(ev.targetX, 0.72, ev.targetZ, '#78f2ff', 1.15, lux, luz);
+          this.cameraCtrl.addTrauma(0.2);
+        } else if (hId === 'kaya_dis') {
+          this.spawnSlashArc(ev.x + lux * 0.5, ev.z + luz * 0.5, faceAngle, '#f59e0b', 1.75);
+          this.spawnShockRing(ev.targetX, ev.targetZ, '#e8a848', 1.75, 0.28);
+          this.spawnImpactBurst(ev.targetX, 0.65, ev.targetZ, '#ffd27a', 1.35, lux, luz);
+          this.spawnParticles(ev.targetX, 0.35, ev.targetZ, '#a87d48', 7, 1.1);
+          this.cameraCtrl.addTrauma(0.3);
         } else {
-          this.spawnSlashArc(ev.x + lux * 0.45, ev.z + luz * 0.45, faceAngle, '#ffe27a', 1.35);
-          this.spawnImpactBurst(ev.targetX, 0.72, ev.targetZ, '#ffe27a', 1.1, lux, luz);
-          this.cameraCtrl.addTrauma(0.22);
+          const variant = resolveHeroVisualVariant(simRef?.heroClass ?? 'auto', simRef?.hero.level ?? 1);
+          if (variant === 'viking') {
+            this.spawnSlashArc(ev.x + lux * 0.48, ev.z + luz * 0.48, faceAngle + 0.16, '#ff8b3d', 1.5);
+            this.spawnSlashArc(ev.x + lux * 0.48, ev.z + luz * 0.48, faceAngle - 0.12, '#ffe27a', 1.3);
+            this.spawnImpactBurst(ev.targetX, 0.72, ev.targetZ, '#ffb35c', 1.25, lux, luz);
+            this.cameraCtrl.addTrauma(0.26);
+          } else {
+            const col = variant === 'royal' ? '#fff088' : '#ffe27a';
+            this.spawnSlashArc(ev.x + lux * 0.45, ev.z + luz * 0.45, faceAngle, col, 1.4);
+            this.spawnImpactBurst(ev.targetX, 0.72, ev.targetZ, col, 1.12, lux, luz);
+            this.cameraCtrl.addTrauma(0.22);
+          }
         }
       } else if (ev.type === 'HERO_ULTIMATE') {
-        if (this.heroRig) this.heroRig.attackTimer = 0.42;
+        if (this.heroRig) triggerHeroAttack(this.heroRig, 0, 1, false);
         this.spawnHeroUltimateVfx(ev);
       } else if (ev.type === 'HERO_CLAW_SHOCK') {
-        if (this.heroRig) this.heroRig.attackTimer = 0.26;
-        const ringCol = ev.heroId === 'kizil_kuyruk' ? '#44f0a6' : ev.heroId === 'kaya_dis' ? '#e8a848' : '#95e06c';
+        if (this.heroRig) triggerHeroAttack(this.heroRig, 0, 1, true);
+        const hId = ev.heroId ?? simRef?.heroId ?? 'boz_pence';
+        const ringCol =
+          hId === 'kizil_kuyruk'
+            ? '#44f0a6'
+            : hId === 'kaya_dis'
+              ? '#e8a848'
+              : hId === 'ay_kurdu'
+                ? '#67e8f9'
+                : '#95e06c';
         this.spawnShockRing(ev.x, ev.z, '#ffffff', 1.6, 0.16);
-        this.spawnShockRing(ev.x, ev.z, ringCol, ev.heroId === 'kizil_kuyruk' ? 5.2 : 3.0);
-        if (ev.heroId !== 'kizil_kuyruk') {
+        this.spawnShockRing(ev.x, ev.z, ringCol, hId === 'kizil_kuyruk' ? 5.2 : 3.0);
+        if (hId !== 'kizil_kuyruk') {
           this.spawnScorch(ev.x, ev.z, 1.1);
-          this.cameraCtrl.addTrauma(0.36);
+          this.cameraCtrl.addTrauma(hId === 'kaya_dis' ? 0.42 : 0.34);
           this.cameraCtrl.addZoomPunch(1.1);
         }
-        this.spawnSparks(ev.x, 0.45, ev.z, 0, 0, 0, ringCol, 16, 8);
+        this.spawnSparks(ev.x, 0.45, ev.z, 0, 0, 0, ringCol, hId === 'ay_kurdu' ? 18 : 16, 8);
         this.spawnParticles(ev.x, 0.45, ev.z, ringCol, 12, 1.2);
       } else if (ev.type === 'HERO_LEVELED') {
         this.spawnShockRing(ev.x, ev.z, '#ffffff', 1.5, 0.18);
@@ -3533,6 +3722,9 @@ export class SceneManager {
     );
     this.raycaster.setFromCamera(ndc, this.cameraCtrl.camera);
 
+    const pt = new THREE.Vector3();
+    const hasGround = this.raycaster.ray.intersectPlane(this.groundPlane, pt) !== null;
+
     const barrelHitsTargets: THREE.Object3D[] = [];
     for (const bv of this.barrelMeshes.values()) {
       if (bv.alive) barrelHitsTargets.push(bv.hitArea);
@@ -3540,13 +3732,17 @@ export class SceneManager {
     if (barrelHitsTargets.length > 0) {
       const bHits = this.raycaster.intersectObjects(barrelHitsTargets, false);
       if (bHits.length > 0) {
-        const barrelId = (bHits[0].object.userData as { barrelId?: string }).barrelId ?? null;
-        return { slotId: null, barrelId, x: bHits[0].point.x, z: bHits[0].point.z };
+        const hitObj = bHits[0].object;
+        const barrelId = (hitObj.userData as { barrelId?: string }).barrelId ?? null;
+        const gx = hasGround ? pt.x : bHits[0].point.x;
+        const gz = hasGround ? pt.z : bHits[0].point.z;
+        const barrelDist = Math.hypot(gx - hitObj.position.x, gz - hitObj.position.z);
+        const roadDist = this.distanceToRoad(gx, gz);
+        if (!(roadDist < 0.68 && barrelDist > 0.48)) {
+          return { slotId: null, barrelId, x: bHits[0].point.x, z: bHits[0].point.z };
+        }
       }
     }
-
-    const pt = new THREE.Vector3();
-    const hasGround = this.raycaster.ray.intersectPlane(this.groundPlane, pt) !== null;
 
     const hitAreas: THREE.Object3D[] = [];
     for (const v of this.slotMeshes.values()) hitAreas.push(v.hitArea);

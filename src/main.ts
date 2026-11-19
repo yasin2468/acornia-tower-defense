@@ -395,14 +395,25 @@ function processBattleEvents(events: SimEvent[]): void {
       battleView.triggerBaseHitFlash(ev.damage);
     } else if (ev.type === 'TOWER_FIRED') {
       const kind =
-        ev.towerId === 'beaver' || ev.towerId === 'badger' || ev.towerId === 'tortoise'
-          ? 'mortar'
-          : ev.towerId === 'owl' || ev.towerId === 'lynx'
-            ? 'emp'
-            : ev.towerId === 'hedgehog'
-              ? 'heavy'
-              : 'arrow';
+        ev.towerId === 'tortoise'
+          ? 'cannon'
+          : ev.towerId === 'badger'
+            ? 'acid'
+            : ev.towerId === 'beaver'
+              ? 'mortar'
+              : ev.towerId === 'lynx'
+                ? 'rune'
+                : ev.towerId === 'owl'
+                  ? 'emp'
+                  : ev.towerId === 'hedgehog'
+                    ? 'heavy'
+                    : ev.towerId === 'falcon'
+                      ? 'falcon'
+                      : 'arrow';
       sound.playShoot(kind);
+    } else if (ev.type === 'PROJECTILE_IMPACT' && ev.aoeRadius > 0) {
+      if (ev.towerId === 'badger') sound.playAcidSplash();
+      else if (ev.towerId === 'tortoise') sound.playSeismicSlam();
     } else if (ev.type === 'ENEMY_HIT') {
       sound.playHit(ev.isCrit, ev.armorBroken, Boolean(ev.heavy), Boolean(ev.resisted));
       const isCritHit = ev.isCrit || ev.armorBroken;
@@ -448,13 +459,22 @@ function processBattleEvents(events: SimEvent[]): void {
       sound.playExplosion(true);
     } else if (ev.type === 'HERO_CLAW_SHOCK') {
       juice.triggerMicroHitStop(0.035, 0.1);
-      sound.playHeroSlash(true);
-    } else if (ev.type === 'HERO_ATTACK') {
-      if (!ev.ranged) {
-        sound.playHeroSlash(true);
-        juice.triggerMicroHitStop(0.024, 0.12);
+      const hId = ev.heroId ?? activeSim?.heroId ?? 'boz_pence';
+      if (hId === 'ay_kurdu') {
+        sound.playHeroAttack('ay_kurdu');
+        sound.playFreeze();
+      } else if (hId === 'kaya_dis') {
+        sound.playSeismicSlam();
+      } else if (hId === 'kizil_kuyruk') {
+        sound.playAcidSplash();
       } else {
-        sound.playHit(false, false, false);
+        sound.playHeroSlash(true);
+      }
+    } else if (ev.type === 'HERO_ATTACK') {
+      const hId = ev.heroId ?? activeSim?.heroId ?? 'boz_pence';
+      sound.playHeroAttack(hId);
+      if (!ev.ranged) {
+        juice.triggerMicroHitStop(0.024, 0.12);
       }
     } else if (ev.type === 'HERO_ULTIMATE') {
       juice.triggerMicroHitStop(0.042, 0.08);

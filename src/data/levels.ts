@@ -326,7 +326,7 @@ const BASE_LEVELS: LevelSpec[] = [
       { x: 4.1, z: 7.4 },
       { x: -4.3, z: 4.0 },
       { x: 4.3, z: -1.0 },
-      { x: -4.1, z: -5.2 },
+      { x: -4.45, z: -5.2 },
     ],
     heroStart: { x: 0.0, z: -2.8 },
     waves: [
@@ -541,8 +541,8 @@ const BASE_LEVELS: LevelSpec[] = [
     ],
     heroStart: { x: -2.7, z: -4.9 },
     barrels: [
-      { id: 'barrel_1', x: -0.5, z: 5.7 },
-      { id: 'barrel_2', x: 2.1, z: -3.9 },
+      { id: 'barrel_1', x: -3.4, z: 5.3 },
+      { id: 'barrel_2', x: -0.9, z: -2.3 },
     ],
     waves: [
       { waveNumber: 1, clearBonus: 21, groups: [{ enemyId: 'turbo_hopper', count: 13, spacing: 1.0, hpOverride: 74, bountyOverride: 6 }] },
@@ -1023,12 +1023,12 @@ const BASE_LEVELS: LevelSpec[] = [
       { x: -4.1, z: 7.4 },
       { x: 4.1, z: 3.0 },
       { x: -4.1, z: -4.0 },
-      { x: 3.2, z: -7.2 },
+      { x: 4.05, z: -7.35 },
     ],
     heroStart: { x: -2.8, z: -4.6 },
     barrels: [
-      { id: 'barrel_1', x: 0.0, z: 5.5 },
-      { id: 'barrel_2', x: 0.0, z: -2.1 },
+      { id: 'barrel_1', x: -2.6, z: 4.9 },
+      { id: 'barrel_2', x: -1.7, z: -3.6 },
     ],
     waves: [
       { waveNumber: 1, clearBonus: 55, groups: [{ enemyId: 'turbo_hopper', count: 24, spacing: 0.42, hpOverride: 95, bountyOverride: 7 }, { enemyId: 'scout_bot', count: 16, spacing: 0.5, hpOverride: 75, bountyOverride: 6 }] },
@@ -1148,8 +1148,8 @@ const BASE_LEVELS: LevelSpec[] = [
     ],
     heroStart: { x: 0.0, z: -2.8 },
     barrels: [
-      { id: 'barrel_1', x: 0.0, z: 6.4 },
-      { id: 'barrel_2', x: -1.6, z: 2.0 },
+      { id: 'barrel_1', x: 0.1, z: 3.1 },
+      { id: 'barrel_2', x: -2.1, z: -5.5 },
     ],
     waves: [
       { waveNumber: 1, clearBonus: 86, groups: [{ enemyId: 'ember_bomber', count: 24, spacing: 0.4, hpOverride: 140, bountyOverride: 9 }, { enemyId: 'turbo_hopper', count: 18, spacing: 0.44, hpOverride: 95, bountyOverride: 7 }] },
@@ -1331,8 +1331,8 @@ function createExtendedLevels(base: LevelSpec[]): LevelSpec[] {
       hpMult: 1.15,
       bonusMult: 1.3,
       addBarrels: [
-        { id: 'barrel_1', x: -1.6, z: 2.0 },
-        { id: 'barrel_2', x: 1.6, z: 2.0 },
+        { id: 'barrel_1', x: -1.24, z: 1.72 },
+        { id: 'barrel_2', x: 1.24, z: 1.72 },
       ],
       swaps: { hover_drone: 'repair_drone' },
     },

@@ -152,6 +152,8 @@ export class MetaView {
   private escKeyHandler: ((ev: KeyboardEvent) => void) | null = null;
   private mapKeyHandler: ((ev: KeyboardEvent) => void) | null = null;
   private prevMapPanPct: number | null = null;
+  private manualMapPanPct: number | null = null;
+  private suppressNextMapClick = false;
   private lastSlideDir: 'left' | 'right' | null = null;
   private pillStripScrollLeft = 0;
 
@@ -351,6 +353,7 @@ export class MetaView {
 
   private selectStageById(id: number): void {
     const clamped = Math.max(1, Math.min(LEVELS.length, id));
+    this.manualMapPanPct = null;
     if (clamped !== this.selectedLevelId) {
       this.lastSlideDir = clamped > this.selectedLevelId ? 'right' : 'left';
       this.selectedLevelId = clamped;
@@ -467,30 +470,30 @@ export class MetaView {
     });
 
     const OAK_HORIZ_TRAIL: ReadonlyArray<{ xPct: number; yPct: number }> = [
-      { xPct: 3.80, yPct: 43.0 },
-      { xPct: 7.82, yPct: 37.0 },
-      { xPct: 11.83, yPct: 45.5 },
-      { xPct: 15.85, yPct: 38.5 },
-      { xPct: 19.87, yPct: 45.0 },
-      { xPct: 23.89, yPct: 37.5 },
-      { xPct: 27.90, yPct: 45.5 },
-      { xPct: 31.92, yPct: 36.5 },
-      { xPct: 35.94, yPct: 44.5 },
-      { xPct: 39.96, yPct: 38.0 },
-      { xPct: 43.97, yPct: 45.5 },
-      { xPct: 47.99, yPct: 36.5 },
-      { xPct: 52.01, yPct: 45.0 },
-      { xPct: 56.03, yPct: 37.5 },
-      { xPct: 60.04, yPct: 44.5 },
-      { xPct: 64.06, yPct: 38.0 },
-      { xPct: 68.08, yPct: 45.0 },
-      { xPct: 72.10, yPct: 37.0 },
-      { xPct: 76.11, yPct: 45.5 },
-      { xPct: 80.13, yPct: 36.5 },
-      { xPct: 84.15, yPct: 44.5 },
-      { xPct: 88.17, yPct: 37.5 },
-      { xPct: 92.18, yPct: 45.0 },
-      { xPct: 96.20, yPct: 38.0 },
+      { xPct: 4.60, yPct: 48.0 },
+      { xPct: 8.55, yPct: 42.5 },
+      { xPct: 12.50, yPct: 50.5 },
+      { xPct: 16.44, yPct: 43.5 },
+      { xPct: 20.39, yPct: 50.0 },
+      { xPct: 24.34, yPct: 42.5 },
+      { xPct: 28.29, yPct: 50.5 },
+      { xPct: 32.23, yPct: 42.0 },
+      { xPct: 36.18, yPct: 49.5 },
+      { xPct: 40.13, yPct: 43.5 },
+      { xPct: 44.08, yPct: 50.5 },
+      { xPct: 48.02, yPct: 42.0 },
+      { xPct: 51.97, yPct: 50.0 },
+      { xPct: 55.92, yPct: 43.0 },
+      { xPct: 59.87, yPct: 49.5 },
+      { xPct: 63.82, yPct: 43.5 },
+      { xPct: 67.76, yPct: 50.0 },
+      { xPct: 71.71, yPct: 42.5 },
+      { xPct: 75.66, yPct: 50.5 },
+      { xPct: 79.61, yPct: 42.0 },
+      { xPct: 83.56, yPct: 49.5 },
+      { xPct: 87.50, yPct: 43.0 },
+      { xPct: 91.45, yPct: 50.0 },
+      { xPct: 95.40, yPct: 43.5 },
     ];
 
     const displayNodes = WORLD_MAP_NODES.map((n, idx) => ({
@@ -501,7 +504,7 @@ export class MetaView {
     const fullPathD = this.buildSmoothTrailPath(displayNodes);
     const unlockedPathD = this.buildSmoothTrailPath(displayNodes.slice(0, maxUnlockedIdx + 1));
     const selDisplayNode = displayNodes.find((n) => n.id === selLevel.id) ?? displayNodes[0];
-    const targetPanPct = this.computeMapPanPct(selDisplayNode.xPct);
+    const targetPanPct = this.manualMapPanPct ?? this.computeMapPanPct(selDisplayNode.xPct);
     const initialPanPct = this.prevMapPanPct ?? targetPanPct;
 
     const nodesHtml = displayNodes.map((n) => {
@@ -1768,6 +1771,10 @@ export class MetaView {
 
     container.querySelectorAll<HTMLElement>('[data-level]').forEach((btn) => {
       btn.onclick = () => {
+        if (this.suppressNextMapClick) {
+          this.suppressNextMapClick = false;
+          return;
+        }
         this.selectStageById(Number(btn.dataset.level));
       };
     });
@@ -1819,7 +1826,70 @@ export class MetaView {
       activePill.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
     }
 
-    const bindHorizontalSwipe = (el: HTMLElement | null) => {
+    const mapViewport = container.querySelector<HTMLElement>('#world-map-viewport');
+    if (mapViewport && track) {
+      let dragStartX = 0;
+      let startPan = Number(track.dataset.targetPan ?? '0');
+      let dragging = false;
+      let moved = false;
+
+      const clampPan = (val: number): number => Math.max(-80.7692, Math.min(0, val));
+
+      mapViewport.onpointerdown = (ev: PointerEvent) => {
+        const tgt = ev.target as HTMLElement | null;
+        if (tgt?.closest?.('.map-nav-arrow, .map-medallion')) {
+          dragging = false;
+          return;
+        }
+        dragStartX = ev.clientX;
+        startPan = this.prevMapPanPct ?? Number(track.dataset.targetPan ?? '0');
+        dragging = true;
+        moved = false;
+        this.suppressNextMapClick = false;
+      };
+
+      mapViewport.onpointermove = (ev: PointerEvent) => {
+        if (!dragging) return;
+        const dx = ev.clientX - dragStartX;
+        if (!moved && Math.abs(dx) < 7) return;
+        if (!moved) {
+          moved = true;
+          this.suppressNextMapClick = true;
+          track.classList.add('is-dragging');
+        }
+        const trackW = track.getBoundingClientRect?.().width || (mapViewport.clientWidth * 5.2) || 2236;
+        const nextPan = clampPan(startPan + (dx / trackW) * 100);
+        track.style.transform = `translate3d(${nextPan.toFixed(4)}%, 0, 0)`;
+        this.prevMapPanPct = nextPan;
+        this.manualMapPanPct = nextPan;
+      };
+
+      const finishDrag = () => {
+        if (!dragging) return;
+        dragging = false;
+        track.classList.remove('is-dragging');
+        if (moved && typeof window !== 'undefined') {
+          window.setTimeout(() => {
+            this.suppressNextMapClick = false;
+          }, 80);
+        }
+      };
+      mapViewport.onpointerup = finishDrag;
+      mapViewport.onpointercancel = finishDrag;
+
+      mapViewport.onwheel = (ev: WheelEvent) => {
+        const delta = Math.abs(ev.deltaX) > Math.abs(ev.deltaY) ? ev.deltaX : ev.deltaY;
+        if (!delta) return;
+        ev.preventDefault();
+        const curPan = this.prevMapPanPct ?? Number(track.dataset.targetPan ?? '0');
+        const nextPan = clampPan(curPan - delta * 0.045);
+        track.style.transform = `translate3d(${nextPan.toFixed(4)}%, 0, 0)`;
+        this.prevMapPanPct = nextPan;
+        this.manualMapPanPct = nextPan;
+      };
+    }
+
+    const bindDrawerSwipe = (el: HTMLElement | null) => {
       if (!el) return;
       let startX = 0;
       let startY = 0;
@@ -1845,8 +1915,7 @@ export class MetaView {
       };
       el.onpointercancel = () => { tracking = false; };
     };
-    bindHorizontalSwipe(container.querySelector<HTMLElement>('#world-map-viewport'));
-    bindHorizontalSwipe(container.querySelector<HTMLElement>('#parchment-drawer'));
+    bindDrawerSwipe(container.querySelector<HTMLElement>('#parchment-drawer'));
 
     if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       if (this.mapKeyHandler) {

@@ -18,12 +18,24 @@ import {
   popScale,
 } from '../src/core/JuiceController.ts';
 import { FIXED_DT, SimulationEngine } from '../src/core/SimulationEngine.ts';
+import { ENEMY_LIST, type HeroId } from '../src/data/enemies.ts';
 import { LEVELS } from '../src/data/levels.ts';
+import { TOWER_LIST } from '../src/data/towers.ts';
 import {
   CameraController,
   REDUCED_MOTION_TRAUMA_CAP,
   shakeAmount,
 } from '../src/rendering/CameraController.ts';
+import {
+  createEnemyRig,
+  createHeroRig,
+  createTowerRig,
+  triggerHeroAttack,
+  triggerTowerRecoil,
+  updateEnemyAnimation,
+  updateHeroAnimation,
+  updateTowerAnimation,
+} from '../src/rendering/ModelFactory.ts';
 import { randomizePitch, VoiceLimiter } from '../src/audio/SoundEngine.ts';
 
 const FRAME = 1 / 60;
@@ -328,5 +340,137 @@ describe('Path-aware stagger & SimulationEngine impact events (GF-2)', () => {
     assert.ok(a.hit && a.hit.type === 'ENEMY_HIT');
     assert.ok(typeof a.hit.dirX === 'number' && typeof a.hit.dirZ === 'number');
     assert.equal(a.hit.resisted, true, 'armored shield_loader vs basic squirrel triggers resisted deflection feedback');
+  });
+});
+
+describe('24-stage obstacle clearances, hero collinear navigation & all unit rigs', () => {
+  it('ensures all 24 levels have clean slot, barrel shoulder, and lantern clearances', () => {
+    const distSeg = (px: number, pz: number, ax: number, az: number, bx: number, bz: number) => {
+      const vx = bx - ax;
+      const vz = bz - az;
+      const len2 = vx * vx + vz * vz || 1;
+      const t = Math.max(0, Math.min(1, ((px - ax) * vx + (pz - az) * vz) / len2));
+      return Math.hypot(px - (ax + t * vx), pz - (az + t * vz));
+    };
+    const roadDist = (px: number, pz: number, lvl: (typeof LEVELS)[number]) => {
+      let best = Infinity;
+      for (const pts of lvl.secondaryPath ? [lvl.path, lvl.secondaryPath] : [lvl.path]) {
+        for (let i = 0; i < pts.length - 1; i++) {
+          best = Math.min(best, distSeg(px, pz, pts[i].x, pts[i].z, pts[i + 1].x, pts[i + 1].z));
+        }
+      }
+      return best;
+    };
+
+    assert.equal(LEVELS.length, 24);
+    for (const lv of LEVELS) {
+      for (const s of lv.slots) {
+        const rd = roadDist(s.x, s.z, lv);
+        assert.ok(rd >= 1.15, `L${lv.id} slot ${s.id} too close to road (${rd.toFixed(2)}m)`);
+      }
+      for (const b of lv.barrels ?? []) {
+        const rd = roadDist(b.x, b.z, lv);
+        assert.ok(rd >= 0.85 && rd <= 1.65, `L${lv.id} barrel ${b.id} roadDist=${rd.toFixed(2)}m out of [0.85, 1.65]`);
+        for (const s of lv.slots) {
+          const sd = Math.hypot(b.x - s.x, b.z - s.z);
+          assert.ok(sd >= 1.45, `L${lv.id} barrel ${b.id} vs slot ${s.id} dist=${sd.toFixed(2)}m < 1.45m`);
+        }
+      }
+      for (const l of lv.lanterns) {
+        const rd = roadDist(l.x, l.z, lv);
+        assert.ok(rd >= 0.9, `L${lv.id} lantern roadDist=${rd.toFixed(2)}m < 0.90m`);
+        for (const s of lv.slots) {
+          const sd = Math.hypot(l.x - s.x, l.z - s.z);
+          assert.ok(sd >= 1.15, `L${lv.id} lantern vs slot ${s.id} dist=${sd.toFixed(2)}m < 1.15m`);
+        }
+      }
+    }
+  });
+
+  it('glides all 4 heroes past collinear slot obstacles and settles at target without getting stuck', () => {
+    const heroIds: HeroId[] = ['boz_pence', 'kizil_kuyruk', 'kaya_dis', 'ay_kurdu'];
+    for (const heroId of heroIds) {
+      const sim = new SimulationEngine(LEVELS[0], { seed: 4201, heroId, waitForFirstWave: true });
+      const slot = LEVELS[0].slots[0];
+      // Start directly in front of slot along X, command strictly collinear target directly behind slot
+      sim.hero.x = slot.x;
+      sim.hero.z = slot.z - 1.25;
+      sim.hero.targetX = sim.hero.x;
+      sim.hero.targetZ = sim.hero.z;
+
+      sim.dispatch({ type: 'MOVE_HERO', x: slot.x, z: slot.z + 1.35 }, 'p1', 0);
+      for (let i = 0; i < 180; i++) {
+        sim.step(FIXED_DT);
+        for (const s of sim.slots.values()) {
+          const sd = Math.hypot(sim.hero.x - s.x, sim.hero.z - s.z);
+          assert.ok(sd >= 0.76, `${heroId} clipped slot ${s.id} at sd=${sd.toFixed(3)}`);
+        }
+      }
+      assert.equal(sim.hero.moving, false, `${heroId} should finish gliding around collinear slot`);
+      assert.ok(sim.hero.z > slot.z + 0.9, `${heroId} should cross behind slot, got z=${sim.hero.z.toFixed(2)}`);
+
+      // Clicking straight onto a slot center pushes target outward and settles cleanly
+      sim.dispatch({ type: 'MOVE_HERO', x: slot.x, z: slot.z }, 'p1', 0);
+      for (let i = 0; i < 90; i++) sim.step(FIXED_DT);
+      assert.equal(sim.hero.moving, false, `${heroId} should settle cleanly when tapping slot center`);
+    }
+  });
+
+  it('animates all 8 towers, 4 heroes, and 14 enemies cleanly and generates distinct pool kinds', () => {
+    for (const tw of TOWER_LIST) {
+      const rig = createTowerRig(tw.id, 1, undefined, 'none', false);
+      triggerTowerRecoil(rig);
+      assert.ok(rig.recoilTimer > 0);
+      for (let i = 0; i < 24; i++) updateTowerAnimation(rig, i * 0.02, 0.02);
+      assert.equal(rig.recoilTimer, 0);
+      assert.equal(rig.weaponGroup.position.z, 0);
+      assert.equal(rig.weaponGroup.rotation.x, 0);
+      assert.equal(rig.characterGroup.position.y, 0);
+      assert.equal(rig.turretHead.scale.x, 1);
+    }
+
+    const heroIds: HeroId[] = ['boz_pence', 'kizil_kuyruk', 'kaya_dis', 'ay_kurdu'];
+    for (const hid of heroIds) {
+      const hRig = createHeroRig(hid, 'none', 'classic');
+      triggerHeroAttack(hRig, 1, 0, false);
+      assert.equal(hRig.attackSeq, 1);
+      for (let i = 0; i < 40; i++) updateHeroAnimation(hRig, false, i * 0.02, 0.02);
+      assert.equal(hRig.attackTimer, 0);
+      assert.equal(hRig.body.scale.x, 1);
+      assert.equal(hRig.body.position.x, 0);
+    }
+
+    for (const en of ENEMY_LIST) {
+      const eRig = createEnemyRig(en.id);
+      eRig.hitJoltTimer = 0.16;
+      updateEnemyAnimation(eRig, 0.1, 0.02, 0.02, 1, false);
+      assert.ok(eRig.hitJoltTimer > 0);
+      for (let i = 0; i < 15; i++) updateEnemyAnimation(eRig, i * 0.02, 0.02, 0.02, 1, false);
+      assert.equal(eRig.hitJoltTimer, 0);
+      assert.equal(eRig.body.scale.x, 1);
+    }
+
+    // Distinct pool kinds from badger vs badger_inferno vs beaver_resin vs fox_storm
+    const simFox = new SimulationEngine(LEVELS[0], { seed: 991, heroId: 'kizil_kuyruk' });
+    simFox.dispatch({ type: 'CAST_HERO_ULTIMATE', x: 0, z: 0 }, 'p1', 0);
+    simFox.step(FIXED_DT);
+    assert.equal(simFox.resinPools[0]?.kind, 'acid');
+
+    const simBadger = new SimulationEngine(LEVELS[0], { seed: 992, waitForFirstWave: true });
+    simBadger.gold = 2000;
+    simBadger.dispatch({ type: 'BUILD_TOWER', slotId: 'slot_1', towerId: 'badger' }, 'p1', 0);
+    simBadger.step(FIXED_DT);
+    const s1 = simBadger.slots.get('slot_1')!;
+    simBadger.spawnEnemy('shield_loader', 600, 0.01, 10, { x: s1.x + 1.5, z: s1.z, wpIndex: 1, progress: 5 });
+    for (let i = 0; i < 40; i++) simBadger.step(FIXED_DT);
+    assert.equal(simBadger.resinPools[0]?.kind, 'acid');
+
+    simBadger.resinPools = [];
+    simBadger.dispatch({ type: 'UPGRADE_TOWER', slotId: 'slot_1' }, 'p1', 0);
+    simBadger.step(FIXED_DT);
+    simBadger.dispatch({ type: 'EVOLVE_TOWER', slotId: 'slot_1', branchId: 'badger_inferno' }, 'p1', 0);
+    simBadger.step(FIXED_DT);
+    for (let i = 0; i < 90; i++) simBadger.step(FIXED_DT);
+    assert.ok(simBadger.resinPools.some((p) => p.kind === 'inferno'), 'badger_inferno must emit inferno pool kind');
   });
 });

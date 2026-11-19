@@ -85,6 +85,7 @@ export type SimEvent =
   | {
       type: 'ENEMY_HIT';
       enemyId: number;
+      towerId?: TowerId;
       x: number;
       z: number;
       damage: number;
@@ -111,7 +112,7 @@ export type SimEvent =
   | { type: 'PINECONE_RAIN'; x: number; z: number; hits: number }
   | { type: 'ACORN_MAGNET'; x: number; z: number; duration: number }
   | { type: 'BARREL_EXPLODED'; barrelId: string; x: number; z: number; hits: number }
-  | { type: 'HERO_ATTACK'; x: number; z: number; targetX: number; targetZ: number; ranged?: boolean }
+  | { type: 'HERO_ATTACK'; x: number; z: number; targetX: number; targetZ: number; ranged?: boolean; heroId?: HeroId; isCrit?: boolean }
   | { type: 'HERO_CLAW_SHOCK'; x: number; z: number; hits: number; heroId?: HeroId }
   | {
       type: 'HERO_ULTIMATE';
@@ -204,6 +205,7 @@ export interface ResinPool {
   dps: number;
   slowPct: number;
   timer: number;
+  kind?: 'resin' | 'acid' | 'inferno';
 }
 
 export interface HeroState {
@@ -357,11 +359,12 @@ export class SimulationEngine {
     const cls = this.heroId === 'boz_pence' ? HERO_CLASSES[this.heroClass] : HERO_CLASSES.classic;
     const giantHpMult = this.relics.includes('giant_hero') ? 1.45 : 1.0;
     const heroHp = Math.round(heroSpec.maxHp * heroMult * cls.hpMult * this.talentMods.heroHpMult * giantHpMult);
+    const safeStart = this.sanitizeHeroPoint(level.heroStart.x, level.heroStart.z, 0.9);
     this.hero = {
-      x: level.heroStart.x,
-      z: level.heroStart.z,
-      targetX: level.heroStart.x,
-      targetZ: level.heroStart.z,
+      x: safeStart.x,
+      z: safeStart.z,
+      targetX: safeStart.x,
+      targetZ: safeStart.z,
       moving: false,
       facingAngle: 0,
       hp: heroHp,
@@ -381,6 +384,28 @@ export class SimulationEngine {
     };
 
     this.computePathLengths();
+  }
+
+  private sanitizeHeroPoint(rawX: number, rawZ: number, minRadius = 0.9): { x: number; z: number } {
+    let px = Math.max(-4.6, Math.min(4.6, rawX));
+    let pz = Math.max(-8.2, Math.min(9.0, rawZ));
+    // Two passes ensure clearance even between adjacent slot pads
+    for (let pass = 0; pass < 2; pass++) {
+      for (const slot of this.slots.values()) {
+        const sdx = px - slot.x;
+        const sdz = pz - slot.z;
+        const sd = Math.hypot(sdx, sdz);
+        if (sd < minRadius) {
+          const nx = sd > 0.04 ? sdx / sd : slot.x >= 0 ? -1 : 1;
+          const nz = sd > 0.04 ? sdz / sd : 0;
+          px = slot.x + nx * minRadius;
+          pz = slot.z + nz * minRadius;
+          px = Math.max(-4.6, Math.min(4.6, px));
+          pz = Math.max(-8.2, Math.min(9.0, pz));
+        }
+      }
+    }
+    return { x: px, z: pz };
   }
 
   private computePathLengths(): void {
@@ -572,21 +597,9 @@ export class SimulationEngine {
       }
       case 'MOVE_HERO': {
         if (!this.hero.dead) {
-          let tx = Math.max(-4.6, Math.min(4.6, cmd.x));
-          let tz = Math.max(-8.2, Math.min(9.0, cmd.z));
-          for (const slot of this.slots.values()) {
-            const sdx = tx - slot.x;
-            const sdz = tz - slot.z;
-            const sd = Math.hypot(sdx, sdz);
-            if (sd < 0.88) {
-              const nx = sd > 0.04 ? sdx / sd : slot.x >= 0 ? -1 : 1;
-              const nz = sd > 0.04 ? sdz / sd : 0;
-              tx = slot.x + nx * 0.90;
-              tz = slot.z + nz * 0.90;
-            }
-          }
-          this.hero.targetX = Math.max(-4.6, Math.min(4.6, tx));
-          this.hero.targetZ = Math.max(-8.2, Math.min(9.0, tz));
+          const safe = this.sanitizeHeroPoint(cmd.x, cmd.z, 0.9);
+          this.hero.targetX = safe.x;
+          this.hero.targetZ = safe.z;
           this.hero.repositionTimer = 1.6;
           this.events.push({ type: 'HERO_RALLY', x: this.hero.targetX, z: this.hero.targetZ });
         }
@@ -633,6 +646,15 @@ export class SimulationEngine {
               });
             }
           }
+          this.resinPools.push({
+            x: tx,
+            z: tz,
+            radius: 2.4,
+            dps: Math.round(14 * lvlMult * cardMult * this.talentMods.heroDamageMult),
+            slowPct: 0.25,
+            timer: 2.4 * this.talentMods.statusDurationMult,
+            kind: 'acid',
+          });
           this.events.push({ type: 'HERO_ULTIMATE', variant: 'fox_storm', x: tx, z: tz, fromX, fromZ, hits });
           break;
         }
@@ -643,8 +665,9 @@ export class SimulationEngine {
             .sort((a, b) => b.progress - a.progress)[0];
           const rawX = cmd.x ?? leading?.x ?? h.x;
           const rawZ = cmd.z ?? leading?.z ?? h.z;
-          const tx = Math.max(-4.6, Math.min(4.6, rawX));
-          const tz = Math.max(-8.0, Math.min(8.8, rawZ));
+          const safe = this.sanitizeHeroPoint(rawX, rawZ, 0.88);
+          const tx = safe.x;
+          const tz = Math.max(-8.0, Math.min(8.8, safe.z));
           if (Math.hypot(tx - h.x, tz - h.z) > 0.05) {
             h.facingAngle = Math.atan2(tx - h.x, tz - h.z);
           }
@@ -723,8 +746,9 @@ export class SimulationEngine {
             .sort((a, b) => b.progress - a.progress)[0];
           const rawX = cmd.x ?? leading?.x ?? h.x;
           const rawZ = cmd.z ?? leading?.z ?? h.z;
-          const tx = Math.max(-4.6, Math.min(4.6, rawX));
-          const tz = Math.max(-8.0, Math.min(8.8, rawZ));
+          const safe = this.sanitizeHeroPoint(rawX, rawZ, 0.88);
+          const tx = safe.x;
+          const tz = Math.max(-8.0, Math.min(8.8, safe.z));
           if (Math.hypot(tx - h.x, tz - h.z) > 0.05) {
             h.facingAngle = Math.atan2(tx - h.x, tz - h.z);
           }
@@ -1044,8 +1068,9 @@ export class SimulationEngine {
         const rx = h.x - closeThreat.x;
         const rz = h.z - closeThreat.z;
         const rlen = Math.hypot(rx, rz) || 1;
-        destX = Math.max(-4.5, Math.min(4.5, h.x + (rx / rlen) * 1.4));
-        destZ = Math.max(-8.0, Math.min(8.6, h.z + (rz / rlen) * 1.4));
+        const kiteSafe = this.sanitizeHeroPoint(h.x + (rx / rlen) * 1.4, h.z + (rz / rlen) * 1.4, 0.84);
+        destX = kiteSafe.x;
+        destZ = kiteSafe.z;
       }
     } else if (h.repositionTimer <= 0 && nearbyGround.length > 0 && !heroSpec.isRanged) {
       const lead = nearbyGround[0];
@@ -1071,25 +1096,70 @@ export class SimulationEngine {
     const dz = destZ - h.z;
     const dist = Math.hypot(dx, dz);
     if (dist > 0.08) {
+      const prevX = h.x;
+      const prevZ = h.z;
       const moveSpd = heroSpec.moveSpeed * (h.activeBuff === 'berserk' ? 1.35 : 1.0);
       const step = Math.min(dist, moveSpd * dt);
-      h.x += (dx / dist) * step;
-      h.z += (dz / dist) * step;
-      // Soft circular deflection around tower slots so hero glides smoothly past pads
+      const ux = dx / dist;
+      const uz = dz / dist;
+      h.x += ux * step;
+      h.z += uz * step;
+      // Tangential glide + soft circular deflection around tower slots so hero never gets wedged head-on
+      const SLOT_CLEAR_R = 0.78;
       for (const slot of this.slots.values()) {
         const sdx = h.x - slot.x;
         const sdz = h.z - slot.z;
         const sd = Math.hypot(sdx, sdz);
-        if (sd < 0.78) {
+        if (sd < SLOT_CLEAR_R) {
           const nx = sd > 0.01 ? sdx / sd : slot.x >= 0 ? -1 : 1;
           const nz = sd > 0.01 ? sdz / sd : 0;
-          h.x = slot.x + nx * 0.78;
-          h.z = slot.z + nz * 0.78;
+          const intoSlot = ux * nx + uz * nz;
+          if (intoSlot < -0.15) {
+            const t1x = -nz;
+            const t1z = nx;
+            const dot1 = ux * t1x + uz * t1z;
+            let sx: number;
+            let sz: number;
+            if (Math.abs(dot1) > 0.05) {
+              const sgn = dot1 >= 0 ? 1 : -1;
+              sx = t1x * sgn;
+              sz = t1z * sgn;
+            } else {
+              // Exact head-on collinear tie-break: steer toward lane center x=0 (away from slot side)
+              const biasX = slot.x >= 0 ? -1 : 1;
+              const sgn = t1x * biasX >= 0 ? 1 : -1;
+              sx = t1x * sgn;
+              sz = t1z * sgn;
+            }
+            const baseAng = Math.atan2(sdz, sdx);
+            const cross = Math.cos(baseAng) * sz - Math.sin(baseAng) * sx;
+            const sweep = (step * 0.92) / SLOT_CLEAR_R;
+            const nextAng = baseAng + (cross >= 0 ? sweep : -sweep);
+            h.x = slot.x + Math.cos(nextAng) * SLOT_CLEAR_R;
+            h.z = slot.z + Math.sin(nextAng) * SLOT_CLEAR_R;
+          } else {
+            h.x = slot.x + nx * SLOT_CLEAR_R;
+            h.z = slot.z + nz * SLOT_CLEAR_R;
+          }
+        }
+      }
+      // Second radial clamp guarantees clearance even between adjacent tight slot pairs
+      for (const slot of this.slots.values()) {
+        const sdx = h.x - slot.x;
+        const sdz = h.z - slot.z;
+        const sd = Math.hypot(sdx, sdz);
+        if (sd < SLOT_CLEAR_R) {
+          const nx = sd > 0.01 ? sdx / sd : slot.x >= 0 ? -1 : 1;
+          const nz = sd > 0.01 ? sdz / sd : 0;
+          h.x = slot.x + nx * SLOT_CLEAR_R;
+          h.z = slot.z + nz * SLOT_CLEAR_R;
         }
       }
       h.x = Math.max(-4.6, Math.min(4.6, h.x));
       h.z = Math.max(-8.2, Math.min(9.0, h.z));
-      h.facingAngle = Math.atan2(dx, dz);
+      const mvx = h.x - prevX;
+      const mvz = h.z - prevZ;
+      h.facingAngle = Math.hypot(mvx, mvz) > 1e-4 ? Math.atan2(mvx, mvz) : Math.atan2(dx, dz);
       h.moving = true;
     } else {
       h.moving = false;
@@ -1143,6 +1213,7 @@ export class SimulationEngine {
           targetX: rangedTarget.x,
           targetZ: rangedTarget.z,
           ranged: true,
+          heroId: this.heroId,
         });
       }
     }
@@ -1193,7 +1264,14 @@ export class SimulationEngine {
             heavy: true,
           });
           this.grantHeroXp(12);
-          this.events.push({ type: 'HERO_ATTACK', x: h.x, z: h.z, targetX: target.x, targetZ: target.z });
+          this.events.push({
+            type: 'HERO_ATTACK',
+            x: h.x,
+            z: h.z,
+            targetX: target.x,
+            targetZ: target.z,
+            heroId: this.heroId,
+          });
         }
       }
 
@@ -1553,6 +1631,7 @@ export class SimulationEngine {
             dirX: cur.x - prevX,
             dirZ: cur.z - prevZ,
             heavy: false,
+            towerId: tower.towerId,
           });
           prevX = cur.x;
           prevZ = cur.z;
@@ -1592,6 +1671,7 @@ export class SimulationEngine {
               dirX: ux,
               dirZ: uz,
               heavy: true,
+              towerId: tower.towerId,
             });
           }
         }
@@ -1689,10 +1769,17 @@ export class SimulationEngine {
                 dirX: rlen > 0.05 ? rx : ux,
                 dirZ: rlen > 0.05 ? rz : uz,
                 heavy: true,
+                towerId: p.towerId,
               });
             }
           }
           if (p.stats.resinDuration && p.stats.resinDps) {
+            const poolKind: ResinPool['kind'] =
+              p.towerId === 'badger'
+                ? p.branchId === 'badger_inferno'
+                  ? 'inferno'
+                  : 'acid'
+                : 'resin';
             this.resinPools.push({
               x: impactX,
               z: impactZ,
@@ -1700,6 +1787,7 @@ export class SimulationEngine {
               dps: p.stats.resinDps * this.talentMods.resinDpsMult,
               slowPct: p.stats.resinSlowPct ?? 0.2,
               timer: p.stats.resinDuration * this.talentMods.statusDurationMult,
+              kind: poolKind,
             });
           }
         } else if (target) {
@@ -1707,6 +1795,7 @@ export class SimulationEngine {
             dirX: ux,
             dirZ: uz,
             heavy: heavyHit,
+            towerId: p.towerId,
           });
           if (isSplash) {
             const splashDmg = Math.max(1, Math.round(p.damage * 0.35));
@@ -1716,6 +1805,7 @@ export class SimulationEngine {
                   dirX: e.x - target.x,
                   dirZ: e.z - target.z,
                   heavy: false,
+                  towerId: p.towerId,
                 });
               }
             }
@@ -1753,7 +1843,7 @@ export class SimulationEngine {
     stats: TowerTierStats,
     isCrit: boolean,
     isFourthShot: boolean,
-    hitMeta?: { dirX?: number; dirZ?: number; heavy?: boolean },
+    hitMeta?: { dirX?: number; dirZ?: number; heavy?: boolean; towerId?: TowerId },
   ): void {
     let dmg = rawDamage;
     if (enemy.isBoss && stats.bossBonusPct) {
@@ -1801,7 +1891,7 @@ export class SimulationEngine {
     isCrit: boolean,
     suppressEvents = false,
     armorBroken = false,
-    hitMeta?: { dirX?: number; dirZ?: number; heavy?: boolean },
+    hitMeta?: { dirX?: number; dirZ?: number; heavy?: boolean; towerId?: TowerId },
   ): void {
     if (enemy.hp <= 0) return;
 
@@ -1815,6 +1905,7 @@ export class SimulationEngine {
       this.events.push({
         type: 'ENEMY_HIT',
         enemyId: enemy.uid,
+        ...(hitMeta?.towerId ? { towerId: hitMeta.towerId } : {}),
         x: enemy.x,
         z: enemy.z,
         damage: Math.round(finalDamage),

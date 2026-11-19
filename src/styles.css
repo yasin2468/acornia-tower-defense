@@ -1338,6 +1338,11 @@ body,
   background-size: cover;
   background-repeat: no-repeat;
   touch-action: pan-y;
+  cursor: grab;
+}
+
+.world-map-box.map-full:active {
+  cursor: grabbing;
 }
 
 .map-horiz-track {
@@ -1348,6 +1353,10 @@ body,
   width: 520%;
   transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
   will-change: transform;
+}
+
+.map-horiz-track.is-dragging {
+  transition: none;
 }
 
 .map-horiz-bg-strip {

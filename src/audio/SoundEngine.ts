@@ -1,3 +1,5 @@
+import type { HeroId } from '../data/enemies.ts';
+
 /** Random pitch multiplier in [1 - spread, 1 + spread] (default ±10 %). */
 export function randomizePitch(freq: number, spread = 0.1, rnd: () => number = Math.random): number {
   const s = Math.max(0, Math.min(0.5, spread));
@@ -266,22 +268,43 @@ export class SoundEngine {
     this.tone(659, 880, 0.14, 'triangle', 0.1, 0.12, 2, 0.02);
   }
 
-  playShoot(kind: 'arrow' | 'mortar' | 'emp' | 'heavy'): void {
+  playShoot(kind: 'arrow' | 'falcon' | 'mortar' | 'acid' | 'cannon' | 'emp' | 'rune' | 'heavy'): void {
     if (kind === 'arrow') {
       if (!this.throttle('shoot_arrow', 0.04)) return;
       this.tone(720, 310, 0.065, 'triangle', 0.085, 0, 0);
       this.noiseBurst(3200, 'highpass', 0.04, 0.048, 1.1, 0, 0);
+    } else if (kind === 'falcon') {
+      if (!this.throttle('shoot_falcon', 0.04)) return;
+      this.tone(980, 440, 0.075, 'triangle', 0.085, 0, 0);
+      this.noiseBurst(4200, 'bandpass', 0.055, 0.055, 2.2, 0, 0);
     } else if (kind === 'mortar') {
       if (!this.throttle('shoot_mortar', 0.06)) return;
       this.transient(0.07, 0.2, 68, 1);
       this.tone(110, 38, 0.24, 'sine', 0.2, 0, 1);
       this.noiseBurst(460, 'lowpass', 0.16, 0.1, 0.9);
       this.duckMusic(0.55, 0.18);
+    } else if (kind === 'acid') {
+      if (!this.throttle('shoot_acid', 0.055)) return;
+      this.transient(0.055, 0.1, 125, 1);
+      this.tone(460, 195, 0.14, 'triangle', 0.11, 0, 1);
+      this.noiseBurst(2800, 'bandpass', 0.11, 0.075, 2.0, 0.015, 1);
+    } else if (kind === 'cannon') {
+      if (!this.throttle('shoot_cannon', 0.07)) return;
+      this.transient(0.1, 0.26, 56, 2);
+      this.tone(95, 30, 0.3, 'sine', 0.24, 0, 2);
+      this.tone(210, 72, 0.16, 'sawtooth', 0.09, 0.01, 1);
+      this.noiseBurst(380, 'lowpass', 0.22, 0.14, 0.8);
+      this.duckMusic(0.45, 0.22);
     } else if (kind === 'emp') {
       if (!this.throttle('shoot_emp', 0.04)) return;
       this.noiseBurst(4200, 'bandpass', 0.06, 0.058, 2.8, 0, 0);
       this.tone(860, 440, 0.095, 'sine', 0.085, 0, 0);
       this.tone(1320, 680, 0.08, 'triangle', 0.055, 0.012, 0);
+    } else if (kind === 'rune') {
+      if (!this.throttle('shoot_rune', 0.04)) return;
+      this.tone(1480, 880, 0.09, 'sine', 0.08, 0, 0, 0.05);
+      this.tone(980, 560, 0.07, 'triangle', 0.055, 0.01, 0, 0.05);
+      this.noiseBurst(4600, 'highpass', 0.04, 0.04, 1.5, 0, 0);
     } else {
       if (!this.throttle('shoot_heavy', 0.045)) return;
       this.transient(0.085, 0.14, 108, 1);
@@ -289,6 +312,45 @@ export class SoundEngine {
       this.tone(145, 55, 0.15, 'sine', 0.15, 0, 1);
       this.noiseBurst(1900, 'bandpass', 0.065, 0.075, 1.8);
     }
+  }
+
+  playAcidSplash(): void {
+    if (!this.throttle('acid_splash', 0.06)) return;
+    this.noiseBurst(4400, 'highpass', 0.1, 0.085, 1.3, 0, 1);
+    this.noiseBurst(2100, 'bandpass', 0.18, 0.08, 2.2, 0.02, 1);
+    this.tone(580, 260, 0.14, 'triangle', 0.08, 0.01, 1);
+  }
+
+  playSeismicSlam(): void {
+    if (!this.throttle('seismic_slam', 0.07)) return;
+    this.transient(0.09, 0.24, 62, 2);
+    this.tone(110, 34, 0.28, 'sine', 0.2, 0, 2);
+    this.noiseBurst(480, 'lowpass', 0.24, 0.13, 0.85, 0.02, 2);
+    this.duckMusic(0.38, 0.22);
+  }
+
+  playHeroAttack(heroId: HeroId): void {
+    if (heroId === 'kizil_kuyruk') {
+      if (!this.throttle('hero_flask', 0.06)) return;
+      this.tone(1180, 580, 0.11, 'triangle', 0.075, 0, 1);
+      this.noiseBurst(4200, 'bandpass', 0.09, 0.065, 2.0, 0.04, 1);
+      return;
+    }
+    if (heroId === 'kaya_dis') {
+      if (!this.throttle('hero_boar', 0.08)) return;
+      this.transient(0.09, 0.18, 86, 2);
+      this.tone(115, 40, 0.16, 'sine', 0.18, 0, 2);
+      this.noiseBurst(1100, 'lowpass', 0.13, 0.12, 1.1, 0.01, 2);
+      return;
+    }
+    if (heroId === 'ay_kurdu') {
+      if (!this.throttle('hero_wolf', 0.07)) return;
+      this.noiseBurst(4200, 'bandpass', 0.075, 0.08, 1.6, 0, 2);
+      this.noiseBurst(3600, 'bandpass', 0.075, 0.075, 1.8, 0.05, 2);
+      this.tone(1520, 1080, 0.09, 'sine', 0.055, 0, 1, 0.05);
+      return;
+    }
+    this.playHeroSlash(true);
   }
 
   playHit(isCrit: boolean, isArmorBreak = false, heavy = false, resisted = false): void {

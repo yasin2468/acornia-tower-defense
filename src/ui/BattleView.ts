@@ -784,8 +784,13 @@ export class BattleView {
     if (!slot) return parts.join('');
 
     const proj = sceneMgr.projectToScreen(slot.x, 0.4, slot.z);
-    const clampedX = Math.max(116, Math.min(314, proj.x));
-    const clampedY = Math.max(168, Math.min(542, proj.y));
+    const hostW = this.mountedRoot?.clientWidth || sceneMgr.renderer.domElement.clientWidth || 430;
+    const hostH = this.mountedRoot?.clientHeight || sceneMgr.renderer.domElement.clientHeight || 840;
+    const padX = Math.min(116, Math.max(96, Math.floor(hostW * 0.27)));
+    const minY = Math.min(168, Math.max(132, Math.floor(hostH * 0.19)));
+    const maxY = Math.max(minY + 120, hostH - 188);
+    const clampedX = Math.max(padX, Math.min(hostW - padX, proj.x));
+    const clampedY = Math.max(minY, Math.min(maxY, proj.y));
 
     if (slot.stumpLocked) {
       parts.push(`

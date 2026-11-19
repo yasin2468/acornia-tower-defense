@@ -76,14 +76,40 @@ export function createPropLOD(
 
 export interface TowerRig {
   root: THREE.Group;
+  towerId: TowerId;
+  branchId?: EvolutionBranchId;
   turretHead: THREE.Object3D;
+  baseTurretY: number;
   characterGroup: THREE.Object3D;
   weaponGroup: THREE.Object3D;
   headSocket: THREE.Object3D;
   recoilTimer: number;
+  recoilDuration: number;
   spawnTimer: number;
   extraParts: THREE.Object3D[];
   spinSpeed?: number;
+}
+
+export function getTowerRecoilDuration(towerId: TowerId): number {
+  switch (towerId) {
+    case 'tortoise':
+      return 0.28;
+    case 'beaver':
+    case 'badger':
+      return 0.24;
+    case 'hedgehog':
+      return 0.22;
+    case 'owl':
+    case 'lynx':
+      return 0.20;
+    default:
+      return 0.15;
+  }
+}
+
+export function triggerTowerRecoil(rig: TowerRig): void {
+  rig.recoilDuration = getTowerRecoilDuration(rig.towerId);
+  rig.recoilTimer = rig.recoilDuration;
 }
 
 function resolveTowerModelName(
@@ -168,11 +194,15 @@ export function createTowerRig(
 
   return {
     root,
+    towerId,
+    branchId,
     turretHead,
+    baseTurretY: turretHead.position.y,
     characterGroup,
     weaponGroup,
     headSocket,
     recoilTimer: 0,
+    recoilDuration: getTowerRecoilDuration(towerId),
     spawnTimer: animateSpawn ? 0.28 : 0,
     extraParts,
     spinSpeed,
@@ -191,20 +221,61 @@ export function updateTowerAnimation(rig: TowerRig, time: number, dt: number): v
   const breathe = 1 + Math.sin(time * 2.8) * 0.024;
   rig.characterGroup.scale.set(1, breathe, 1);
 
+  let spinBoost = 1;
   if (rig.recoilTimer > 0) {
     rig.recoilTimer = Math.max(0, rig.recoilTimer - dt);
-    const ratio = rig.recoilTimer / 0.22;
-    const s = evalSquashPop(rig.recoilTimer, 0.22, 1.24, 0.80);
-    rig.turretHead.scale.set(s.sx, s.sy, s.sz);
-    rig.weaponGroup.position.z = -0.28 * ratio;
-    rig.characterGroup.rotation.x = -0.16 * ratio;
+    const dur = rig.recoilDuration || 0.22;
+    const ratio = rig.recoilTimer / dur;
+    const phase = 1 - ratio;
+    const thrust = Math.sin(phase * Math.PI);
+
+    if (rig.towerId === 'tortoise') {
+      const s = evalSquashPop(rig.recoilTimer, dur, 1.28, 0.76);
+      rig.turretHead.scale.set(s.sx, s.sy, s.sz);
+      rig.weaponGroup.position.set(0, -0.02 * ratio, -0.42 * ratio);
+      rig.weaponGroup.rotation.x = -0.18 * ratio;
+      rig.characterGroup.position.y = -0.03 * ratio;
+      rig.characterGroup.rotation.x = -0.20 * ratio;
+    } else if (rig.towerId === 'beaver' || rig.towerId === 'badger') {
+      const s = evalSquashPop(rig.recoilTimer, dur, 1.25, 0.78);
+      rig.turretHead.scale.set(s.sx, s.sy, s.sz);
+      rig.weaponGroup.position.set(0, 0.04 * thrust, -0.20 * ratio);
+      rig.weaponGroup.rotation.x = -0.32 * ratio;
+      rig.characterGroup.position.y = 0.06 * thrust;
+      rig.characterGroup.rotation.x = -0.14 * ratio;
+    } else if (rig.towerId === 'hedgehog') {
+      const s = evalSquashPop(rig.recoilTimer, dur, 1.26, 0.78);
+      rig.turretHead.scale.set(s.sx, s.sy, s.sz);
+      rig.weaponGroup.position.set(0, 0, -0.36 * ratio);
+      rig.weaponGroup.rotation.x = -0.10 * ratio;
+      rig.characterGroup.position.y = 0;
+      rig.characterGroup.rotation.x = -0.16 * ratio;
+    } else if (rig.towerId === 'owl' || rig.towerId === 'lynx') {
+      const s = evalSquashPop(rig.recoilTimer, dur, 1.22, 0.84);
+      rig.turretHead.scale.set(s.sx, s.sy, s.sz);
+      rig.weaponGroup.position.set(0, 0.06 * thrust, 0.16 * thrust);
+      rig.weaponGroup.rotation.x = 0.14 * thrust;
+      rig.characterGroup.position.y = 0.03 * thrust;
+      rig.characterGroup.rotation.x = 0.08 * thrust;
+      spinBoost = 1 + 2.8 * ratio;
+    } else {
+      const s = evalSquashPop(rig.recoilTimer, dur, 1.22, 0.84);
+      rig.turretHead.scale.set(s.sx, s.sy, s.sz);
+      rig.weaponGroup.position.set(0, 0, -0.20 * ratio);
+      rig.weaponGroup.rotation.x = -0.08 * ratio;
+      rig.characterGroup.position.y = 0;
+      rig.characterGroup.rotation.x = -0.11 * ratio;
+      spinBoost = 1 + 2.2 * ratio;
+    }
   } else {
     rig.turretHead.scale.set(1, 1, 1);
-    rig.weaponGroup.position.z = 0;
+    rig.weaponGroup.position.set(0, 0, 0);
+    rig.weaponGroup.rotation.x = 0;
+    rig.characterGroup.position.y = 0;
     rig.characterGroup.rotation.x = 0;
   }
 
-  const spinRate = rig.spinSpeed ?? 2.6;
+  const spinRate = (rig.spinSpeed ?? 2.6) * spinBoost;
   for (const part of rig.extraParts) {
     part.rotation.y += dt * spinRate;
   }
@@ -213,6 +284,7 @@ export function updateTowerAnimation(rig: TowerRig, time: number, dt: number): v
 export interface HeroRig {
   root: THREE.Group;
   body: THREE.Object3D;
+  heroId: HeroId;
   legL?: THREE.Object3D;
   legR?: THREE.Object3D;
   armL?: THREE.Object3D;
@@ -221,7 +293,11 @@ export interface HeroRig {
   headSocket: THREE.Object3D;
   ring: THREE.Mesh;
   attackTimer: number;
+  attackDuration: number;
+  attackSeq: number;
+  handledAttackSeq: number;
   lungeTimer: number;
+  lungeDuration: number;
   lungeDirX: number;
   lungeDirZ: number;
   mixer?: THREE.AnimationMixer;
@@ -229,6 +305,20 @@ export interface HeroRig {
   walkAction?: THREE.AnimationAction;
   attackAction?: THREE.AnimationAction;
   activeClip?: 'idle' | 'walk' | 'attack';
+}
+
+export function triggerHeroAttack(rig: HeroRig, dirX = 0, dirZ = 1, isShock = false): void {
+  const baseDur = rig.heroId === 'kaya_dis' ? 0.50 : rig.heroId === 'ay_kurdu' ? 0.36 : 0.44;
+  rig.attackDuration = isShock ? Math.max(0.32, baseDur * 0.85) : baseDur;
+  rig.attackTimer = rig.attackDuration;
+  rig.attackSeq += 1;
+
+  const isRanged = rig.heroId === 'kizil_kuyruk';
+  const len = Math.hypot(dirX, dirZ) || 1;
+  rig.lungeDirX = isRanged ? -(dirX / len) : dirX / len;
+  rig.lungeDirZ = isRanged ? -(dirZ / len) : dirZ / len;
+  rig.lungeDuration = isRanged ? 0.16 : 0.22;
+  rig.lungeTimer = rig.lungeDuration;
 }
 
 export function createHeroRig(
@@ -282,18 +372,28 @@ export function createHeroRig(
     const idleClip =
       inst.animations.find((a) => /^(idle|2h_melee_idle)$/i.test(a.name)) ?? inst.animations[0];
     const walkClip =
-      inst.animations.find((a) => /running_a/i.test(a.name)) ??
-      inst.animations.find((a) => /walking_a/i.test(a.name)) ??
+      inst.animations.find((a) => /running/i.test(a.name)) ??
+      inst.animations.find((a) => /walk/i.test(a.name)) ??
       idleClip;
     const attackClip =
       inst.animations.find((a) => /attack|chop|spellcast/i.test(a.name)) ?? idleClip;
+    const walkSpeedScale =
+      heroId === 'ay_kurdu'
+        ? 1.28
+        : heroId === 'kizil_kuyruk'
+          ? 1.20
+          : heroId === 'kaya_dis'
+            ? 1.02
+            : 1.12;
     idleAction = mixer.clipAction(idleClip);
     walkAction = mixer.clipAction(walkClip);
-    walkAction.setEffectiveTimeScale(1.25);
+    walkAction.setEffectiveTimeScale(walkSpeedScale);
     attackAction = mixer.clipAction(attackClip);
     attackAction.setLoop(THREE.LoopOnce, 1);
     attackAction.clampWhenFinished = true;
-    attackAction.setEffectiveTimeScale(2.35);
+    const baseAtkDur = heroId === 'kaya_dis' ? 0.50 : heroId === 'ay_kurdu' ? 0.36 : 0.44;
+    const clipDur = attackClip.duration || 1.0;
+    attackAction.setEffectiveTimeScale(Math.min(3.0, Math.max(1.5, clipDur / baseAtkDur)));
     idleAction.play();
     activeClip = 'idle';
   }
@@ -306,9 +406,11 @@ export function createHeroRig(
   ring.position.y = 0.065;
   root.add(ring);
 
+  const defaultAtkDur = heroId === 'kaya_dis' ? 0.50 : heroId === 'ay_kurdu' ? 0.36 : 0.44;
   return {
     root,
     body,
+    heroId,
     legL,
     legR,
     armL,
@@ -317,7 +419,11 @@ export function createHeroRig(
     headSocket,
     ring,
     attackTimer: 0,
+    attackDuration: defaultAtkDur,
+    attackSeq: 0,
+    handledAttackSeq: 0,
     lungeTimer: 0,
+    lungeDuration: 0.22,
     lungeDirX: 0,
     lungeDirZ: 0,
     mixer,
@@ -337,37 +443,58 @@ export function updateHeroAnimation(rig: HeroRig, moving: boolean, time: number,
   let lz = 0;
   if (rig.lungeTimer > 0) {
     rig.lungeTimer = Math.max(0, rig.lungeTimer - dt);
-    const snap = evalHitJolt(0.22 - rig.lungeTimer, 0.22).push * 0.36;
+    const lDur = rig.lungeDuration || 0.22;
+    const mag = rig.heroId === 'kizil_kuyruk' ? 0.12 : rig.heroId === 'kaya_dis' ? 0.42 : 0.36;
+    const snap = evalHitJolt(Math.max(0, lDur - rig.lungeTimer), lDur).push * mag;
     lx = rig.lungeDirX * snap;
     lz = rig.lungeDirZ * snap;
   }
 
   if (rig.mixer) {
-    const want: 'idle' | 'walk' | 'attack' =
-      rig.attackTimer > 0 ? 'attack' : moving ? 'walk' : 'idle';
     if (rig.attackTimer > 0) {
       rig.attackTimer = Math.max(0, rig.attackTimer - dt);
-      const s = evalSquashPop(rig.attackTimer, 0.45, 1.24, 0.82);
+      const aDur = rig.attackDuration || 0.44;
+      const peak = rig.heroId === 'kaya_dis' ? 1.28 : 1.22;
+      const minY = rig.heroId === 'kaya_dis' ? 0.78 : 0.84;
+      const s = evalSquashPop(rig.attackTimer, aDur, peak, minY);
       rig.body.scale.set(s.sx, s.sy, s.sz);
     } else {
       rig.body.scale.set(1, 1, 1);
     }
     rig.body.position.set(lx, 0, lz);
-    if (want !== rig.activeClip) {
+
+    if (rig.attackSeq !== rig.handledAttackSeq && rig.attackAction) {
+      rig.handledAttackSeq = rig.attackSeq;
+      const clipDur = rig.attackAction.getClip().duration || 1.0;
+      rig.attackAction.setEffectiveTimeScale(Math.min(3.0, Math.max(1.5, clipDur / Math.max(0.28, rig.attackDuration))));
       const prev =
         rig.activeClip === 'attack'
           ? rig.attackAction
           : rig.activeClip === 'walk'
             ? rig.walkAction
             : rig.idleAction;
-      const next =
-        want === 'attack' ? rig.attackAction : want === 'walk' ? rig.walkAction : rig.idleAction;
-      const fade = want === 'attack' || rig.activeClip === 'attack' ? 0.04 : 0.12;
-      if (prev && prev !== next) prev.fadeOut(fade);
-      if (next) {
-        next.reset().setEffectiveWeight(1).fadeIn(fade).play();
+      if (prev && prev !== rig.attackAction) prev.fadeOut(0.03);
+      rig.attackAction.reset().setEffectiveWeight(1).fadeIn(0.03).play();
+      rig.activeClip = 'attack';
+    } else {
+      const want: 'idle' | 'walk' | 'attack' =
+        rig.attackTimer > 0 ? 'attack' : moving ? 'walk' : 'idle';
+      if (want !== rig.activeClip) {
+        const prev =
+          rig.activeClip === 'attack'
+            ? rig.attackAction
+            : rig.activeClip === 'walk'
+              ? rig.walkAction
+              : rig.idleAction;
+        const next =
+          want === 'attack' ? rig.attackAction : want === 'walk' ? rig.walkAction : rig.idleAction;
+        const fade = want === 'attack' || rig.activeClip === 'attack' ? 0.05 : 0.12;
+        if (prev && prev !== next) prev.fadeOut(fade);
+        if (next) {
+          next.reset().setEffectiveWeight(1).fadeIn(fade).play();
+        }
+        rig.activeClip = want;
       }
-      rig.activeClip = want;
     }
     rig.mixer.update(dt);
     return;
@@ -375,10 +502,11 @@ export function updateHeroAnimation(rig: HeroRig, moving: boolean, time: number,
 
   if (rig.attackTimer > 0) {
     rig.attackTimer = Math.max(0, rig.attackTimer - dt);
-    const s = evalSquashPop(rig.attackTimer, 0.45, 1.28, 0.78);
+    const aDur = rig.attackDuration || 0.44;
+    const s = evalSquashPop(rig.attackTimer, aDur, 1.28, 0.78);
     rig.body.scale.set(s.sx, s.sy, s.sz);
     rig.body.position.set(lx, 0, lz);
-    const slam = Math.sin((rig.attackTimer / 0.45) * Math.PI) * 1.25;
+    const slam = Math.sin((rig.attackTimer / aDur) * Math.PI) * 1.25;
     if (rig.armL) rig.armL.rotation.x = -slam;
     if (rig.armR) rig.armR.rotation.x = -slam;
     return;
@@ -516,7 +644,8 @@ export function updateEnemyAnimation(
 
   if (rig.hitJoltTimer > 0) {
     rig.hitJoltTimer = Math.max(0, rig.hitJoltTimer - fxDt);
-    const s = evalSquashPop(rig.hitJoltTimer, 0.16, 1.34, 0.70);
+    const isBoss = ENEMIES[rig.enemyId].isBoss;
+    const s = evalSquashPop(rig.hitJoltTimer, 0.16, isBoss ? 1.16 : 1.34, isBoss ? 0.86 : 0.70);
     rig.body.scale.set(s.sx, s.sy, s.sz);
     const kick = Math.sin((rig.hitJoltTimer / 0.16) * Math.PI) * 0.14;
     rig.body.position.set(rig.knockX * kick + engageX, baseFlyY, rig.knockZ * kick + engageZ);
