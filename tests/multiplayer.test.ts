@@ -199,4 +199,34 @@ describe('O1 — Gerçek WebSocket rölesi, 2P Co-op ve 1v1 PvP çok oyunculu ka
       await stopTestServer(server, relay, [c1, c2, c3]);
     }
   });
+
+  it('SOCIAL_PING mesajı WebSocket üzerinden koordinatlarıyla karşı oyuncuya REMOTE_SOCIAL olarak iletilir', async () => {
+    const { server, relay, wsUrl } = await startTestServer();
+    const c1 = new NetworkService(wsUrl);
+    const c2 = new NetworkService(wsUrl);
+    try {
+      const m1 = once<MatchInfo>();
+      const m2 = once<MatchInfo>();
+      c1.onMatchStart = m1.resolve;
+      c2.onMatchStart = m2.resolve;
+
+      const code = await c1.createRoom('coop', 1, '6123');
+      await c2.joinRoom(code);
+      await Promise.all([m1.promise, m2.promise]);
+
+      const gotSocial = once<{ emoteId: string; fromRole: string; x?: number; z?: number }>();
+      c2.onSocialPing = (emoteId, fromRole, x, z) => {
+        gotSocial.resolve({ emoteId, fromRole, x, z });
+      };
+
+      c1.sendSocialPing('pin_help', -2.5, 4.25);
+      const recv = await gotSocial.promise;
+      assert.equal(recv.emoteId, 'pin_help');
+      assert.equal(recv.fromRole, 'p1');
+      assert.equal(recv.x, -2.5);
+      assert.equal(recv.z, 4.25);
+    } finally {
+      await stopTestServer(server, relay, [c1, c2]);
+    }
+  });
 });

@@ -15,6 +15,7 @@ import {
   advanceExpeditionStage,
   buildExpeditionLevelSpec,
 } from './data/roguelike.ts';
+import { recordMultiplayerOutcome } from './data/season.ts';
 import { t, tParams } from './i18n/locales.ts';
 import { SoundEngine } from './audio/SoundEngine.ts';
 import {
@@ -29,9 +30,10 @@ import {
   AdService,
   AnalyticsService,
   BillingService,
+  HapticsService,
   RemoteConfigService,
 } from './services/CommercialServices.ts';
-import { NetworkService } from './services/NetworkService.ts';
+import { NetworkService, type SocialEmoteId } from './services/NetworkService.ts';
 import {
   discoverJournalEntries,
   getJournalCatalog,
@@ -53,6 +55,7 @@ const isPromoMode = import.meta.env.DEV && urlParams.get('promo') === '1';
 const saveManager = new SaveManager();
 const adService = new AdService(saveManager);
 const billingService = new BillingService(saveManager);
+const haptics = new HapticsService(saveManager);
 const analytics = new AnalyticsService();
 const remoteConfig = new RemoteConfigService();
 const network = new NetworkService();
@@ -80,7 +83,30 @@ let currentLevelId = 1;
 let currentIronMode = false;
 let currentIsExpedition = false;
 let victoryRecorded = false;
+let multiOutcomeRecorded = false;
+let pendingSeasonKills = 0;
 let simAccumulator = 0;
+
+function flushSeasonKills(): void {
+  if (pendingSeasonKills <= 0) return;
+  const delta = pendingSeasonKills;
+  pendingSeasonKills = 0;
+  saveManager.update((d) => {
+    d.seasonPassKills += delta;
+  });
+}
+
+function triggerSocialFeedback(isLocal: boolean, emoteId: SocialEmoteId, x?: number, z?: number): void {
+  const loc = saveManager.get().settings.locale;
+  sound.playEmote();
+  const label = t(loc, `social.${emoteId}`);
+  battleView.showBanner(tParams(loc, isLocal ? 'social.sentToast' : 'social.peerToast', { msg: label }), 2.3);
+  if ((emoteId === 'pin_build' || emoteId === 'pin_help') && activeSim) {
+    const px = x ?? activeSim.hero.x;
+    const pz = z ?? activeSim.hero.z;
+    sceneMgr.spawnSocialPing(px, pz, emoteId === 'pin_help' ? '#ff6b4f' : '#5ef28e');
+  }
+}
 let lastFrameMs = performance.now();
 let lastRenderUiMs = 0;
 let lastStatePingMs = 0;
@@ -130,6 +156,12 @@ const battleView = new BattleView(
       activeSim.gold -= cost;
       network.sendPvpMerc(enemyId);
     },
+    onSendSocial: (emoteId) => {
+      const px = activeSim?.hero.x;
+      const pz = activeSim?.hero.z;
+      network.sendSocialPing(emoteId, px, pz);
+      triggerSocialFeedback(true, emoteId, px, pz);
+    },
   },
   isPromoMode,
   network,
@@ -157,6 +189,12 @@ network.onPvpIncoming = (enemyId) => {
   }
 };
 
+network.onSocialPing = (emoteId, _fromRole, x, z) => {
+  if (mode === 'battle' && activeSim) {
+    triggerSocialFeedback(false, emoteId, x, z);
+  }
+};
+
 network.onPeerState = (peer) => {
   if (mode === 'battle' && activeSim && network.mode === 'pvp' && peer.status === 'lost') {
     activeSim.dispatchRemote({ type: 'FORCE_PVP_VICTORY' }, 'p1');
@@ -179,6 +217,7 @@ function syncAudioAndCameraSettings(): void {
   const reduced = Boolean(reducedMotionQuery?.matches) || s.shakeStrength <= 0;
   juice.setReducedMotion(reduced);
   sceneMgr.setReducedMotion(reduced);
+  haptics.setReducedMotion(reduced);
 }
 
 function renderMeta(): void {
@@ -208,6 +247,8 @@ async function launchBattleSpec(
   currentIronMode = options.ironMode;
   currentIsExpedition = options.isExpedition;
   victoryRecorded = false;
+  multiOutcomeRecorded = false;
+  pendingSeasonKills = 0;
   simAccumulator = 0;
   lastStatePingMs = 0;
   juice.reset();
@@ -285,6 +326,7 @@ async function startExpeditionStage(): Promise<void> {
 }
 
 function exitToMap(): void {
+  flushSeasonKills();
   if (network.state !== 'idle') {
     network.leaveRoom();
   }
@@ -303,6 +345,7 @@ function processBattleEvents(events: SimEvent[]): void {
   for (const ev of events) {
     if (ev.type === 'TOWER_BUILT') {
       sound.playBuild();
+      haptics.impact('light');
     } else if (ev.type === 'TOWER_UPGRADED') {
       sound.playUpgrade();
     } else if (ev.type === 'TOWER_FIRED') {
@@ -322,6 +365,7 @@ function processBattleEvents(events: SimEvent[]): void {
         isCritHit ? 'crit' : 'normal',
       );
     } else if (ev.type === 'ENEMY_KILLED') {
+      pendingSeasonKills += 1;
       sound.playScrapBreak();
       sound.playCoin();
       if (ev.isBoss) {
@@ -332,6 +376,7 @@ function processBattleEvents(events: SimEvent[]): void {
     } else if (ev.type === 'PINECONE_RAIN') {
       juice.triggerMicroHitStop(0.04, 0.08);
       sound.playExplosion(true);
+      haptics.impact('medium');
     } else if (ev.type === 'BARREL_EXPLODED') {
       juice.triggerMicroHitStop(0.04, 0.08);
       sound.playExplosion(true);
@@ -343,6 +388,7 @@ function processBattleEvents(events: SimEvent[]): void {
     } else if (ev.type === 'HERO_ULTIMATE') {
       juice.triggerMicroHitStop(0.042, 0.08);
       sound.playExplosion(true);
+      haptics.impact('medium');
     } else if (ev.type === 'HERO_LEVELED') {
       sound.playUpgrade();
       if (activeSim?.heroId === 'boz_pence' && activeSim.heroClass === 'auto' && (ev.level === 2 || ev.level === 4)) {
@@ -352,15 +398,27 @@ function processBattleEvents(events: SimEvent[]): void {
       juice.triggerMicroHitStop(0.045, 0.06);
       sound.playBossSiren();
       sound.playExplosion(true);
+      haptics.impact('heavy');
       const bossSpec = ENEMIES[ev.bossId ?? 'mega_harvester'];
       battleView.showBanner(t(loc, bossSpec.descKey), 3.5);
     } else if (ev.type === 'WAVE_STARTED') {
+      flushSeasonKills();
       if (ev.announceEnemy) {
         const enemySpec = ENEMIES[ev.announceEnemy];
         battleView.showBanner(`${t(loc, 'hud.newEnemy')}: ${t(loc, enemySpec.nameKey)}`, 3.4);
       }
     } else if (ev.type === 'GAME_WON' && !victoryRecorded) {
       victoryRecorded = true;
+      flushSeasonKills();
+      if (network.state === 'in_match' && !multiOutcomeRecorded) {
+        multiOutcomeRecorded = true;
+        const multiRes = recordMultiplayerOutcome(saveManager, network.mode, true);
+        if (multiRes.trophyDelta > 0) {
+          metaView.statusNotice = tParams(loc, 'league.winToast', { trophies: multiRes.trophyDelta });
+        } else if (multiRes.firstCoopGems > 0) {
+          metaView.statusNotice = tParams(loc, 'league.coopFirstToast', { gems: multiRes.firstCoopGems });
+        }
+      }
       if (currentIsExpedition && activeSim) {
         const run = saveManager.get().activeExpedition;
         if (run) {
@@ -397,6 +455,14 @@ function processBattleEvents(events: SimEvent[]): void {
         analytics.track('level_win', { levelId: currentLevelId, stars: ev.stars });
       }
     } else if (ev.type === 'GAME_LOST') {
+      flushSeasonKills();
+      if (network.state === 'in_match' && !multiOutcomeRecorded) {
+        multiOutcomeRecorded = true;
+        const multiRes = recordMultiplayerOutcome(saveManager, network.mode, false);
+        if (multiRes.trophyDelta < 0) {
+          metaView.statusNotice = tParams(loc, 'league.lossToast', { trophies: multiRes.trophyDelta });
+        }
+      }
       if (currentIsExpedition && activeSim?.reviveUsed) {
         saveManager.update((d) => {
           d.activeExpedition = null;

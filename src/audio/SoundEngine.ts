@@ -331,4 +331,10 @@ export class SoundEngine {
     this.tone(240, 130, 0.36, 'sawtooth', 0.09, 0, 2, 0.02);
     this.tone(180, 100, 0.38, 'triangle', 0.08, 0.12, 2, 0.02);
   }
+
+  playEmote(): void {
+    if (!this.throttle('emote', 0.15)) return;
+    this.tone(587, 784, 0.09, 'triangle', 0.055, 0, 1, 0.04);
+    this.tone(784, 988, 0.11, 'sine', 0.055, 0.07, 1, 0.04);
+  }
 }

@@ -998,6 +998,11 @@ export class SceneManager {
     this.shockRings.push({ mesh, life, maxLife: life, maxScale });
   }
 
+  spawnSocialPing(x: number, z: number, colorHex = '#5ef28e'): void {
+    this.spawnShockRing(x, z, '#ffffff', 1.4, 0.22);
+    this.spawnShockRing(x, z, colorHex, 2.8, 0.55);
+  }
+
   /** Bright layered muzzle burst: additive white-hot core + coloured star, plus forward sparks. */
   spawnMuzzleFlash(x: number, y: number, z: number, colorHex: string, dirX = 0, dirZ = 0, big = false): void {
     const core = new THREE.Mesh(

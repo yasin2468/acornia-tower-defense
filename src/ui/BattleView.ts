@@ -17,7 +17,7 @@ import {
   type BillingService,
   type RemoteConfigService,
 } from '../services/CommercialServices.ts';
-import type { NetworkService } from '../services/NetworkService.ts';
+import type { NetworkService, SocialEmoteId } from '../services/NetworkService.ts';
 import type { SaveManager } from '../services/SaveManager.ts';
 import { ICONS, PORTRAIT_URLS, UI_ICON_URLS } from './icons.ts';
 
@@ -47,6 +47,7 @@ export interface BattleViewCallbacks {
   onRestart: () => void;
   onExitToMap: () => void;
   onSendPvpMerc?: (enemyId: EnemyId, cost: number) => void;
+  onSendSocial?: (emoteId: SocialEmoteId) => void;
 }
 
 export class BattleView {
@@ -441,10 +442,20 @@ export class BattleView {
             : `pvp|${net.roomCode}|${net.peerBaseHp}|${sim.gold >= 95 ? 3 : sim.gold >= 60 ? 2 : sim.gold >= 35 ? 1 : 0}|${loc}`;
         if (mKey !== this.lastMultiKey) {
           this.lastMultiKey = mKey;
+          const socialHtml = `
+            <div class="social-emote-row">
+              <button class="social-emote-btn" data-social-emote="pin_build" title="${t(loc, 'social.pin_build')}">📍</button>
+              <button class="social-emote-btn" data-social-emote="pin_help" title="${t(loc, 'social.pin_help')}">🆘</button>
+              <button class="social-emote-btn" data-social-emote="cool_squirrel" title="${t(loc, 'social.cool_squirrel')}">😎</button>
+              <button class="social-emote-btn" data-social-emote="laugh_beaver" title="${t(loc, 'social.laugh_beaver')}">😂</button>
+              <button class="social-emote-btn" data-social-emote="cry_dozer" title="${t(loc, 'social.cry_dozer')}">😭</button>
+            </div>
+          `;
           if (net.mode === 'coop') {
             this.multiBarEl.innerHTML = `
               <span>2P CO-OP #${net.roomCode} (${net.role.toUpperCase()})</span>
               <button class="btn btn-gold btn-sm" id="bw-coop-gift" ${coopLeft >= 25 ? '' : 'disabled'}>${tParams(loc, 'multi.coopGift', { left: coopLeft })}</button>
+              ${socialHtml}
             `;
             const giftBtn = this.multiBarEl.querySelector<HTMLButtonElement>('#bw-coop-gift');
             if (giftBtn) {
@@ -456,6 +467,7 @@ export class BattleView {
               <button class="btn btn-dark btn-sm" data-pvp-merc="scout_bot" data-merc-cost="35" ${sim.gold >= 35 ? '' : 'disabled'}>${t(loc, 'multi.pvpScout')}</button>
               <button class="btn btn-dark btn-sm" data-pvp-merc="shield_loader" data-merc-cost="60" ${sim.gold >= 60 ? '' : 'disabled'}>${t(loc, 'multi.pvpShield')}</button>
               <button class="btn btn-gold btn-sm" data-pvp-merc="chomp_brute" data-merc-cost="95" ${sim.gold >= 95 ? '' : 'disabled'}>${t(loc, 'multi.pvpBrute')}</button>
+              ${socialHtml}
             `;
             this.multiBarEl.querySelectorAll<HTMLButtonElement>('[data-pvp-merc]').forEach((btn) => {
               btn.onclick = () => {
@@ -465,6 +477,11 @@ export class BattleView {
               };
             });
           }
+          this.multiBarEl.querySelectorAll<HTMLButtonElement>('[data-social-emote]').forEach((btn) => {
+            btn.onclick = () => {
+              this.callbacks.onSendSocial?.(btn.dataset.socialEmote as SocialEmoteId);
+            };
+          });
         }
       }
     }

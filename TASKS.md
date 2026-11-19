@@ -26,12 +26,12 @@ aynı anda değiştirmez. Durumlar: `planlandi` → `devam` → `dogrulaniyor` �
 | F3-2 | 2 yeni kahraman: Kızıl Kuyruk (`hero_fox.glb`) ve Kaya Diş (`hero_boar.glb`) | Carbon | dogrulandi | Blender Cycles portre + `hero_fox`/`hero_boar.glb` + `tests/faz3.test.ts` (84/84 pass) + build ✓ |
 | F3-3 | Orman Günlüğü (`360°` 3D vitrin + Zümrüt ödülü) & Akustik Biyom Müzikleri (`F3-6`) | Carbon | dogrulandi | `SceneManager.renderJournalShowcase` + `SoundEngine` biyom müziği + `tests/faz3.test.ts` (86/86 pass) + build ✓ |
 | F3-4 | Kayıp Orman Seferi (5 aşamalı Roguelike oyun sonu + 6 Orman Tılsımı) | Carbon | dogrulandi | `roguelike.ts` + `SimulationEngine` 6 tılsım/kısıt + `MetaView`/`BattleView` sefer akışı + `tests/faz3.test.ts` (89/89 pass) + build ✓ |
+| F3-5 | 14 Günlük PvP Kupa Ligi, Harita Pin/Emoji, 30 Kademeli Sezonluk Orman Bileti & Haptics/SDK kancaları | Carbon | dogrulandi | `season.ts` + `wsRelay`/`NetworkService` `SOCIAL_PING` + `CommercialServices` `HapticsService`/SDK köprüsü + `tests/faz3.test.ts` & `multiplayer.test.ts` (93/93 pass) + build ✓ |
 
 ## Kuyruk (Carbon doldurur)
 
 | # | İş | Not |
 |---|---|---|
-| F3-5 | 14 Günlük PvP Kupa Ligi, Harita Pin/Emoji, 30 Kademeli Sezonluk Orman Bileti & Haptics/SDK kancaları | sirada |
 
 ## Devir notu
 GLM'e iş verirken satır numarasını yaz: `TASKS T2` + tek cümle hedef + kabul kriteri.

@@ -6,6 +6,15 @@ import type { EnemyId } from '../data/enemies.ts';
 
 export type MultiMode = 'coop' | 'pvp';
 export type PlayerRole = 'p1' | 'p2';
+export type SocialEmoteId = 'pin_build' | 'pin_help' | 'cool_squirrel' | 'laugh_beaver' | 'cry_dozer';
+
+const VALID_SOCIAL_EMOTES: ReadonlySet<string> = new Set<SocialEmoteId>([
+  'pin_build',
+  'pin_help',
+  'cool_squirrel',
+  'laugh_beaver',
+  'cry_dozer',
+]);
 
 export type WsClientMessage =
   | { type: 'CREATE_ROOM'; mode: MultiMode; levelId: number; roomCode?: string }
@@ -14,6 +23,7 @@ export type WsClientMessage =
   | { type: 'LEAVE_ROOM' }
   | { type: 'GAME_CMD'; cmd: GameCommandInput; tick: number }
   | { type: 'PVP_MERC'; enemyId: EnemyId }
+  | { type: 'SOCIAL_PING'; emoteId: SocialEmoteId; x?: number; z?: number }
   | {
       type: 'STATE_PING';
       baseHp: number;
@@ -29,6 +39,7 @@ export type WsServerMessage =
   | { type: 'MATCH_START'; roomCode: string; role: PlayerRole; mode: MultiMode; levelId: number; seed: number }
   | { type: 'REMOTE_CMD'; cmd: GameCommandInput; playerId: PlayerRole; tick: number }
   | { type: 'PVP_INCOMING'; enemyId: EnemyId; fromRole: PlayerRole }
+  | { type: 'REMOTE_SOCIAL'; emoteId: SocialEmoteId; fromRole: PlayerRole; x?: number; z?: number }
   | {
       type: 'PEER_STATE';
       baseHp: number;
@@ -284,6 +295,20 @@ export function attachWsRelay(server: http.Server, wsPath = '/ws'): WsRelayHandl
         const other = getOtherPeer(client);
         if (other && client.role) {
           sendJson(other, { type: 'PVP_INCOMING', enemyId: msg.enemyId, fromRole: client.role });
+        }
+        break;
+      }
+      case 'SOCIAL_PING': {
+        if (!VALID_SOCIAL_EMOTES.has(msg.emoteId)) return;
+        const other = getOtherPeer(client);
+        if (other && client.role) {
+          sendJson(other, {
+            type: 'REMOTE_SOCIAL',
+            emoteId: msg.emoteId,
+            fromRole: client.role,
+            x: typeof msg.x === 'number' && Number.isFinite(msg.x) ? msg.x : undefined,
+            z: typeof msg.z === 'number' && Number.isFinite(msg.z) ? msg.z : undefined,
+          });
         }
         break;
       }

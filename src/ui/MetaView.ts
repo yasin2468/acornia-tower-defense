@@ -16,6 +16,21 @@ import {
   type RelicId,
 } from '../data/roguelike.ts';
 import {
+  KILLS_PER_SEASON_TIER,
+  LEAGUE_TIERS,
+  SEASON_MAX_TIER,
+  claimLeagueTierReward,
+  claimSeasonTierReward,
+  ensureLeagueSeason,
+  ensureSeasonPassWindow,
+  getLeagueLeaderboard,
+  getLeagueTierForTrophies,
+  getSeasonCurrentTier,
+  getSeasonTierRewards,
+  type LeagueTierId,
+  type SeasonRewardSpec,
+} from '../data/season.ts';
+import {
   TALENT_BRANCHES,
   TALENT_MAX_RANK,
   computeAvailableTalentStars,
@@ -440,6 +455,44 @@ export class MetaView {
         : this.network.state === 'matching'
           ? t(loc, 'multi.matching')
           : '';
+
+    const leagueWindow = ensureLeagueSeason(this.saveManager);
+    const save = this.saveManager.get();
+    const curTier = getLeagueTierForTrophies(save.trophies);
+    const tiersHtml = LEAGUE_TIERS.filter((tier) => tier.id !== 'oak')
+      .map((tier) => {
+        const unlocked = save.trophies >= tier.minTrophies;
+        const claimed = save.claimedLeagueTiers.includes(tier.id);
+        const rewardParts: string[] = [];
+        if (tier.oakCoins > 0) rewardParts.push(`+${tier.oakCoins} ${t(loc, 'cur.oak')}`);
+        if (tier.gems > 0) rewardParts.push(`+${tier.gems} ${t(loc, 'cur.gem')}`);
+        if (tier.epicChest) rewardParts.push(t(loc, 'cards.plusTen'));
+        if (tier.hatUnlock) rewardParts.push(t(loc, `hat.${tier.hatUnlock}`));
+        return `
+          <div class="league-tier-row ${unlocked ? 'unlocked' : ''}">
+            <div style="min-width:0;">
+              <div style="font-size:12px; font-weight:900; color:#ffffff;">${t(loc, `league.tier.${tier.id}`)} · ${tier.minTrophies}🏆</div>
+              <div style="font-size:10.5px; color:var(--accent-gold);">${rewardParts.join(' · ')}</div>
+            </div>
+            <button class="btn btn-sm ${unlocked && !claimed ? 'btn-gold' : ''}" data-claim-league="${tier.id}" ${unlocked && !claimed ? '' : 'disabled'}>
+              ${t(loc, claimed ? 'league.claimed' : unlocked ? 'league.claim' : 'season.locked')}
+            </button>
+          </div>
+        `;
+      })
+      .join('');
+
+    const ladderHtml = getLeagueLeaderboard(save.trophies)
+      .map(
+        (entry, idx) => `
+          <div class="league-ladder-row ${entry.isPlayer ? 'you' : ''}">
+            <span>#${idx + 1} ${t(loc, entry.nameKey)}</span>
+            <span style="color:var(--accent-gold); font-weight:900;">${entry.trophies} 🏆</span>
+          </div>
+        `,
+      )
+      .join('');
+
     return `
       <div class="card-panel" style="display:flex; flex-direction:column; gap:10px;">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
@@ -459,6 +512,21 @@ export class MetaView {
         </div>
         <button class="btn btn-primary" id="btn-quick-match">${t(loc, 'multi.quickMatch')}</button>
         ${liveHint ? `<div style="font-size:12px; font-weight:700; color:var(--accent-gold);">${liveHint}</div>` : ''}
+      </div>
+
+      <div class="card-panel" id="league-panel" style="display:flex; flex-direction:column; gap:8px; border-color: rgba(255, 202, 69, 0.4);">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+          <div style="font-size:14.5px; font-weight:900; color:#ffe17a;">${t(loc, 'league.title')}</div>
+          <span class="pill-badge">${tParams(loc, 'league.daysLeft', { days: leagueWindow.daysLeft })}</span>
+        </div>
+        <div style="font-size:11px; color:var(--text-muted);">${t(loc, 'league.sub')}</div>
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; flex-wrap:wrap;">
+          <span class="pill-badge gold">${t(loc, `league.tier.${curTier.id}`)} · ${tParams(loc, 'league.trophies', { count: save.trophies })}</span>
+          <span class="pill-badge" style="font-size:10px; ${save.firstCoopRewardClaimed ? 'opacity:0.65;' : 'border-color:#5ef28e; color:#9af7bc;'}">${t(loc, save.firstCoopRewardClaimed ? 'league.firstCoopClaimed' : 'league.firstCoopBonus')}</span>
+        </div>
+        <div class="league-tier-grid">${tiersHtml}</div>
+        <div style="font-size:12px; font-weight:800; color:#ffffff; margin-top:2px;">${t(loc, 'league.ladderTitle')}</div>
+        <div style="display:flex; flex-direction:column; gap:4px;">${ladderHtml}</div>
       </div>
     `;
   }
@@ -665,11 +733,59 @@ export class MetaView {
     `;
   }
 
+  private formatSeasonReward(spec: SeasonRewardSpec, loc: Locale): string {
+    const parts: string[] = [];
+    if (spec.oakCoins) parts.push(`+${spec.oakCoins} ${t(loc, 'cur.oak')}`);
+    if (spec.gems) parts.push(`+${spec.gems} ${t(loc, 'cur.gem')}`);
+    if (spec.shardUnit && spec.shardCount) {
+      const unitKey =
+        spec.shardUnit in TOWERS
+          ? TOWERS[spec.shardUnit as TowerId].nameKey
+          : HEROES[spec.shardUnit as HeroId].nameKey;
+      parts.push(`+${spec.shardCount} ${t(loc, unitKey)}`);
+    }
+    if (spec.skipTickets) parts.push(`+${spec.skipTickets} 🎟`);
+    if (spec.hatUnlock) parts.push(t(loc, `hat.${spec.hatUnlock}`));
+    return parts.join(' · ');
+  }
+
   private renderShopTab(loc: Locale): string {
-    const save = this.saveManager.get();
     const nowMs = Date.now();
+    const seasonWin = ensureSeasonPassWindow(this.saveManager, nowMs);
+    const save = this.saveManager.get();
     const vipStatus = getVipDailyStatus(save, nowMs);
     const vipActive = isVipActive(save, nowMs);
+    const curTier = getSeasonCurrentTier(save.seasonPassKills);
+    const killsInTier = curTier >= SEASON_MAX_TIER ? KILLS_PER_SEASON_TIER : save.seasonPassKills % KILLS_PER_SEASON_TIER;
+    const pct = Math.min(100, Math.round((killsInTier / KILLS_PER_SEASON_TIER) * 100));
+
+    const tierRowsHtml = Array.from({ length: SEASON_MAX_TIER }, (_, i) => {
+      const tier = i + 1;
+      const rw = getSeasonTierRewards(tier);
+      const reached = curTier >= tier;
+      const freeClaimed = save.claimedSeasonFreeTiers.includes(tier);
+      const goldClaimed = save.claimedSeasonGoldTiers.includes(tier);
+      const canGold = reached && save.seasonGoldUnlocked && !goldClaimed;
+      return `
+        <div class="season-tier-row ${reached ? 'reached' : ''}">
+          <span class="pill-badge" style="font-size:10px; padding:3px 7px;">${tParams(loc, 'season.tierNum', { tier })}</span>
+          <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:3px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
+              <span style="font-size:10.5px; color:#d9e9f9;">${t(loc, 'season.freeTrack')}: ${this.formatSeasonReward(rw.free, loc)}</span>
+              <button class="btn btn-sm ${reached && !freeClaimed ? 'btn-primary' : ''}" style="padding:3px 8px; font-size:10px;" data-season-free="${tier}" ${reached && !freeClaimed ? '' : 'disabled'}>
+                ${t(loc, freeClaimed ? 'season.claimed' : reached ? 'season.claim' : 'season.locked')}
+              </button>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
+              <span style="font-size:10.5px; color:var(--accent-gold);">${t(loc, 'season.goldTrack')}: ${this.formatSeasonReward(rw.gold, loc)}</span>
+              <button class="btn btn-sm ${canGold ? 'btn-gold' : ''}" style="padding:3px 8px; font-size:10px;" data-season-gold="${tier}" ${canGold ? '' : 'disabled'}>
+                ${t(loc, goldClaimed ? 'season.claimed' : canGold ? 'season.claim' : 'season.locked')}
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
 
     return `
       <div class="card-panel" style="border-color: var(--accent-gold); background: linear-gradient(180deg, #3c3118 0%, #201a11 100%); display:flex; flex-direction:column; gap:10px;">
@@ -683,6 +799,24 @@ export class MetaView {
           <button class="btn btn-gold btn-sm" id="btn-vip-monthly">${t(loc, 'shop.vipMonthly')}</button>
           <button class="btn btn-primary btn-sm" id="btn-vip-lifetime">${t(loc, 'shop.vipLifetime')}</button>
         </div>
+      </div>
+
+      <div class="card-panel" id="season-pass-panel" style="display:flex; flex-direction:column; gap:8px; border-color: rgba(110, 231, 183, 0.4);">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+          <div style="font-size:14.5px; font-weight:900; color:#ffe17a;">${t(loc, 'season.title')}</div>
+          <span class="pill-badge">${tParams(loc, 'season.tierBadge', { tier: curTier })}</span>
+        </div>
+        <div style="font-size:11px; color:var(--text-muted);">${tParams(loc, 'season.sub', { days: seasonWin.daysLeft })}</div>
+        <div class="shard-bar">
+          <div class="shard-bar-fill" style="width:${pct}%"></div>
+          <span class="shard-bar-text">${tParams(loc, 'season.progress', { cur: killsInTier, need: KILLS_PER_SEASON_TIER })}</span>
+        </div>
+        ${
+          save.seasonGoldUnlocked
+            ? `<div style="font-size:11.5px; font-weight:900; color:var(--accent-gold);">${t(loc, 'season.goldActive')}</div>`
+            : `<button class="btn btn-gold btn-sm" id="btn-buy-season-gold">${t(loc, 'season.buyGold')}</button>`
+        }
+        <div class="season-track-list">${tierRowsHtml}</div>
       </div>
 
       <div style="font-size:15px; font-weight:900; color:#ffe17a;">${t(loc, 'shop.chests')}</div>
@@ -936,6 +1070,40 @@ export class MetaView {
     const vipLifetime = container.querySelector<HTMLButtonElement>('#btn-vip-lifetime');
     if (vipMonthly) vipMonthly.onclick = () => { this.billingService.purchaseVip('monthly'); this.statusNotice = `${t(loc, 'shop.vipActive')} (Monthly)`; this.callbacks.onRefresh(); };
     if (vipLifetime) vipLifetime.onclick = () => { this.billingService.purchaseVip('lifetime'); this.statusNotice = `${t(loc, 'shop.vipActive')} (Lifetime)`; this.callbacks.onRefresh(); };
+
+    const buySeasonGold = container.querySelector<HTMLButtonElement>('#btn-buy-season-gold');
+    if (buySeasonGold) {
+      buySeasonGold.onclick = () => {
+        if (this.billingService.purchaseSeasonPass()) {
+          this.statusNotice = t(loc, 'season.goldActive');
+          this.callbacks.onRefresh();
+        }
+      };
+    }
+
+    container.querySelectorAll<HTMLElement>('[data-claim-league]').forEach((btn) => {
+      btn.onclick = () => {
+        if (claimLeagueTierReward(this.saveManager, btn.dataset.claimLeague as LeagueTierId)) {
+          this.callbacks.onRefresh();
+        }
+      };
+    });
+
+    container.querySelectorAll<HTMLElement>('[data-season-free]').forEach((btn) => {
+      btn.onclick = () => {
+        if (claimSeasonTierReward(this.saveManager, Number(btn.dataset.seasonFree), 'free')) {
+          this.callbacks.onRefresh();
+        }
+      };
+    });
+
+    container.querySelectorAll<HTMLElement>('[data-season-gold]').forEach((btn) => {
+      btn.onclick = () => {
+        if (claimSeasonTierReward(this.saveManager, Number(btn.dataset.seasonGold), 'gold')) {
+          this.callbacks.onRefresh();
+        }
+      };
+    });
 
     const vipClaim = container.querySelector<HTMLButtonElement>('#btn-vip-claim');
     if (vipClaim) {

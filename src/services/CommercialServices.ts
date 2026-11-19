@@ -7,6 +7,20 @@ export type AdPlacement =
   | 'base_revive'
   | 'victory_2x';
 
+export type HapticStyle = 'light' | 'medium' | 'heavy';
+
+export interface NativeBridgeHooks {
+  showRewardedAd?: (placement: AdPlacement) => Promise<{ rewarded: boolean } | boolean>;
+  purchaseProduct?: (productId: string) => Promise<boolean> | boolean;
+  logEvent?: (name: string, params: Record<string, string | number | boolean>) => void;
+  getRemoteConfig?: () => Partial<RemoteEconomicConfig> | null | undefined;
+  hapticImpact?: (style: HapticStyle) => void;
+}
+
+function getNativeBridge(): NativeBridgeHooks | undefined {
+  return (globalThis as { __PALAMUT_NATIVE_BRIDGE__?: NativeBridgeHooks }).__PALAMUT_NATIVE_BRIDGE__;
+}
+
 export interface AnalyticsEvent {
   name: string;
   params: Record<string, string | number | boolean>;
@@ -128,6 +142,12 @@ export class AdService {
       });
       return { rewarded: true, bypassed: true };
     }
+    const bridge = getNativeBridge();
+    if (bridge?.showRewardedAd) {
+      const nativeRes = await bridge.showRewardedAd(placement);
+      const rewarded = typeof nativeRes === 'boolean' ? nativeRes : Boolean(nativeRes?.rewarded);
+      return { rewarded, bypassed: false };
+    }
     return { rewarded: true, bypassed: false };
   }
 }
@@ -139,10 +159,11 @@ export class BillingService {
     this.saveManager = saveManager;
   }
 
-  /** Phase 1 local simulation hook; Phase 4 binds directly to RevenueCat SDK. */
+  /** Phase 1 local simulation hook; Phase 4 binds directly to RevenueCat SDK via __PALAMUT_NATIVE_BRIDGE__. */
   purchaseFirstDefeatBundle(): boolean {
     const s = this.saveManager.get();
     if (s.firstDefeatBundleBought) return false;
+    void getNativeBridge()?.purchaseProduct?.('first_defeat_bundle');
     this.saveManager.update((draft) => {
       draft.firstDefeatBundleBought = true;
       draft.emeraldGems += 300;
@@ -153,6 +174,7 @@ export class BillingService {
   }
 
   purchaseVip(tier: 'monthly' | 'lifetime', nowMs = Date.now()): void {
+    void getNativeBridge()?.purchaseProduct?.(tier === 'monthly' ? 'vip_monthly' : 'vip_lifetime');
     this.saveManager.update((draft) => {
       draft.vipTier = tier;
       if (tier === 'monthly') {
@@ -167,6 +189,16 @@ export class BillingService {
       }
     });
   }
+
+  purchaseSeasonPass(): boolean {
+    const s = this.saveManager.get();
+    if (s.seasonGoldUnlocked) return false;
+    void getNativeBridge()?.purchaseProduct?.('season_pass_gold');
+    this.saveManager.update((draft) => {
+      draft.seasonGoldUnlocked = true;
+    });
+    return true;
+  }
 }
 
 export class AnalyticsService {
@@ -177,6 +209,7 @@ export class AnalyticsService {
     if (this.buffer.length > 200) {
       this.buffer.shift();
     }
+    getNativeBridge()?.logEvent?.(name, params);
   }
 
   getRecent(): readonly AnalyticsEvent[] {
@@ -194,7 +227,56 @@ export class RemoteConfigService {
   };
 
   get(): RemoteEconomicConfig {
-    return this.config;
+    const overrides = getNativeBridge()?.getRemoteConfig?.();
+    return overrides ? { ...this.config, ...overrides } : this.config;
+  }
+}
+
+export class HapticsService {
+  private readonly saveManager: SaveManager;
+  private reducedMotion = false;
+
+  constructor(saveManager: SaveManager) {
+    this.saveManager = saveManager;
+  }
+
+  setReducedMotion(reduced: boolean): void {
+    this.reducedMotion = reduced;
+  }
+
+  impact(style: HapticStyle = 'light'): boolean {
+    if (this.reducedMotion || !this.saveManager.get().settings.hapticsEnabled) return false;
+
+    const bridge = getNativeBridge();
+    if (bridge?.hapticImpact) {
+      bridge.hapticImpact(style);
+      return true;
+    }
+
+    const capHaptics = (
+      globalThis as {
+        Capacitor?: { Plugins?: { Haptics?: { impact?: (opts: { style: string }) => void } } };
+      }
+    ).Capacitor?.Plugins?.Haptics;
+    if (capHaptics?.impact) {
+      const capStyle = style === 'heavy' ? 'HEAVY' : style === 'medium' ? 'MEDIUM' : 'LIGHT';
+      try {
+        capHaptics.impact({ style: capStyle });
+        return true;
+      } catch {
+        // Fall through to Web Vibration API
+      }
+    }
+
+    const ms = style === 'heavy' ? 28 : style === 'medium' ? 16 : 8;
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      try {
+        return Boolean(navigator.vibrate(ms));
+      } catch {
+        return false;
+      }
+    }
+    return false;
   }
 }
 

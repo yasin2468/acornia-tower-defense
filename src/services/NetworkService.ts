@@ -1,7 +1,9 @@
 import type { GameCommandInput } from '../core/CommandBus.ts';
 import type { SimulationEngine } from '../core/SimulationEngine.ts';
 import type { EnemyId } from '../data/enemies.ts';
-import type { MultiMode, PlayerRole, WsClientMessage, WsServerMessage } from '../server/wsRelay.ts';
+import type { MultiMode, PlayerRole, SocialEmoteId, WsClientMessage, WsServerMessage } from '../server/wsRelay.ts';
+
+export type { SocialEmoteId };
 
 export interface MatchInfo {
   roomCode: string;
@@ -33,6 +35,7 @@ export class NetworkService {
   onMatchStart?: (info: MatchInfo) => void;
   onRemoteCommand?: (cmd: GameCommandInput, playerId: PlayerRole, tick: number) => void;
   onPvpIncoming?: (enemyId: EnemyId, fromRole: PlayerRole) => void;
+  onSocialPing?: (emoteId: SocialEmoteId, fromRole: PlayerRole, x?: number, z?: number) => void;
   onPeerState?: (peer: { baseHp: number; maxBaseHp: number; gold: number; wave: number; status: 'playing' | 'won' | 'lost' }) => void;
   onPeerLeft?: () => void;
   onError?: (code: string) => void;
@@ -40,9 +43,11 @@ export class NetworkService {
   private ws: WebSocket | null = null;
   private connectPromise: Promise<boolean> | null = null;
   private fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+  private botEmoteTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingCreateResolve: ((code: string) => void) | null = null;
   private pendingJoinResolve: ((ok: boolean) => void) | null = null;
   private botTimer = 6.5;
+  private botEmoteSentWave3 = false;
 
   constructor(wsUrl?: string) {
     if (wsUrl) {
@@ -59,6 +64,10 @@ export class NetworkService {
     if (this.fallbackTimer !== null) {
       clearTimeout(this.fallbackTimer);
       this.fallbackTimer = null;
+    }
+    if (this.botEmoteTimer !== null) {
+      clearTimeout(this.botEmoteTimer);
+      this.botEmoteTimer = null;
     }
   }
 
@@ -197,6 +206,10 @@ export class NetworkService {
         this.onPvpIncoming?.(msg.enemyId, msg.fromRole);
         break;
       }
+      case 'REMOTE_SOCIAL': {
+        this.onSocialPing?.(msg.emoteId, msg.fromRole, msg.x, msg.z);
+        break;
+      }
       case 'PEER_STATE': {
         this.peerBaseHp = msg.baseHp;
         this.peerMaxBaseHp = msg.maxBaseHp;
@@ -316,6 +329,7 @@ export class NetworkService {
     this.peerBaseHp = 150;
     this.peerMaxBaseHp = 150;
     this.botTimer = 6.5;
+    this.botEmoteSentWave3 = false;
     this.onStateChange?.();
     this.onMatchStart?.({
       roomCode: this.roomCode,
@@ -325,11 +339,32 @@ export class NetworkService {
       seed: this.seed,
       isBotMatch: true,
     });
+    this.botEmoteTimer = setTimeout(() => {
+      this.botEmoteTimer = null;
+      if (this.state === 'in_match' && this.isBotMatch) {
+        this.onSocialPing?.('cool_squirrel', 'p2');
+      }
+    }, 900);
   }
 
   sendGameCommand(cmd: GameCommandInput, tick: number): void {
     if (this.state !== 'in_match' || this.isBotMatch || !this.connected) return;
     this.sendWs({ type: 'GAME_CMD', cmd, tick });
+  }
+
+  sendSocialPing(emoteId: SocialEmoteId, x?: number, z?: number): void {
+    if (this.state !== 'in_match') return;
+    if (this.isBotMatch) {
+      if (this.botEmoteTimer !== null) clearTimeout(this.botEmoteTimer);
+      this.botEmoteTimer = setTimeout(() => {
+        this.botEmoteTimer = null;
+        if (this.state === 'in_match' && this.isBotMatch) {
+          this.onSocialPing?.(emoteId === 'pin_help' ? 'cool_squirrel' : 'laugh_beaver', 'p2', x, z);
+        }
+      }, 450);
+      return;
+    }
+    this.sendWs({ type: 'SOCIAL_PING', emoteId, x, z });
   }
 
   sendPvpMerc(enemyId: EnemyId): void {
@@ -367,6 +402,10 @@ export class NetworkService {
 
   stepBot(dt: number, sim: SimulationEngine): void {
     if (this.state !== 'in_match' || !this.isBotMatch || sim.status !== 'playing') return;
+    if (!this.botEmoteSentWave3 && sim.currentWaveIndex >= 2) {
+      this.botEmoteSentWave3 = true;
+      this.onSocialPing?.('laugh_beaver', 'p2');
+    }
     this.botTimer -= dt;
     if (this.botTimer > 0) return;
 

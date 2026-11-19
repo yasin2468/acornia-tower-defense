@@ -14,6 +14,20 @@ import {
   startNewExpedition,
 } from '../src/data/roguelike.ts';
 import {
+  FIRST_COOP_GEM_BONUS,
+  KILLS_PER_SEASON_TIER,
+  LEAGUE_DURATION_MS,
+  SEASON_DURATION_MS,
+  SEASON_MAX_TIER,
+  claimLeagueTierReward,
+  claimSeasonTierReward,
+  ensureLeagueSeason,
+  ensureSeasonPassWindow,
+  getSeasonCurrentTier,
+  recordMultiplayerOutcome,
+} from '../src/data/season.ts';
+import { BillingService, HapticsService, type NativeBridgeHooks } from '../src/services/CommercialServices.ts';
+import {
   computeAvailableTalentStars,
   computeTalentModifiers,
   computeTotalEarnedStars,
@@ -291,5 +305,86 @@ describe('F3-4 — Kayıp Orman Seferi (Roguelike ve 6 Orman Tılsımı)', () =>
     });
     for (let i = 0; i < 45; i++) sim.step(FIXED_DT);
     assert.ok(targetBot.slowTimer > 0 && targetBot.slowPct >= 0.2, 'frost_thorns hedefi yavaşlatmalı');
+  });
+});
+
+describe('F3-5 & F4-Hazırlık — 14 Günlük Kupa Ligi, 30 Kademeli Orman Bileti ve Haptics', () => {
+  it('Kupa Ligi PvP +28/-12 kupa, kademe ödülü, ilk Co-op +50 Zümrüt ve 14 gün yumuşak sıfırlama yapar', () => {
+    const sm = new SaveManager(NOW);
+    const startOak = sm.get().oakCoins;
+    const startGems = sm.get().emeraldGems;
+
+    const coop1 = recordMultiplayerOutcome(sm, 'coop', true, NOW);
+    assert.equal(coop1.firstCoopGems, FIRST_COOP_GEM_BONUS);
+    assert.equal(sm.get().emeraldGems, startGems + FIRST_COOP_GEM_BONUS);
+
+    const coop2 = recordMultiplayerOutcome(sm, 'coop', true, NOW);
+    assert.equal(coop2.firstCoopGems, 0, 'ilk Co-op bonusu tekrarlanmamalı');
+
+    for (let i = 0; i < 4; i++) {
+      recordMultiplayerOutcome(sm, 'pvp', true, NOW);
+    }
+    assert.equal(sm.get().trophies, 112);
+
+    const loss = recordMultiplayerOutcome(sm, 'pvp', false, NOW);
+    assert.equal(loss.trophyDelta, -12);
+    assert.equal(sm.get().trophies, 100);
+
+    assert.equal(claimLeagueTierReward(sm, 'bronze'), true);
+    assert.equal(sm.get().oakCoins, startOak + 120);
+    assert.equal(claimLeagueTierReward(sm, 'bronze'), false);
+
+    const rolled = ensureLeagueSeason(sm, NOW + LEAGUE_DURATION_MS + 1000);
+    assert.equal(rolled.reset, true);
+    assert.equal(sm.get().trophies, 50);
+    assert.deepEqual(sm.get().claimedLeagueTiers, []);
+  });
+
+  it('30 Kademeli Sezon Bileti her 35 imhada ilerler, Altın Bilet ve Kademe 30 Viking şapkası verir', () => {
+    const sm = new SaveManager(NOW);
+    const billing = new BillingService(sm);
+
+    sm.update((d) => {
+      d.seasonPassKills = KILLS_PER_SEASON_TIER * SEASON_MAX_TIER;
+    });
+    assert.equal(getSeasonCurrentTier(sm.get().seasonPassKills), 30);
+
+    assert.equal(claimSeasonTierReward(sm, 1, 'free'), true);
+    assert.equal(claimSeasonTierReward(sm, 30, 'gold'), false, 'Altın Bilet olmadan Altın ödül kapalı');
+
+    assert.equal(billing.purchaseSeasonPass(), true);
+    assert.equal(billing.purchaseSeasonPass(), false);
+    assert.equal(claimSeasonTierReward(sm, 30, 'gold'), true);
+    assert.ok(sm.get().unlockedHats.includes('viking'), 'Kademe 30 Altın ödülü viking şapkasını açmalı');
+
+    const rolled = ensureSeasonPassWindow(sm, NOW + SEASON_DURATION_MS + 1000);
+    assert.equal(rolled.reset, true);
+    assert.equal(sm.get().seasonPassKills, 0);
+    assert.equal(sm.get().seasonGoldUnlocked, false);
+  });
+
+  it('HapticsService ayar ve reducedMotion kapılarına uyar ve __PALAMUT_NATIVE_BRIDGE__ kancasına iletir', () => {
+    const sm = new SaveManager(NOW);
+    const haptics = new HapticsService(sm);
+    const calls: string[] = [];
+    const g = globalThis as { __PALAMUT_NATIVE_BRIDGE__?: NativeBridgeHooks };
+    const prev = g.__PALAMUT_NATIVE_BRIDGE__;
+    g.__PALAMUT_NATIVE_BRIDGE__ = {
+      hapticImpact: (style) => calls.push(style),
+    };
+    try {
+      assert.equal(haptics.impact('light'), true);
+      assert.equal(haptics.impact('heavy'), true);
+      haptics.setReducedMotion(true);
+      assert.equal(haptics.impact('medium'), false);
+      haptics.setReducedMotion(false);
+      sm.update((d) => {
+        d.settings.hapticsEnabled = false;
+      });
+      assert.equal(haptics.impact('light'), false);
+      assert.deepEqual(calls, ['light', 'heavy']);
+    } finally {
+      g.__PALAMUT_NATIVE_BRIDGE__ = prev;
+    }
   });
 });
