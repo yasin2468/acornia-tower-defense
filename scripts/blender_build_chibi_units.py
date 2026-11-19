@@ -24,6 +24,12 @@ import bpy
 import numpy as np
 from mathutils import Euler, Matrix, Vector
 
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
+
+from blender_custom_tower_bases import build_custom_tower_base  # noqa: E402
+
 OUT_DIR = "/Users/yasinozkan/Desktop/Projelerim/palamut-kalesi/public/models"
 CC0 = "/tmp/palamut_cc0"
 DERIVED = os.path.join(CC0, "_derived")
@@ -1743,31 +1749,9 @@ def build_tower_glb(model_name):
 
     # Parse spec
     if model_name.startswith("tower_squirrel_"):
-        color = "red"
         suf = model_name.replace("tower_squirrel_", "")
         tier = 1 if suf == "t1" else 2 if suf == "t2" else 3
-        ht = {1: 1.24, 2: 1.46, 3: 1.66}[tier]
-        _, o = place(hex_building(color, "tower_base"), parent=root, height=ht)
-        retexture(o, "hexagons_medieval", warm)
-        mn, mx = mesh_bounds(o)
-        deck_z = mx.z - (mx.z - mn.z) * 0.085
-
-        if tier >= 2:
-            _, fo = place(os.path.join(HEX_P, f"flag_{color}.gltf"), parent=root, height=0.58 + 0.10 * (tier - 2),
-                          loc=(-0.38, 0.30, deck_z - 0.02))
-            retexture(fo, "hexagons_medieval", warm)
-        if suf == "sniper":
-            _, fo = place(os.path.join(HEX_P, f"flag_{color}.gltf"), parent=root, height=0.68,
-                          loc=(0.38, 0.30, deck_z - 0.02), rot_z=180)
-            retexture(fo, "hexagons_medieval", warm)
-            _, to = place(os.path.join(HEX_P, "target.gltf"), parent=root, height=0.42, loc=(0.56, 0.34, 0), rot_z=-30)
-            retexture(to, "hexagons_medieval", warm)
-        if suf == "gatling":
-            _, fo = place(os.path.join(HEX_P, f"flag_{color}.gltf"), parent=root, height=0.68,
-                          loc=(0.38, 0.30, deck_z - 0.02), rot_z=180)
-            retexture(fo, "hexagons_medieval", warm)
-            _, bo = place(os.path.join(HEX_P, "bucket_arrows.gltf"), parent=root, height=0.34, loc=(0.54, -0.34, 0))
-            retexture(bo, "hexagons_medieval", warm)
+        _, deck_z = build_custom_tower_base("squirrel", suf, tier, root)
 
         turret_head = make_empty("TurretHead", loc=(0, 0, deck_z), parent=root)
         if suf == "t1":
@@ -1825,44 +1809,10 @@ def build_tower_glb(model_name):
             set_parent_keep(qh, spin)
 
     elif model_name.startswith("tower_beaver_"):
-        color = "yellow"
         suf = model_name.replace("tower_beaver_", "")
-        if suf == "t2":
-            ht = 1.72
-            _, o = place(hex_building(color, "tower_catapult"), parent=root, height=ht)
-            retexture(o, "hexagons_medieval", warm)
-            mn, mx = mesh_bounds(o)
-            deck_z = (mx.z - mn.z) * (1.5 / 1.964)
-            crew_offset = (0.20, 0.14)
-        else:
-            ht = 1.24 if suf == "t1" else 1.66
-            _, o = place(hex_building(color, "tower_base"), parent=root, height=ht)
-            retexture(o, "hexagons_medieval", warm)
-            mn, mx = mesh_bounds(o)
-            deck_z = mx.z - (mx.z - mn.z) * 0.085
-            crew_offset = (0.04, 0.06)
-
-        if suf in ("t2", "resin", "mortar"):
-            _, fo = place(os.path.join(HEX_P, f"flag_{color}.gltf"), parent=root, height=0.62,
-                          loc=(-0.38, 0.30, deck_z - 0.02))
-            retexture(fo, "hexagons_medieval", warm)
-        if suf == "resin":
-            _, fo2 = place(os.path.join(HEX_P, f"flag_{color}.gltf"), parent=root, height=0.66,
-                           loc=(0.38, 0.30, deck_z - 0.02), rot_z=180)
-            retexture(fo2, "hexagons_medieval", warm)
-            for bx, by in ((-0.54, -0.34), (0.54, -0.34)):
-                _, bo = place(os.path.join(HEX_P, "barrel.gltf"), parent=root, height=0.34, loc=(bx, by, 0))
-                retexture(bo, "hexagons_medieval", warm)
-            _, go = place(os.path.join(Q, "rpg_items_pack/Crystal3.glb"), parent=root, height=0.26,
-                          loc=(0.24, 0.20, deck_z + 0.28), rot_deg=(30, 0, 0))
-            set_flat_color(go, "*", "#ffb038", emission_hex="#ff8c1a", emission_strength=1.3, force=True)
-        if suf == "mortar":
-            _, fo2 = place(os.path.join(HEX_P, f"flag_{color}.gltf"), parent=root, height=0.68,
-                           loc=(0.38, 0.30, deck_z - 0.02), rot_z=180)
-            retexture(fo2, "hexagons_medieval", warm)
-            _, po = place(os.path.join(HEX_B, "neutral", "projectile_catapult.gltf"), parent=root, max_xy=0.32,
-                          loc=(-0.54, -0.38, 0))
-            retexture(po, "hexagons_medieval", warm)
+        tier = 1 if suf == "t1" else 2 if suf == "t2" else 3
+        _, deck_z = build_custom_tower_base("beaver", suf, tier, root)
+        crew_offset = (0.04, 0.06)
 
         turret_head = make_empty("TurretHead", loc=(0, 0, deck_z), parent=root)
         if suf == "t1":
@@ -1885,6 +1835,9 @@ def build_tower_glb(model_name):
                 head, deck_z, tex_path=tex, offset=crew_offset,
                 tail_fn=lambda hp, sc, pr: attach_beaver_tail(pr, hp, sc, 4),
             )
+            ch, _ = place(os.path.join(Q, "platformer_game_pack/Cannon.glb"), max_xy=0.42,
+                          loc=(0.28, -0.19, deck_z), rot_deg=(0, 0, -90))
+            set_parent_keep(ch, wg)
         elif suf == "resin":
             tex = ensure_kaykit_variant_tex("barbarian", "bv2_amber", paw_hex="#b55d35", hue_shift=-0.42, sat_mult=1.25, val_mult=1.08)
             head, _ = build_beaver_head(fur_col=1, muzzle_col=3, goggles=True)
@@ -1912,23 +1865,9 @@ def build_tower_glb(model_name):
             set_parent_keep(ch, wg)
 
     elif model_name.startswith("tower_hedgehog_"):
-        color = "green"
         suf = model_name.replace("tower_hedgehog_", "")
         tier = 1 if suf == "t1" else 2 if suf == "t2" else 3
-        ht = {1: 1.24, 2: 1.46, 3: 1.66}[tier]
-        _, o = place(hex_building(color, "tower_base"), parent=root, height=ht)
-        retexture(o, "hexagons_medieval", warm)
-        mn, mx = mesh_bounds(o)
-        deck_z = mx.z - (mx.z - mn.z) * 0.085
-
-        if tier >= 2:
-            _, fo = place(os.path.join(HEX_P, f"flag_{color}.gltf"), parent=root, height=0.58 + 0.10 * (tier - 2),
-                          loc=(-0.38, 0.30, deck_z - 0.02))
-            retexture(fo, "hexagons_medieval", warm)
-        if tier == 3:
-            _, fo2 = place(os.path.join(HEX_P, f"flag_{color}.gltf"), parent=root, height=0.68,
-                           loc=(0.38, 0.30, deck_z - 0.02), rot_z=180)
-            retexture(fo2, "hexagons_medieval", warm)
+        _, deck_z = build_custom_tower_base("hedgehog", suf, tier, root)
 
         turret_head = make_empty("TurretHead", loc=(0, 0, deck_z), parent=root)
         if suf == "t1":
@@ -1986,23 +1925,9 @@ def build_tower_glb(model_name):
             set_flat_color(so, "*", "#d8e4ef", roughness=0.25, metallic=0.82, force=True)
 
     elif model_name.startswith("tower_owl_"):
-        color = "blue"
         suf = model_name.replace("tower_owl_", "")
         tier = 1 if suf == "t1" else 2 if suf == "t2" else 3
-        ht = {1: 1.24, 2: 1.46, 3: 1.66}[tier]
-        _, o = place(hex_building(color, "tower_base"), parent=root, height=ht)
-        retexture(o, "hexagons_medieval", warm)
-        mn, mx = mesh_bounds(o)
-        deck_z = mx.z - (mx.z - mn.z) * 0.085
-
-        if tier >= 2:
-            _, fo = place(os.path.join(HEX_P, f"flag_{color}.gltf"), parent=root, height=0.58 + 0.10 * (tier - 2),
-                          loc=(-0.38, 0.30, deck_z - 0.02))
-            retexture(fo, "hexagons_medieval", warm)
-        if tier == 3:
-            _, fo2 = place(os.path.join(HEX_P, f"flag_{color}.gltf"), parent=root, height=0.68,
-                           loc=(0.38, 0.30, deck_z - 0.02), rot_z=180)
-            retexture(fo2, "hexagons_medieval", warm)
+        _, deck_z = build_custom_tower_base("owl", suf, tier, root)
 
         turret_head = make_empty("TurretHead", loc=(0, 0, deck_z), parent=root)
         if suf == "t1":

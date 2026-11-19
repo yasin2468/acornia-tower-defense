@@ -20,7 +20,7 @@ import type { NetworkService, SocialEmoteId } from '../services/NetworkService.t
 import type { SaveManager } from '../services/SaveManager.ts';
 import { ICONS, PORTRAIT_URLS, UI_ICON_URLS } from './icons.ts';
 
-export type FloatingDamageKind = 'normal' | 'heavy' | 'resisted' | 'crit' | 'gold' | 'base';
+export type FloatingDamageKind = 'normal' | 'heavy' | 'resisted' | 'crit' | 'gold' | 'base' | 'skill';
 
 export interface FloatingDamage {
   id: number;
@@ -59,6 +59,7 @@ export class BattleView {
   selectedSlotId: string | null = null;
   previewTowerId: TowerId | null = null;
   targetingSkill: 'rain' | 'hero_leap' | null = null;
+  targetingPoint: { x: number; z: number } = { x: 0, z: 0 };
   speedMultiplier: 1 | 2 | 3 = 1;
   speed2xUnlockedThisMatch = false;
   paused = false;
@@ -88,10 +89,12 @@ export class BattleView {
   private rainCdEl: HTMLElement | null = null;
   private magnetBtnEl: HTMLButtonElement | null = null;
   private magnetCdEl: HTMLElement | null = null;
+  private magnetBuffEl: HTMLElement | null = null;
   private heroBtnEl: HTMLButtonElement | null = null;
   private heroCdEl: HTMLElement | null = null;
   private heroHpBarEl: HTMLElement | null = null;
   private heroLvlEl: HTMLElement | null = null;
+  private heroBuffEl: HTMLElement | null = null;
   private bossBarEl: HTMLElement | null = null;
   private bossNameEl: HTMLElement | null = null;
   private bossHpTextEl: HTMLElement | null = null;
@@ -205,7 +208,16 @@ export class BattleView {
         }
       }
     }
-    const life = kind === 'crit' || kind === 'base' ? 0.95 : kind === 'heavy' ? 0.82 : kind === 'gold' ? 0.9 : 0.68;
+    const life =
+      kind === 'skill'
+        ? 1.12
+        : kind === 'crit' || kind === 'base'
+          ? 0.95
+          : kind === 'heavy'
+            ? 0.82
+            : kind === 'gold'
+              ? 0.9
+              : 0.68;
     const driftX = ((this.floatingDamages.length % 5) - 2) * 8 + (Math.random() - 0.5) * 6;
     this.floatSeq += 1;
     this.floatingDamages.push({
@@ -288,18 +300,20 @@ export class BattleView {
         <div class="hud-controls">
           <button class="tactile-sq-btn" id="bw-speed">x1</button>
           <button class="tactile-sq-btn" id="bw-pause"><span class="svg-ico">${ICONS.pause}</span></button>
-          <button class="skill-medallion-btn hero-skill-btn" id="bw-skill-hero" title="${t(loc, HEROES[sim.heroId].nameKey)}">
+          <button class="skill-medallion-btn hero-skill-btn" id="bw-skill-hero" title="${t(loc, HEROES[sim.heroId].nameKey)}${tParams(loc, 'skill.hotkeyHint', { key: '1' })}">
             <img src="${PORTRAIT_URLS[sim.heroId]}" alt="${t(loc, HEROES[sim.heroId].nameKey)}" />
             <span class="hero-skill-lvl" id="bw-hero-lvl">${t(loc, 'cards.level')}1</span>
+            <span class="hero-buff-pill" id="bw-hero-buff" style="display:none;"></span>
             <span class="hero-skill-hp"><span class="hero-skill-hp-fill" id="bw-hero-hp" style="width:100%"></span></span>
             <span class="cd-badge" id="bw-hero-cd" style="display:none;"></span>
           </button>
-          <button class="skill-medallion-btn" id="bw-skill-rain" title="${t(loc, 'skill.rain')}">
+          <button class="skill-medallion-btn" id="bw-skill-rain" title="${t(loc, 'skill.rain')}${tParams(loc, 'skill.hotkeyHint', { key: '2' })}">
             <img src="${UI_ICON_URLS.skillRain}" alt="${t(loc, 'skill.rain')}" />
             <span class="cd-badge" id="bw-rain-cd" style="display:none;"></span>
           </button>
-          <button class="skill-medallion-btn" id="bw-skill-magnet" title="${t(loc, 'skill.magnet')}">
+          <button class="skill-medallion-btn" id="bw-skill-magnet" title="${t(loc, 'skill.magnet')}${tParams(loc, 'skill.hotkeyHint', { key: '3' })}">
             <img src="${UI_ICON_URLS.skillMagnet}" alt="${t(loc, 'skill.magnet')}" />
+            <span class="hero-buff-pill" id="bw-magnet-buff" style="display:none;"></span>
             <span class="cd-badge" id="bw-magnet-cd" style="display:none;"></span>
           </button>
         </div>
@@ -326,6 +340,7 @@ export class BattleView {
     this.heroCdEl = container.querySelector('#bw-hero-cd');
     this.heroHpBarEl = container.querySelector('#bw-hero-hp');
     this.heroLvlEl = container.querySelector('#bw-hero-lvl');
+    this.heroBuffEl = container.querySelector('#bw-hero-buff');
     this.bossBarEl = container.querySelector('#bw-boss-bar');
     this.bossNameEl = container.querySelector('#bw-boss-name');
     this.bossHpTextEl = container.querySelector('#bw-boss-hp-text');
@@ -338,12 +353,94 @@ export class BattleView {
     this.rainCdEl = container.querySelector('#bw-rain-cd');
     this.magnetBtnEl = container.querySelector('#bw-skill-magnet');
     this.magnetCdEl = container.querySelector('#bw-magnet-cd');
+    this.magnetBuffEl = container.querySelector('#bw-magnet-buff');
     this.modalHostEl = container.querySelector('#bw-modal-host');
     this.hudTopEl = container.querySelector('#bw-hud-top');
     this.hudBottomEl = container.querySelector('#bw-hud-bottom');
     this.promoHudBtnEl = container.querySelector('#btn-promo-hud');
 
     this.bindStaticEvents(container, sim);
+  }
+
+  private seedTargetingPoint(sim: SimulationEngine, groundOnly: boolean): void {
+    const leading = sim.enemies
+      .filter((e) => e.hp > 0 && (!groundOnly || !e.isFlying))
+      .sort((a, b) => b.progress - a.progress)[0];
+    this.targetingPoint = leading
+      ? { x: leading.x, z: leading.z }
+      : { x: sim.hero.dead ? 0 : sim.hero.x, z: sim.hero.dead ? 0 : sim.hero.z };
+  }
+
+  getTargetingVisualSpec(sim: SimulationEngine): { radius: number; color: string; showLink: boolean } {
+    if (this.targetingSkill === 'rain') {
+      return { radius: 3.1, color: '#ff9f43', showLink: false };
+    }
+    if (sim.heroId === 'kizil_kuyruk') {
+      return { radius: 3.6, color: '#44f0a6', showLink: true };
+    }
+    if (sim.heroId === 'kaya_dis') {
+      return { radius: 3.5, color: '#e8a848', showLink: true };
+    }
+    return { radius: 3.3, color: '#ff7b3b', showLink: true };
+  }
+
+  triggerRainSkill(sim: SimulationEngine): void {
+    if (sim.pineconeRainCooldown > 0) return;
+    this.targetingSkill = this.targetingSkill === 'rain' ? null : 'rain';
+    if (this.targetingSkill === 'rain') {
+      this.seedTargetingPoint(sim, false);
+    }
+  }
+
+  triggerMagnetSkill(sim: SimulationEngine): void {
+    if (sim.magnetCooldown > 0) return;
+    this.targetingSkill = null;
+    sim.dispatch({ type: 'CAST_ACORN_MAGNET' });
+  }
+
+  triggerHeroSkill(sim: SimulationEngine): void {
+    if (sim.hero.dead || sim.hero.skillCooldown > 0) return;
+    const loc = this.saveManager.get().settings.locale;
+    if (sim.heroId === 'kizil_kuyruk') {
+      this.targetingSkill = this.targetingSkill === 'hero_leap' ? null : 'hero_leap';
+      if (this.targetingSkill === 'hero_leap') {
+        this.seedTargetingPoint(sim, false);
+        this.showBanner(t(loc, 'skill.hero.foxHint'), 2.5);
+      } else {
+        this.showBanner('', 0);
+      }
+      return;
+    }
+    if (sim.heroId === 'kaya_dis') {
+      this.targetingSkill = this.targetingSkill === 'hero_leap' ? null : 'hero_leap';
+      if (this.targetingSkill === 'hero_leap') {
+        this.seedTargetingPoint(sim, true);
+        this.showBanner(t(loc, 'skill.hero.boarHint'), 2.5);
+      } else {
+        this.showBanner('', 0);
+      }
+      return;
+    }
+    if (sim.heroId === 'ay_kurdu') {
+      this.targetingSkill = null;
+      sim.dispatch({ type: 'CAST_HERO_ULTIMATE' });
+      this.showBanner(t(loc, 'skill.hero.wolf_howl'), 2.0);
+      return;
+    }
+    const variant = resolveHeroVisualVariant(sim.heroClass, sim.hero.level);
+    if (variant === 'viking') {
+      this.targetingSkill = this.targetingSkill === 'hero_leap' ? null : 'hero_leap';
+      if (this.targetingSkill === 'hero_leap') {
+        this.seedTargetingPoint(sim, true);
+        this.showBanner(t(loc, 'skill.hero.leapHint'), 2.5);
+      } else {
+        this.showBanner('', 0);
+      }
+    } else {
+      this.targetingSkill = null;
+      sim.dispatch({ type: 'CAST_HERO_ULTIMATE' });
+      this.showBanner(t(loc, `skill.hero.${variant}`), 2.0);
+    }
   }
 
   private bindStaticEvents(container: HTMLElement, sim: SimulationEngine): void {
@@ -370,50 +467,13 @@ export class BattleView {
     if (pauseBtn) pauseBtn.onclick = () => { this.paused = true; };
 
     if (this.rainBtnEl) {
-      this.rainBtnEl.onclick = () => {
-        if (sim.pineconeRainCooldown > 0) return;
-        this.targetingSkill = this.targetingSkill === 'rain' ? null : 'rain';
-      };
+      this.rainBtnEl.onclick = () => this.triggerRainSkill(sim);
     }
     if (this.magnetBtnEl) {
-      this.magnetBtnEl.onclick = () => sim.dispatch({ type: 'CAST_ACORN_MAGNET' });
+      this.magnetBtnEl.onclick = () => this.triggerMagnetSkill(sim);
     }
     if (this.heroBtnEl) {
-      this.heroBtnEl.onclick = () => {
-        if (sim.hero.dead || sim.hero.skillCooldown > 0) return;
-        const loc = this.saveManager.get().settings.locale;
-        if (sim.heroId === 'kizil_kuyruk') {
-          this.targetingSkill = this.targetingSkill === 'hero_leap' ? null : 'hero_leap';
-          if (this.targetingSkill === 'hero_leap') {
-            this.showBanner(t(loc, 'skill.hero.foxHint'), 2.5);
-          }
-          return;
-        }
-        if (sim.heroId === 'kaya_dis') {
-          this.targetingSkill = this.targetingSkill === 'hero_leap' ? null : 'hero_leap';
-          if (this.targetingSkill === 'hero_leap') {
-            this.showBanner(t(loc, 'skill.hero.boarHint'), 2.5);
-          }
-          return;
-        }
-        if (sim.heroId === 'ay_kurdu') {
-          this.targetingSkill = null;
-          sim.dispatch({ type: 'CAST_HERO_ULTIMATE' });
-          this.showBanner(t(loc, 'skill.hero.wolf_howl'), 2.0);
-          return;
-        }
-        const variant = resolveHeroVisualVariant(sim.heroClass, sim.hero.level);
-        if (variant === 'viking') {
-          this.targetingSkill = this.targetingSkill === 'hero_leap' ? null : 'hero_leap';
-          if (this.targetingSkill === 'hero_leap') {
-            this.showBanner(t(loc, 'skill.hero.leapHint'), 2.5);
-          }
-        } else {
-          this.targetingSkill = null;
-          sim.dispatch({ type: 'CAST_HERO_ULTIMATE' });
-          this.showBanner(t(loc, `skill.hero.${variant}`), 2.0);
-        }
-      };
+      this.heroBtnEl.onclick = () => this.triggerHeroSkill(sim);
     }
 
     if (this.promoHudBtnEl) {
@@ -576,15 +636,28 @@ export class BattleView {
     }
 
     if (this.speedBtnEl) this.speedBtnEl.textContent = `x${this.speedMultiplier}`;
-    if (this.rainBtnEl) this.rainBtnEl.classList.toggle('active', this.targetingSkill === 'rain');
+    if (this.rainBtnEl) {
+      this.rainBtnEl.classList.toggle('active', this.targetingSkill === 'rain');
+      this.rainBtnEl.classList.toggle('ready', sim.pineconeRainCooldown <= 0 && this.targetingSkill !== 'rain');
+    }
     if (this.rainCdEl) {
       this.rainCdEl.style.display = sim.pineconeRainCooldown > 0 ? 'flex' : 'none';
       if (sim.pineconeRainCooldown > 0) this.rainCdEl.textContent = `${Math.ceil(sim.pineconeRainCooldown)}`;
     }
-    if (this.magnetBtnEl) this.magnetBtnEl.classList.toggle('active', sim.magnetActiveTimer > 0);
+    if (this.magnetBtnEl) {
+      this.magnetBtnEl.classList.toggle('active', sim.magnetActiveTimer > 0);
+      this.magnetBtnEl.classList.toggle('buff-active', sim.magnetActiveTimer > 0);
+      this.magnetBtnEl.classList.toggle('ready', sim.magnetCooldown <= 0 && sim.magnetActiveTimer <= 0);
+    }
     if (this.magnetCdEl) {
       this.magnetCdEl.style.display = sim.magnetCooldown > 0 ? 'flex' : 'none';
       if (sim.magnetCooldown > 0) this.magnetCdEl.textContent = `${Math.ceil(sim.magnetCooldown)}`;
+    }
+    if (this.magnetBuffEl) {
+      this.magnetBuffEl.style.display = sim.magnetActiveTimer > 0 ? 'inline-flex' : 'none';
+      if (sim.magnetActiveTimer > 0) {
+        this.magnetBuffEl.textContent = tParams(loc, 'skill.buff.sec', { sec: Math.ceil(sim.magnetActiveTimer) });
+      }
     }
     if (this.heroBtnEl) {
       const skillKey =
@@ -595,12 +668,21 @@ export class BattleView {
             : sim.heroId === 'ay_kurdu'
               ? 'skill.hero.wolf_howl'
               : `skill.hero.${resolveHeroVisualVariant(sim.heroClass, sim.hero.level)}`;
-      this.heroBtnEl.title = t(loc, skillKey);
+      this.heroBtnEl.title = `${t(loc, skillKey)}${tParams(loc, 'skill.hotkeyHint', { key: '1' })}`;
+      this.heroBtnEl.classList.toggle('active', this.targetingSkill === 'hero_leap');
+      this.heroBtnEl.classList.toggle('buff-active', !sim.hero.dead && sim.hero.skillActiveTimer > 0);
       this.heroBtnEl.classList.toggle(
-        'active',
-        this.targetingSkill === 'hero_leap' || sim.hero.skillActiveTimer > 0,
+        'ready',
+        !sim.hero.dead && sim.hero.skillCooldown <= 0 && this.targetingSkill !== 'hero_leap' && sim.hero.skillActiveTimer <= 0,
       );
       this.heroBtnEl.classList.toggle('dead', sim.hero.dead);
+    }
+    if (this.heroBuffEl) {
+      const showHeroBuff = !sim.hero.dead && sim.hero.skillActiveTimer > 0;
+      this.heroBuffEl.style.display = showHeroBuff ? 'inline-flex' : 'none';
+      if (showHeroBuff) {
+        this.heroBuffEl.textContent = tParams(loc, 'skill.buff.sec', { sec: Math.ceil(sim.hero.skillActiveTimer) });
+      }
     }
     if (this.heroLvlEl) this.heroLvlEl.textContent = `${t(loc, 'cards.level')}${sim.hero.level}`;
     if (this.heroHpBarEl) {
@@ -719,7 +801,7 @@ export class BattleView {
 
     let floatCount = 0;
     for (const f of this.floatingDamages) {
-      const projY = f.kind === 'base' ? 2.1 : 1.72;
+      const projY = f.kind === 'base' ? 2.1 : f.kind === 'skill' ? 2.15 : 1.72;
       const proj = sceneMgr.projectToScreen(f.x, projY, f.z);
       if (!proj.visible) continue;
       const el = this.acquireFloat(floatCount);
@@ -727,10 +809,20 @@ export class BattleView {
       floatCount += 1;
       const age = f.maxLife - f.life;
       const p = Math.max(0, Math.min(1, age / f.maxLife));
-      const rise = f.kind === 'gold' ? 44 : f.kind === 'crit' || f.kind === 'base' ? 46 : f.kind === 'heavy' ? 38 : 30;
+      const rise =
+        f.kind === 'gold'
+          ? 44
+          : f.kind === 'skill'
+            ? 52
+            : f.kind === 'crit' || f.kind === 'base'
+              ? 46
+              : f.kind === 'heavy'
+                ? 38
+                : 30;
       const dy = easeOutCubic(p) * rise;
       const dx = f.driftX * (0.4 + p * 0.9);
-      const peak = f.kind === 'crit' ? 1.75 : f.kind === 'base' ? 1.7 : f.kind === 'heavy' ? 1.5 : 1.35;
+      const peak =
+        f.kind === 'crit' ? 1.75 : f.kind === 'base' ? 1.7 : f.kind === 'skill' ? 1.55 : f.kind === 'heavy' ? 1.5 : 1.35;
       const sc = popScale(age, peak, f.kind === 'crit' ? 0.22 : 0.16);
       if (el.key !== f.id || el.text !== f.text || el.kind !== f.kind) {
         el.key = f.id;

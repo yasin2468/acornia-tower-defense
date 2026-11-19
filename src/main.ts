@@ -411,9 +411,14 @@ function processBattleEvents(events: SimEvent[]): void {
                       ? 'falcon'
                       : 'arrow';
       sound.playShoot(kind);
-    } else if (ev.type === 'PROJECTILE_IMPACT' && ev.aoeRadius > 0) {
-      if (ev.towerId === 'badger') sound.playAcidSplash();
-      else if (ev.towerId === 'tortoise') sound.playSeismicSlam();
+    } else if (ev.type === 'PROJECTILE_IMPACT') {
+      if (ev.aoeRadius > 0) {
+        if (ev.towerId === 'badger') sound.playAcidSplash();
+        else if (ev.towerId === 'tortoise') sound.playSeismicSlam();
+      }
+      if (ev.isArmorBreak) {
+        sound.playArmorBreak();
+      }
     } else if (ev.type === 'ENEMY_HIT') {
       sound.playHit(ev.isCrit, ev.armorBroken, Boolean(ev.heavy), Boolean(ev.resisted));
       const isCritHit = ev.isCrit || ev.armorBroken;
@@ -449,10 +454,12 @@ function processBattleEvents(events: SimEvent[]): void {
       juice.triggerMicroHitStop(0.04, 0.08);
       sound.playPineconeBarrage();
       haptics.impact('medium');
+      battleView.addFloatingDamage(ev.x, ev.z, t(loc, 'skill.rain'), 'skill');
       questSkills += 1;
     } else if (ev.type === 'ACORN_MAGNET') {
       sound.playMagnetCast();
       haptics.impact('light');
+      battleView.addFloatingDamage(ev.x, ev.z, t(loc, 'skill.magnet'), 'skill');
       questSkills += 1;
     } else if (ev.type === 'BARREL_EXPLODED') {
       juice.triggerMicroHitStop(0.04, 0.08);
@@ -480,6 +487,7 @@ function processBattleEvents(events: SimEvent[]): void {
       juice.triggerMicroHitStop(0.042, 0.08);
       sound.playHeroUltimate(ev.variant);
       haptics.impact('medium');
+      battleView.addFloatingDamage(ev.x, ev.z, t(loc, `skill.hero.${ev.variant}`), 'skill');
       questSkills += 1;
     } else if (ev.type === 'HERO_LEVELED') {
       sound.playUpgrade();
@@ -663,7 +671,9 @@ canvas.addEventListener('pointermove', (ev) => {
   if (mode !== 'battle' || !activeSim || battleView.paused || activeSim.status !== 'playing') return;
   if (battleView.targetingSkill) {
     const hover = sceneMgr.pickWorld(ev.clientX, ev.clientY);
-    if (hover) sceneMgr.updateTargetingReticle(battleView.targetingSkill, hover.x, hover.z);
+    if (hover) {
+      battleView.targetingPoint = { x: hover.x, z: hover.z };
+    }
     return;
   }
   if (!dragHeroState) return;
@@ -697,6 +707,23 @@ const resizeObserver = new ResizeObserver(() => {
 resizeObserver.observe(shell);
 
 window.addEventListener('pointerdown', () => sound.resume(), { passive: true });
+
+window.addEventListener('keydown', (ev) => {
+  if (mode !== 'battle' || !activeSim || battleView.paused || activeSim.status !== 'playing') return;
+  const tag = (ev.target as HTMLElement | null)?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  if (ev.key === '1') {
+    battleView.triggerHeroSkill(activeSim);
+  } else if (ev.key === '2') {
+    battleView.triggerRainSkill(activeSim);
+  } else if (ev.key === '3') {
+    battleView.triggerMagnetSkill(activeSim);
+  } else if (ev.key === 'Escape' && battleView.targetingSkill) {
+    battleView.targetingSkill = null;
+    sceneMgr.updateTargetingReticle(null);
+    battleView.showBanner('', 0);
+  }
+});
 
 function frame(nowMs: number): void {
   requestAnimationFrame(frame);
@@ -732,7 +759,23 @@ function frame(nowMs: number): void {
       }
     }
     battleView.updateTimers(rawDt, activeSim);
-    if (!battleView.targetingSkill) sceneMgr.updateTargetingReticle(null);
+    if (battleView.targetingSkill) {
+      const spec = battleView.getTargetingVisualSpec(activeSim);
+      sceneMgr.updateTargetingReticle(
+        battleView.targetingSkill,
+        battleView.targetingPoint.x,
+        battleView.targetingPoint.z,
+        {
+          radius: spec.radius,
+          color: spec.color,
+          showLink: spec.showLink,
+          heroX: activeSim.hero.x,
+          heroZ: activeSim.hero.z,
+        },
+      );
+    } else {
+      sceneMgr.updateTargetingReticle(null);
+    }
     const curSave = saveManager.get();
     sceneMgr.sync(
       activeSim,

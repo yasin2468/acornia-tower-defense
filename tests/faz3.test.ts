@@ -593,7 +593,7 @@ describe('F5 — 10 Düğümlü Ulu Meşe Yetenek Ağacı, Akıllı Yapay Zeka, 
     assert.notEqual(clusterPicked?.uid, frontSolo.uid);
     assert.equal(Math.hypot(clusterPicked!.x - pack1.x, clusterPicked!.z - pack1.z) < 0.6, true);
 
-    // 2. Smart mod Şahin: onarım dronunu (şifacı + uçan) standart izciye göre önceliklendirir
+    // 2. Smart mod Kuzgun: onarım dronunu (şifacı + uçan) standart izciye göre önceliklendirir
     const simSmart = new SimulationEngine(LEVELS[0], { seed: 9202 });
     simSmart.gold = 300;
     simSmart.dispatch({ type: 'BUILD_TOWER', slotId: 'slot_3', towerId: 'falcon' }, 'p1', 0);
@@ -667,5 +667,33 @@ describe('F5 — 10 Düğümlü Ulu Meşe Yetenek Ağacı, Akıllı Yapay Zeka, 
     assert.equal(r1.gems, 15);
     assert.ok(r8.oak > r1.oak && r16.oak > r8.oak, 'Palamut zafer ödülü bölüme göre monoton artmalı');
     assert.ok(r16Iron.oak > r16.oak && r16Iron.gems > r16.gems, 'Demir Mod ek ödül vermeli');
+  });
+
+  it('8 kulenin 32 özel 3B .glb modeli CustomTowerBase mimarisi ve taret düğümleriyle paketlenmiştir', () => {
+    const towerModels = MODEL_NAMES.filter((m) => m.startsWith('tower_'));
+    assert.equal(towerModels.length, 32, '8 kule x 4 kademe/dal tam 32 kule modeli olmalı');
+
+    for (const modelName of towerModels) {
+      const glbPath = path.resolve(`public/models/${modelName}.glb`);
+      assert.ok(fs.existsSync(glbPath), `${modelName}.glb dosyası mevcut olmalı`);
+      const buf = fs.readFileSync(glbPath);
+      assert.equal(buf.readUInt32LE(0), 0x46546c67, `${modelName}.glb geçerli glTF 2.0 başlığı taşımalı`);
+      const jsonLen = buf.readUInt32LE(12);
+      const gltf = JSON.parse(buf.subarray(20, 20 + jsonLen).toString('utf8')) as {
+        nodes?: Array<{ name?: string }>;
+        materials?: Array<{ name?: string }>;
+      };
+      const nodeNames = (gltf.nodes ?? []).map((n) => n.name ?? '');
+      const matNames = (gltf.materials ?? []).map((m) => m.name ?? '');
+
+      assert.ok(
+        nodeNames.some((n) => n.startsWith('CustomTowerBase_')),
+        `${modelName}.glb CustomTowerBase_* özel mimari düğümü içermeli`,
+      );
+      assert.ok(nodeNames.includes('TurretHead'), `${modelName}.glb TurretHead içermeli`);
+      assert.ok(nodeNames.includes('CharacterGroup'), `${modelName}.glb CharacterGroup içermeli`);
+      assert.ok(nodeNames.includes('HeadSocket'), `${modelName}.glb HeadSocket içermeli`);
+      assert.ok(matNames.includes('CustomTowerAtlasMat'), `${modelName}.glb CustomTowerAtlasMat materyali içermeli`);
+    }
   });
 });

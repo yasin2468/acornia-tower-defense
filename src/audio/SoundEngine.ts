@@ -399,6 +399,13 @@ export class SoundEngine {
     this.noiseBurst(6200, 'highpass', 0.14, 0.03, 0.8, 0.01, 1);
   }
 
+  playArmorBreak(): void {
+    if (!this.throttle('armor_break', 0.08)) return;
+    this.transient(0.085, 0.12, 130, 2);
+    this.tone(860, 340, 0.12, 'square', 0.085, 0, 2, 0.05);
+    this.noiseBurst(3800, 'bandpass', 0.11, 0.1, 2.2, 0.01, 2);
+  }
+
   playScrapBreak(): void {
     if (!this.throttle('scrap', 0.04)) return;
     this.transient(0.05, 0.06, 130, 1);
@@ -476,19 +483,22 @@ export class SoundEngine {
   playHeroUltimate(variant: 'classic' | 'viking' | 'royal' | 'fox_storm' | 'boar_charge' | 'wolf_howl'): void {
     if (variant === 'wolf_howl') {
       // Resonant frost howl glide + crystalline ice chord + rallying chime
-      this.tone(290, 520, 0.24, 'triangle', 0.11, 0, 2);
-      this.tone(520, 390, 0.28, 'sine', 0.09, 0.18, 2);
-      this.noiseBurst(3600, 'bandpass', 0.22, 0.09, 2.2, 0.06, 2);
-      this.tone(659, 988, 0.22, 'triangle', 0.08, 0.14, 1);
+      this.tone(290, 540, 0.26, 'triangle', 0.12, 0, 2);
+      this.tone(540, 390, 0.3, 'sine', 0.095, 0.18, 2);
+      this.noiseBurst(4400, 'highpass', 0.24, 0.085, 1.4, 0.05, 2);
+      this.tone(1568, 2093, 0.2, 'sine', 0.07, 0.08, 2, 0.03);
+      this.tone(659, 988, 0.24, 'triangle', 0.085, 0.14, 1);
       this.duckMusic(0.35, 0.28);
       return;
     }
     if (variant === 'fox_storm') {
-      // Flask shatter glass crackle + emerald chemical fizz + alchemy bell
-      this.noiseBurst(4600, 'highpass', 0.16, 0.13, 1.4, 0, 2);
+      // Multi-flask shatter glass crackle + emerald chemical fizz + alchemy bell
+      this.noiseBurst(5200, 'highpass', 0.18, 0.14, 1.4, 0, 2);
+      this.noiseBurst(4600, 'highpass', 0.14, 0.1, 1.8, 0.07, 2);
       this.tone(1480, 620, 0.18, 'triangle', 0.1, 0.02, 2);
       this.noiseBurst(2200, 'bandpass', 0.28, 0.1, 2.4, 0.08, 2);
-      this.tone(523, 880, 0.22, 'sine', 0.08, 0.1, 1);
+      this.tone(523, 880, 0.22, 'sine', 0.085, 0.1, 1);
+      this.tone(1046, 1319, 0.16, 'sine', 0.07, 0.16, 1);
       this.duckMusic(0.35, 0.25);
       return;
     }

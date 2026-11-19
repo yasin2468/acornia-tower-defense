@@ -63,6 +63,7 @@ import {
 
 const WHITE = new THREE.Color(1, 1, 1);
 const SLOW_TINT = new THREE.Color('#38a1db');
+const STUN_TINT = new THREE.Color('#ffcf54');
 const FROZEN_TINT = new THREE.Color('#9fe8ff');
 const TRAIL_POINTS = 10;
 
@@ -89,7 +90,19 @@ interface EnemyFeel {
   axis: THREE.Vector3;
   lastHitDirX: number;
   lastHitDirZ: number;
-  visual: 'rest' | 'slow' | 'frozen' | 'flash';
+  visual: 'rest' | 'slow' | 'stun' | 'frozen' | 'flash';
+}
+
+interface HeroCastMotion {
+  fromX: number;
+  fromZ: number;
+  toX: number;
+  toZ: number;
+  elapsed: number;
+  duration: number;
+  arcHeight: number;
+  mode: 'leap' | 'charge';
+  trail: TrailItem | null;
 }
 
 interface TowerPunch {
@@ -939,16 +952,48 @@ export class SceneManager {
   onChainZap?: () => void;
   /** Fired on each railgun / pierce-line shot. */
   onRailgunFire?: () => void;
-  private poolMeshes: Array<{ group: THREE.Group; fillMat: THREE.MeshBasicMaterial; rimMat: THREE.MeshBasicMaterial }> = [];
+  private poolMeshes: Array<{
+    group: THREE.Group;
+    fillMat: THREE.MeshBasicMaterial;
+    rimMat: THREE.MeshBasicMaterial;
+    swirl: THREE.Mesh;
+    swirlMat: THREE.MeshBasicMaterial;
+  }> = [];
+  private poolSwirlGeo = new THREE.RingGeometry(0.32, 0.62, 18, 1, 0, Math.PI * 1.45);
+  private iceSpikeGeo = new THREE.ConeGeometry(0.14, 0.54, 5);
+  private stunStarGeo = new THREE.OctahedronGeometry(0.085, 0);
+  private iceCageMat = new THREE.MeshBasicMaterial({
+    color: '#9ef2ff',
+    transparent: true,
+    opacity: 0.44,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  private stunStarMat = new THREE.MeshBasicMaterial({ color: '#ffe14d', toneMapped: false });
+  private enemyIceCages = new Map<number, THREE.Group>();
+  private enemyStunHalos = new Map<number, THREE.Group>();
+  private towerBuffHalos = new Map<string, { group: THREE.Group; mat: THREE.MeshBasicMaterial }>();
   private lodTrees: Array<{ lod: THREE.LOD; phase: number }> = [];
   private batterySaver = false;
   private heroRig: HeroRig | null = null;
   private heroVisualKey = '';
   private heroAuraGroup: THREE.Group | null = null;
   private heroAuraKey: AuraId = 'none';
+  private heroFieldAuraGroup: THREE.Group;
+  private heroFieldOuterMat: THREE.MeshBasicMaterial;
+  private heroFieldInnerMat: THREE.MeshBasicMaterial;
+  private heroFieldGemMat: THREE.MeshBasicMaterial;
+  private heroCastMotion: HeroCastMotion | null = null;
   private castleBannerClothes: THREE.Mesh[] = [];
   private rangeRing: THREE.Mesh;
-  private targetingReticle: THREE.Mesh;
+  private targetingReticle: THREE.Group;
+  private reticleOuterMat: THREE.MeshBasicMaterial;
+  private reticleInnerMesh: THREE.Mesh;
+  private reticleInnerMat: THREE.MeshBasicMaterial;
+  private reticleFillMat: THREE.MeshBasicMaterial;
+  private targetingLinkLine: THREE.Mesh;
+  private targetingLinkMat: THREE.MeshBasicMaterial;
   private rallyMarker: THREE.Group;
   private rallyShowTimer = 0;
   private magnetTimer = 0;
@@ -1046,19 +1091,106 @@ export class SceneManager {
     this.rangeRing.position.y = 0.07;
     this.rangeRing.visible = false;
 
-    this.targetingReticle = new THREE.Mesh(
-      new THREE.RingGeometry(0.9, 1.0, 48),
-      new THREE.MeshBasicMaterial({
-        color: '#ff9f43',
-        transparent: true,
-        opacity: 0.85,
-        side: THREE.DoubleSide,
-        depthWrite: false,
-      }),
+    this.targetingReticle = new THREE.Group();
+    this.reticleOuterMat = new THREE.MeshBasicMaterial({
+      color: '#ff9f43',
+      transparent: true,
+      opacity: 0.85,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const reticleOuter = new THREE.Mesh(new THREE.RingGeometry(0.955, 1.0, 48), this.reticleOuterMat);
+    reticleOuter.rotation.x = -Math.PI / 2;
+
+    this.reticleInnerMat = new THREE.MeshBasicMaterial({
+      color: '#ffffff',
+      transparent: true,
+      opacity: 0.62,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    this.reticleInnerMesh = new THREE.Mesh(
+      new THREE.RingGeometry(0.45, 0.49, 24, 1, 0, Math.PI * 1.4),
+      this.reticleInnerMat,
     );
-    this.targetingReticle.rotation.x = -Math.PI / 2;
+    this.reticleInnerMesh.rotation.x = -Math.PI / 2;
+    this.reticleInnerMesh.position.y = 0.004;
+
+    this.reticleFillMat = new THREE.MeshBasicMaterial({
+      color: '#ff9f43',
+      transparent: true,
+      opacity: 0.14,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const reticleFill = new THREE.Mesh(new THREE.CircleGeometry(0.955, 36), this.reticleFillMat);
+    reticleFill.rotation.x = -Math.PI / 2;
+    reticleFill.position.y = -0.002;
+
+    this.targetingReticle.add(reticleFill, reticleOuter, this.reticleInnerMesh);
     this.targetingReticle.position.y = 0.085;
     this.targetingReticle.visible = false;
+
+    this.targetingLinkMat = new THREE.MeshBasicMaterial({
+      color: '#52e8ff',
+      transparent: true,
+      opacity: 0.55,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    this.targetingLinkLine = new THREE.Mesh(new THREE.PlaneGeometry(0.11, 1), this.targetingLinkMat);
+    this.targetingLinkLine.rotation.x = -Math.PI / 2;
+    this.targetingLinkLine.position.y = 0.092;
+    this.targetingLinkLine.visible = false;
+
+    this.heroFieldAuraGroup = new THREE.Group();
+    this.heroFieldOuterMat = new THREE.MeshBasicMaterial({
+      color: '#ffd454',
+      transparent: true,
+      opacity: 0.42,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const fOuter = new THREE.Mesh(new THREE.RingGeometry(0.975, 1.0, 56), this.heroFieldOuterMat);
+    fOuter.rotation.x = -Math.PI / 2;
+    this.heroFieldInnerMat = new THREE.MeshBasicMaterial({
+      color: '#ffffff',
+      transparent: true,
+      opacity: 0.24,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const fInner = new THREE.Mesh(new THREE.RingGeometry(0.89, 0.915, 48, 1, 0, Math.PI * 1.65), this.heroFieldInnerMat);
+    fInner.rotation.x = -Math.PI / 2;
+    fInner.position.y = 0.003;
+    fInner.name = 'AuraInnerSpin';
+    this.heroFieldGemMat = new THREE.MeshBasicMaterial({
+      color: '#ffd454',
+      transparent: true,
+      opacity: 0.72,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    this.heroFieldAuraGroup.add(fOuter, fInner);
+    for (let i = 0; i < 6; i++) {
+      const a = (i * Math.PI * 2) / 6;
+      const gMesh = new THREE.Mesh(this.stunStarGeo, this.heroFieldGemMat);
+      gMesh.position.set(Math.cos(a) * 0.985, 0.08, Math.sin(a) * 0.985);
+      gMesh.scale.setScalar(0.55);
+      this.heroFieldAuraGroup.add(gMesh);
+    }
+    this.heroFieldAuraGroup.position.y = 0.068;
+    this.heroFieldAuraGroup.visible = false;
 
     this.rallyMarker = new THREE.Group();
     const rallyRing = new THREE.Mesh(
@@ -1080,7 +1212,15 @@ export class SceneManager {
     this.rallyMarker.add(rallyRing, rallyPole, rallyFlag);
     this.rallyMarker.visible = false;
 
-    this.scene.add(this.levelGroup, this.dynamicGroup, this.rangeRing, this.targetingReticle, this.rallyMarker);
+    this.scene.add(
+      this.levelGroup,
+      this.dynamicGroup,
+      this.rangeRing,
+      this.targetingReticle,
+      this.targetingLinkLine,
+      this.heroFieldAuraGroup,
+      this.rallyMarker,
+    );
     this.initPools();
   }
 
@@ -1944,6 +2084,13 @@ export class SceneManager {
     this.skillEffects = [];
     this.magnetTimer = 0;
     this.targetingReticle.visible = false;
+    this.targetingLinkLine.visible = false;
+    this.heroFieldAuraGroup.visible = false;
+    this.heroCastMotion = null;
+    for (const h of this.towerBuffHalos.values()) h.mat.dispose();
+    this.towerBuffHalos.clear();
+    this.enemyIceCages.clear();
+    this.enemyStunHalos.clear();
     this.levelGroup.clear();
     this.dynamicGroup.clear();
     this.slotMeshes.clear();
@@ -2130,32 +2277,150 @@ export class SceneManager {
         this.heroAuraGroup.rotation.y = -this.animTime * 1.65;
       }
       this.heroRig.root.visible = !sim.hero.dead;
-      this.heroRig.root.position.set(sim.hero.x, 0, sim.hero.z);
+      let heroDispX = sim.hero.x;
+      let heroDispY = 0;
+      let heroDispZ = sim.hero.z;
+      if (this.heroCastMotion && !this.reducedMotion) {
+        this.heroCastMotion.elapsed += realDt;
+        const p = Math.min(1, this.heroCastMotion.elapsed / this.heroCastMotion.duration);
+        const k = easeOutCubic(p);
+        heroDispX = this.heroCastMotion.fromX + (this.heroCastMotion.toX - this.heroCastMotion.fromX) * k;
+        heroDispZ = this.heroCastMotion.fromZ + (this.heroCastMotion.toZ - this.heroCastMotion.fromZ) * k;
+        heroDispY = Math.sin(p * Math.PI) * this.heroCastMotion.arcHeight;
+        this.heroRig.body.rotation.x =
+          this.heroCastMotion.mode === 'leap' ? Math.sin(p * Math.PI) * 0.28 : Math.sin(p * Math.PI) * 0.24;
+        if (this.heroCastMotion.trail) {
+          pushTrailPoint(this.heroCastMotion.trail, heroDispX, heroDispY + 0.72, heroDispZ);
+          rebuildTrail(this.heroCastMotion.trail);
+        }
+        if (p >= 1) {
+          this.heroRig.body.rotation.x = 0;
+          if (this.heroCastMotion.trail) {
+            this.heroCastMotion.trail.fading = true;
+          }
+          this.heroCastMotion = null;
+        }
+      } else {
+        if (this.heroCastMotion) {
+          if (this.heroCastMotion.trail) this.heroCastMotion.trail.fading = true;
+          this.heroCastMotion = null;
+        }
+        if (this.heroRig.body.rotation.x !== 0) this.heroRig.body.rotation.x = 0;
+      }
+      this.heroRig.root.position.set(heroDispX, heroDispY, heroDispZ);
       this.heroRig.root.scale.setScalar(sim.relics.includes('giant_hero') ? 1.22 : 1.0);
       this.heroRig.body.rotation.y = sim.hero.facingAngle;
+
+      // Compact hero foot ring (strictly stays around hero feet — field buff uses heroFieldAuraGroup)
       const ringMat = this.heroRig.ring.material as THREE.MeshBasicMaterial;
       if (sim.hero.activeBuff === 'banner') {
-        ringMat.color.set('#ffd454');
-        ringMat.opacity = 0.72 + Math.sin(this.animTime * 6) * 0.18;
-        this.heroRig.ring.scale.setScalar(6.4);
+        const isWolf = sim.heroId === 'ay_kurdu';
+        ringMat.color.set(isWolf ? '#67e8f9' : '#ffd454');
+        ringMat.opacity = 0.85;
+        this.heroRig.ring.scale.setScalar(1.16 + Math.sin(this.animTime * 6) * 0.06);
       } else if (sim.hero.alchemyAuraTimer > 0) {
         ringMat.color.set('#44f0a6');
-        ringMat.opacity = 0.65 + Math.sin(this.animTime * 6) * 0.16;
-        this.heroRig.ring.scale.setScalar(8.4);
+        ringMat.opacity = 0.85;
+        this.heroRig.ring.scale.setScalar(1.14 + Math.sin(this.animTime * 6) * 0.05);
       } else if (sim.hero.activeBuff === 'ironhide') {
         ringMat.color.set('#e8a848');
         ringMat.opacity = 0.92;
-        this.heroRig.ring.scale.setScalar(1.45 + Math.sin(this.animTime * 9) * 0.12);
+        this.heroRig.ring.scale.setScalar(1.26 + Math.sin(this.animTime * 9) * 0.08);
       } else if (sim.hero.activeBuff === 'berserk') {
         ringMat.color.set('#ff6b3d');
         ringMat.opacity = 0.92;
-        this.heroRig.ring.scale.setScalar(1.32 + Math.sin(this.animTime * 10) * 0.12);
+        this.heroRig.ring.scale.setScalar(1.22 + Math.sin(this.animTime * 10) * 0.08);
       } else {
         ringMat.color.set('#7eed87');
-        ringMat.opacity = 0.9;
+        ringMat.opacity = 0.82;
         this.heroRig.ring.scale.setScalar(1.0);
       }
       updateHeroAnimation(this.heroRig, sim.hero.moving, this.animTime, realDt);
+
+      // Field aura projection (crisp thin double rune ring + gems — replaces opaque donut)
+      const auraBonus = sim.talentMods.heroAuraRadiusBonus;
+      const isRoyalPassive =
+        sim.heroId === 'boz_pence' && resolveHeroVisualVariant(sim.heroClass, sim.hero.level) === 'royal';
+      let auraColor: string | null = null;
+      let auraRadius = 0;
+      let auraOpacity = 0.44;
+      if (!sim.hero.dead) {
+        if (sim.hero.activeBuff === 'banner') {
+          auraColor = sim.heroId === 'ay_kurdu' ? '#67e8f9' : '#ffd454';
+          auraRadius = 4.5 + auraBonus;
+          auraOpacity = 0.48;
+        } else if (sim.hero.alchemyAuraTimer > 0) {
+          auraColor = '#44f0a6';
+          auraRadius = 6.0 + auraBonus;
+          auraOpacity = sim.hero.skillActiveTimer > 0 ? 0.48 : 0.34;
+        } else if (isRoyalPassive) {
+          auraColor = '#ffe27a';
+          auraRadius = 4.5 + auraBonus;
+          auraOpacity = 0.24;
+        }
+      }
+      if (auraColor && auraRadius > 0) {
+        this.heroFieldAuraGroup.visible = true;
+        this.heroFieldAuraGroup.position.set(heroDispX, 0.068, heroDispZ);
+        this.heroFieldAuraGroup.scale.setScalar(auraRadius);
+        this.heroFieldAuraGroup.rotation.y = this.animTime * 0.45;
+        const inner = this.heroFieldAuraGroup.getObjectByName('AuraInnerSpin');
+        if (inner) inner.rotation.z = -this.animTime * 1.1;
+        this.heroFieldOuterMat.color.set(auraColor);
+        this.heroFieldOuterMat.opacity = auraOpacity * (0.86 + Math.sin(this.animTime * 5) * 0.14);
+        this.heroFieldInnerMat.opacity = auraOpacity * 0.55;
+        this.heroFieldGemMat.color.set(auraColor);
+        this.heroFieldGemMat.opacity = Math.min(0.95, auraOpacity * 1.55);
+      } else {
+        this.heroFieldAuraGroup.visible = false;
+      }
+
+      // Per-tower haste rune halo for every tower boosted by Hero Aura
+      const activeBuffedSlots = new Set<string>();
+      if (auraColor && auraRadius > 0) {
+        for (const slot of sim.slots.values()) {
+          if (!slot.tower) continue;
+          if (Math.hypot(sim.hero.x - slot.x, sim.hero.z - slot.z) <= auraRadius) {
+            activeBuffedSlots.add(slot.id);
+            let halo = this.towerBuffHalos.get(slot.id);
+            if (!halo) {
+              const g = new THREE.Group();
+              const mat = new THREE.MeshBasicMaterial({
+                color: auraColor,
+                transparent: true,
+                opacity: 0.75,
+                side: THREE.DoubleSide,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+                toneMapped: false,
+              });
+              const r1 = new THREE.Mesh(new THREE.RingGeometry(0.68, 0.77, 24), mat);
+              r1.rotation.x = -Math.PI / 2;
+              const r2 = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.61, 18, 1, 0, Math.PI * 1.25), mat);
+              r2.rotation.x = -Math.PI / 2;
+              r2.position.y = 0.004;
+              g.add(r1, r2);
+              g.position.set(slot.x, 0.078, slot.z);
+              this.dynamicGroup.add(g);
+              halo = { group: g, mat };
+              this.towerBuffHalos.set(slot.id, halo);
+            }
+            halo.group.visible = true;
+            halo.mat.color.set(auraColor);
+            halo.mat.opacity = 0.56 + Math.sin(this.animTime * 6.5) * 0.16;
+            halo.group.rotation.y = this.animTime * 1.85;
+          }
+        }
+      }
+      for (const [sid, halo] of this.towerBuffHalos.entries()) {
+        if (!activeBuffedSlots.has(sid)) {
+          this.dynamicGroup.remove(halo.group);
+          halo.mat.dispose();
+          this.towerBuffHalos.delete(sid);
+        }
+      }
+    } else {
+      this.heroFieldAuraGroup.visible = false;
     }
 
     if (this.rallyShowTimer > 0) this.rallyShowTimer = Math.max(0, this.rallyShowTimer - realDt);
@@ -2194,9 +2459,12 @@ export class SceneManager {
         rig.root.quaternion.identity();
       }
 
-      // Contrast-punched hit flash (suppresses map albedo + drives ACES-visible emissive tint, WCAG 2.3.1 rate-limited)
+      // Contrast-punched hit flash + distinct Ice Cage vs Physical Stun vs Slow visuals
       feel.flashElapsed += realDt;
       const fs = hitFlashStrength(feel.flashElapsed, feel.flashDur);
+      const isFrozen = e.freezeVisualTimer > 0;
+      const isStunned = !isFrozen && e.stunTimer > 0;
+      const isSlowed = !isFrozen && !isStunned && e.slowTimer > 0;
       if (fs > 0) {
         for (const b of feel.bases) {
           b.mat.color.copy(b.color).multiplyScalar(1 - feel.flashDarken * fs);
@@ -2204,15 +2472,15 @@ export class SceneManager {
           b.mat.emissiveIntensity = feel.flashEmissivePeak * fs;
         }
         feel.visual = 'flash';
-      } else if (e.stunTimer > 0 || e.slowTimer > 0) {
-        const frozen = e.stunTimer > 0;
-        const want = frozen ? 'frozen' : 'slow';
+      } else if (isFrozen || isStunned || isSlowed) {
+        const want: EnemyFeel['visual'] = isFrozen ? 'frozen' : isStunned ? 'stun' : 'slow';
         if (feel.visual !== want) {
           for (const b of feel.bases) {
             b.mat.color.copy(b.color);
-            if (frozen) b.mat.color.lerp(FROZEN_TINT, 0.35);
-            b.mat.emissive.copy(frozen ? FROZEN_TINT : SLOW_TINT);
-            b.mat.emissiveIntensity = frozen ? 0.5 : 0.28;
+            if (isFrozen) b.mat.color.lerp(FROZEN_TINT, 0.38);
+            else if (isStunned) b.mat.color.lerp(STUN_TINT, 0.18);
+            b.mat.emissive.copy(isFrozen ? FROZEN_TINT : isStunned ? STUN_TINT : SLOW_TINT);
+            b.mat.emissiveIntensity = isFrozen ? 0.56 : isStunned ? 0.24 : 0.28;
           }
           feel.visual = want;
         }
@@ -2220,11 +2488,71 @@ export class SceneManager {
         restoreMaterials(feel.bases);
         feel.visual = 'rest';
       }
+
+      // 3D Ice Crystal Cage around genuinely frozen enemies
+      let iceCage = this.enemyIceCages.get(e.uid);
+      if (isFrozen) {
+        if (!iceCage) {
+          iceCage = new THREE.Group();
+          const sc = e.isBoss ? 1.55 : e.isFlying ? 1.05 : 1.0;
+          for (let k = 0; k < 5; k++) {
+            const a = (k * Math.PI * 2) / 5;
+            const shard = new THREE.Mesh(this.iceSpikeGeo, this.iceCageMat);
+            shard.position.set(Math.cos(a) * 0.36 * sc, 0.28 * sc, Math.sin(a) * 0.36 * sc);
+            shard.rotation.z = -Math.cos(a) * 0.32;
+            shard.rotation.x = Math.sin(a) * 0.32;
+            shard.scale.setScalar(sc);
+            iceCage.add(shard);
+          }
+          this.dynamicGroup.add(iceCage);
+          this.enemyIceCages.set(e.uid, iceCage);
+        }
+        iceCage.visible = true;
+        iceCage.position.set(rig.root.position.x, e.isFlying ? 1.05 : 0.04, rig.root.position.z);
+        iceCage.rotation.y = this.animTime * 0.65;
+      } else if (iceCage) {
+        this.dynamicGroup.remove(iceCage);
+        this.enemyIceCages.delete(e.uid);
+      }
+
+      // 3D Orbiting Golden Stars above physically stunned enemies
+      let stunHalo = this.enemyStunHalos.get(e.uid);
+      if (isStunned) {
+        if (!stunHalo) {
+          stunHalo = new THREE.Group();
+          const r = e.isBoss ? 0.52 : 0.32;
+          for (let k = 0; k < 3; k++) {
+            const a = (k * Math.PI * 2) / 3;
+            const star = new THREE.Mesh(this.stunStarGeo, this.stunStarMat);
+            star.position.set(Math.cos(a) * r, 0, Math.sin(a) * r);
+            stunHalo.add(star);
+          }
+          this.dynamicGroup.add(stunHalo);
+          this.enemyStunHalos.set(e.uid, stunHalo);
+        }
+        stunHalo.visible = true;
+        const headY = e.isBoss ? 2.15 : e.isFlying ? 1.88 : 1.32;
+        stunHalo.position.set(rig.root.position.x, headY + Math.sin(this.animTime * 7) * 0.05, rig.root.position.z);
+        stunHalo.rotation.y = this.animTime * 5.2;
+      } else if (stunHalo) {
+        this.dynamicGroup.remove(stunHalo);
+        this.enemyStunHalos.delete(e.uid);
+      }
     }
 
     // Detach killed enemy body for a parabolic 0.42s knockback tumble death pop!
     for (const [uid, rig] of this.enemyRigs.entries()) {
       if (!aliveIds.has(uid)) {
+        const cage = this.enemyIceCages.get(uid);
+        if (cage) {
+          this.dynamicGroup.remove(cage);
+          this.enemyIceCages.delete(uid);
+        }
+        const halo = this.enemyStunHalos.get(uid);
+        if (halo) {
+          this.dynamicGroup.remove(halo);
+          this.enemyStunHalos.delete(uid);
+        }
         const feel = this.enemyFeel.get(uid);
         const hdx = feel?.lastHitDirX ?? 0;
         const hdz = feel?.lastHitDirZ ?? 1;
@@ -2303,23 +2631,25 @@ export class SceneManager {
           this.dynamicGroup.add(mortarRing);
         } else if (p.towerId === 'owl' || p.towerId === 'lynx') {
           const orbGroup = new THREE.Group();
-          const boltCol =
-            p.towerId === 'lynx'
-              ? p.branchId === 'lynx_frostbite'
-                ? '#7ef5ff'
-                : '#be75ff'
+          const isFrostShot = Boolean(p.isFourthShot && p.stats.freezeDuration);
+          const boltCol = isFrostShot
+            ? '#c9f8ff'
+            : p.towerId === 'lynx'
+              ? p.branchId === 'lynx_flurry'
+                ? '#be75ff'
+                : '#7ef5ff'
               : p.branchId === 'owl_glacier'
-                ? '#c8f8ff'
+                ? '#a8f4ff'
                 : '#6be8ff';
           const orb = new THREE.Mesh(
-            new THREE.OctahedronGeometry(0.16, 0),
+            new THREE.OctahedronGeometry(isFrostShot ? 0.24 : 0.16, 0),
             new THREE.MeshBasicMaterial({
               color: boltCol,
               toneMapped: false,
             }),
           );
           const halo = new THREE.Mesh(
-            new THREE.TorusGeometry(0.19, 0.025, 6, 14),
+            new THREE.TorusGeometry(isFrostShot ? 0.27 : 0.19, isFrostShot ? 0.032 : 0.025, 6, 14),
             new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false }),
           );
           orbGroup.add(orb, halo);
@@ -2381,9 +2711,9 @@ export class SceneManager {
               ? '#a8f0ff'
               : '#45d8ff'
             : p.towerId === 'lynx'
-              ? p.branchId === 'lynx_frostbite'
-                ? '#78f2ff'
-                : '#b872ff'
+              ? p.branchId === 'lynx_flurry'
+                ? '#b872ff'
+                : '#78f2ff'
               : p.towerId === 'falcon'
                 ? '#4fe8ff'
                 : p.towerId === 'hedgehog'
@@ -2483,7 +2813,7 @@ export class SceneManager {
       }
     }
 
-    // Sync elemental pools (resin amber / alchemy acid / inferno magma) with pulsing rim & rising bubbles
+    // Sync elemental pools (resin amber / alchemy acid / inferno magma) with pulsing rim, swirling vortex & rising bubbles
     while (this.poolMeshes.length < sim.resinPools.length) {
       const group = new THREE.Group();
       const fillMat = new THREE.MeshBasicMaterial({
@@ -2505,10 +2835,22 @@ export class SceneManager {
       const rim = new THREE.Mesh(this.poolRimGeo, rimMat);
       rim.rotation.x = -Math.PI / 2;
       rim.position.y = 0.004;
-      group.add(fill, rim);
+      const swirlMat = new THREE.MeshBasicMaterial({
+        color: '#ffe0a3',
+        transparent: true,
+        opacity: 0.55,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        toneMapped: false,
+      });
+      const swirl = new THREE.Mesh(this.poolSwirlGeo, swirlMat);
+      swirl.rotation.x = -Math.PI / 2;
+      swirl.position.y = 0.008;
+      group.add(fill, rim, swirl);
       group.position.y = 0.058;
       this.dynamicGroup.add(group);
-      this.poolMeshes.push({ group, fillMat, rimMat });
+      this.poolMeshes.push({ group, fillMat, rimMat, swirl, swirlMat });
     }
     for (let i = 0; i < this.poolMeshes.length; i++) {
       const pool: ResinPool | undefined = sim.resinPools[i];
@@ -2520,25 +2862,32 @@ export class SceneManager {
         if (kind === 'acid') {
           pm.fillMat.color.set('#22d970');
           pm.rimMat.color.set('#80ffb8');
+          pm.swirlMat.color.set('#a8ffcf');
           pm.fillMat.opacity = 0.46 + pulse * 0.08;
+          pm.swirl.rotation.z = -this.animTime * 2.1;
         } else if (kind === 'inferno') {
           pm.fillMat.color.set('#ff5218');
           pm.rimMat.color.set('#ffc14d');
+          pm.swirlMat.color.set('#ffe070');
           pm.fillMat.opacity = 0.50 + pulse * 0.10;
+          pm.swirl.rotation.z = this.animTime * 2.8;
         } else {
           pm.fillMat.color.set('#e69b35');
           pm.rimMat.color.set('#ffd27a');
+          pm.swirlMat.color.set('#ffe499');
           pm.fillMat.opacity = 0.44 + pulse * 0.06;
+          pm.swirl.rotation.z = this.animTime * 1.35;
         }
         const fade = Math.min(1, pool.timer / 0.45);
         pm.fillMat.opacity *= fade;
         pm.rimMat.opacity = 0.72 * fade;
+        pm.swirlMat.opacity = 0.52 * fade;
         pm.group.position.set(pool.x, 0.058, pool.z);
         pm.group.scale.setScalar(pool.radius * (0.97 + pulse * 0.03));
-        if (!this.reducedMotion && kind !== 'resin' && Math.random() < realDt * 4.5) {
+        if (!this.reducedMotion && Math.random() < realDt * (kind === 'inferno' ? 6.5 : 4.5)) {
           const ang = Math.random() * Math.PI * 2;
-          const rr = Math.random() * pool.radius * 0.75;
-          const bCol = kind === 'acid' ? '#70ffb2' : '#ff9838';
+          const rr = Math.random() * pool.radius * 0.78;
+          const bCol = kind === 'acid' ? '#70ffb2' : kind === 'inferno' ? '#ff9838' : '#ffc254';
           this.spawnParticles(pool.x + Math.cos(ang) * rr, 0.14, pool.z + Math.sin(ang) * rr, bCol, 1, 0.55);
         }
       }
@@ -2672,54 +3021,89 @@ export class SceneManager {
               : ev.towerId === 'badger'
                 ? '#4cf58d'
                 : ev.towerId === 'lynx'
-                  ? '#be78ff'
+                  ? ev.branchId === 'lynx_flurry'
+                    ? '#be78ff'
+                    : '#7ef5ff'
                   : ev.towerId === 'beaver' || ev.towerId === 'tortoise'
                     ? '#ff9f38'
                     : ev.towerId === 'hedgehog'
                       ? '#ffc04a'
                       : '#ffe47a';
-          const big = ev.towerId === 'beaver' || ev.towerId === 'badger' || ev.towerId === 'tortoise' || Boolean(ev.isLine);
+          const big =
+            ev.towerId === 'beaver' ||
+            ev.towerId === 'badger' ||
+            ev.towerId === 'tortoise' ||
+            Boolean(ev.isLine) ||
+            Boolean(ev.isCrit) ||
+            Boolean(ev.isFreeze);
           const mx = ev.fromX + ux * 0.55;
           const mz = ev.fromZ + uz * 0.55;
-          this.spawnMuzzleFlash(mx, 1.45, mz, flashCol, ux, uz, big);
+          this.spawnMuzzleFlash(mx, 1.45, mz, ev.isFreeze ? '#d8fbff' : flashCol, ux, uz, big);
           if (ev.towerId === 'tortoise') {
             this.spawnShockRing(mx, mz, '#ffd166', 0.9, 0.16, 1.25);
           } else if (ev.towerId === 'falcon') {
             this.spawnSparks(mx, 1.45, mz, ux, 0.1, uz, '#9beeff', 4, 7.5, 0.3);
           } else if (ev.towerId === 'lynx') {
-            this.spawnShockRing(mx, mz, '#c98aff', 0.65, 0.14, 1.35);
+            this.spawnShockRing(
+              mx,
+              mz,
+              ev.isFreeze ? '#9ef5ff' : ev.branchId === 'lynx_flurry' ? '#c98aff' : '#7ef5ff',
+              0.72,
+              0.15,
+              1.35,
+            );
+          } else if (ev.isCrit) {
+            this.spawnShockRing(mx, mz, '#ffe85c', 0.85, 0.14, 1.35);
+          }
+          if (ev.isFreeze) {
+            this.spawnSparks(mx, 1.42, mz, ux, 0.15, uz, '#c8f8ff', 6, 7.0, 0.45);
           }
         }
 
         if (ev.isChain || ev.isLine) {
-          const pts: THREE.Vector3[] = [new THREE.Vector3(ev.fromX, 1.42, ev.fromZ)];
+          const origin = new THREE.Vector3(ev.fromX, 1.42, ev.fromZ);
           if (ev.isChain) {
-            let prev = pts[0];
-            for (const id of ev.targetIds) {
+            const isTempest = ev.towerId === 'falcon' || ev.branchId === 'falcon_tempest';
+            const coreHex = isTempest ? '#8cf4ff' : '#6be8ff';
+            const haloHex = isTempest ? '#ffe169' : '#b47bff';
+            let prev = origin;
+            ev.targetIds.forEach((id, idx) => {
               const pos = enemyPos(id) ?? { x: ev.toX, z: ev.toZ };
-              const midX = (prev.x + pos.x) * 0.5 + (Math.random() - 0.5) * 0.6;
-              const midZ = (prev.z + pos.z) * 0.5 + (Math.random() - 0.5) * 0.6;
-              pts.push(new THREE.Vector3(midX, 1.0 + Math.random() * 0.35, midZ));
-              const hitPt = new THREE.Vector3(pos.x, 0.75, pos.z);
-              pts.push(hitPt);
+              const hitPt = new THREE.Vector3(pos.x, 0.78, pos.z);
+              if (idx === 0 && isTempest) {
+                // Falcon Tempest calls a vertical storm bolt straight from the sky onto the primary target!
+                const skyPt = new THREE.Vector3(pos.x + (Math.random() - 0.5) * 0.6, 7.4, pos.z - 0.4);
+                this.spawnJaggedLightning(skyPt, hitPt, '#ffe875', '#68ebff', 0.11, 0.24, 2);
+                this.spawnFlashLight(pos.x, 1.6, pos.z, '#7ef5ff', 3.4, 5.5, 0.24);
+                this.spawnShockRing(pos.x, pos.z, '#ffe169', 1.55, 0.28);
+              }
+              this.spawnJaggedLightning(prev, hitPt, coreHex, haloHex, 0.085, 0.21, idx === 0 ? 1 : 0);
               prev = hitPt;
-              this.spawnSparks(pos.x, 0.8, pos.z, 0, 0, 0, '#9ff3ff', 8, 7);
-              this.spawnShockRing(pos.x, pos.z, '#7fe9ff', 1.0, 0.22);
+              this.spawnSparks(pos.x, 0.8, pos.z, 0, 0.35, 0, coreHex, 10, 8.0);
+              this.spawnShockRing(pos.x, pos.z, coreHex, 1.1, 0.22);
+            });
+            if (ev.targetIds.length === 0) {
+              this.spawnJaggedLightning(origin, new THREE.Vector3(ev.toX, 0.65, ev.toZ), coreHex, haloHex, 0.085, 0.2, 1);
             }
-            if (pts.length === 1) pts.push(new THREE.Vector3(ev.toX, 0.65, ev.toZ));
-            this.spawnEnergyBeam(pts, '#5ce1ff', 0.085, 0.2);
-            this.spawnEnergyBeam(pts, '#ffffff', 0.032, 0.13);
             this.onChainZap?.();
           } else {
-            pts.push(new THREE.Vector3(ev.toX, 0.65, ev.toZ));
-            this.spawnEnergyBeam(pts, '#ffb43c', 0.1, 0.22);
-            this.spawnEnergyBeam(pts, '#ffffff', 0.04, 0.14);
+            const pts = [origin, new THREE.Vector3(ev.toX, 0.65, ev.toZ)];
+            this.spawnEnergyBeam(pts, '#ffb43c', 0.11, 0.24);
+            this.spawnEnergyBeam(pts, '#ffffff', 0.044, 0.16);
+            // Sonic Mach shock rings spaced along piercing line
+            for (let rIdx = 1; rIdx <= 3; rIdx++) {
+              const tDist = (rIdx * 2.4) / Math.max(1, len);
+              if (tDist > 1.0) break;
+              const rx = ev.fromX + dirX * tDist;
+              const rz = ev.fromZ + dirZ * tDist;
+              this.spawnShockRing(rx, rz, '#ffe49e', 0.92, 0.22, 0.85);
+            }
             for (const id of ev.targetIds) {
               const pos = enemyPos(id);
-              if (pos) this.spawnImpactBurst(pos.x, 0.85, pos.z, '#ffd27a', 1.15, ux, uz);
+              if (pos) this.spawnImpactBurst(pos.x, 0.85, pos.z, '#ffd27a', 1.25, ux, uz);
             }
-            this.cameraCtrl.addTrauma(0.2);
-            this.cameraCtrl.addDirectionalKick(ux, uz, 0.1);
+            this.cameraCtrl.addTrauma(0.24);
+            this.cameraCtrl.addDirectionalKick(ux, uz, 0.12);
             this.onRailgunFire?.();
           }
         }
@@ -2749,6 +3133,9 @@ export class SceneManager {
             this.spawnParticles(ev.x, 0.42, ev.z, '#d99e4e', 14, 1.4);
             this.spawnParticles(ev.x, 0.32, ev.z, '#6b533b', 9, 1.15);
             this.spawnImpactBurst(ev.x, 0.45, ev.z, '#ffd166', 1.45, 0, 0);
+            if (ev.branchId === 'tortoise_quake' || ev.isStun) {
+              this.spawnMiniEarthSpikes(ev.x, ev.z, r * 0.56, 5, '#e8a848', 0.48);
+            }
             this.cameraCtrl.addTrauma(0.42);
             this.cameraCtrl.addZoomPunch(1.35);
             this.cameraCtrl.addDirectionalKick(ev.dirX, ev.dirZ, 0.16);
@@ -2762,9 +3149,16 @@ export class SceneManager {
             this.spawnParticles(ev.x, 0.4, ev.z, '#ff9436', 12, 1.35);
             this.spawnParticles(ev.x, 0.3, ev.z, '#4a3c33', 7, 1.05);
             this.spawnImpactBurst(ev.x, 0.45, ev.z, '#ffb347', 1.35, 0, 0);
+            if (ev.isStun) {
+              this.spawnShockRing(ev.x, ev.z, '#ffe14d', r * 1.1, 0.34, 0.85);
+            }
             this.cameraCtrl.addTrauma(0.36);
             this.cameraCtrl.addZoomPunch(1.15);
             this.cameraCtrl.addDirectionalKick(ev.dirX, ev.dirZ, 0.14);
+          }
+          if (ev.isArmorBreak) {
+            this.spawnSlashArc(ev.x, ev.z, 0.4, '#6ef3ff', 1.45);
+            this.spawnSlashArc(ev.x, ev.z, -1.1, '#ffd54f', 1.35);
           }
           this.onMortarExplode?.();
         } else {
@@ -2774,24 +3168,43 @@ export class SceneManager {
               : ev.towerId === 'badger'
                 ? '#5ef79b'
                 : ev.towerId === 'lynx'
-                  ? '#c98aff'
+                  ? ev.branchId === 'lynx_flurry'
+                    ? '#c98aff'
+                    : '#8ef6ff'
                   : ev.towerId === 'hedgehog' || ev.towerId === 'tortoise'
                     ? '#ffd27a'
                     : '#fff1b8';
-          const burstScale = ev.isCrit ? 1.25 : ev.towerId === 'hedgehog' ? 1.18 : ev.towerId === 'falcon' ? 1.05 : 0.88;
+          const burstScale = ev.isCrit ? 1.3 : ev.towerId === 'hedgehog' ? 1.18 : ev.towerId === 'falcon' ? 1.05 : 0.88;
           this.spawnImpactBurst(ev.x, 0.85, ev.z, sparkHex, burstScale, ev.dirX, ev.dirZ);
+          if (ev.branchId === 'squirrel_sniper' && ev.isCrit) {
+            this.spawnEnergyBeam(
+              [new THREE.Vector3(ev.x, 0.25, ev.z), new THREE.Vector3(ev.x, 3.6, ev.z)],
+              '#ffe85c',
+              0.048,
+              0.2,
+            );
+            this.spawnShockRing(ev.x, ev.z, '#ffe85c', 1.45, 0.24, 0.72);
+          }
           if (ev.towerId === 'falcon') {
-            this.spawnShockRing(ev.x, ev.z, '#8ceeff', ev.isCrit ? 1.35 : 0.88, 0.20, 0.72);
+            this.spawnShockRing(ev.x, ev.z, '#8ceeff', ev.isCrit ? 1.4 : 0.92, 0.20, 0.72);
             this.spawnSparks(ev.x, 0.85, ev.z, ev.dirX, 0.2, ev.dirZ, '#ffd86b', 6, 8.5, 0.55);
           } else if (ev.towerId === 'lynx') {
-            const lynxHex = ev.branchId === 'lynx_frostbite' ? '#7ef5ff' : '#c98aff';
-            this.spawnShockRing(ev.x, ev.z, lynxHex, 1.0, 0.22, 0.55);
+            const lynxHex = ev.branchId === 'lynx_flurry' ? '#c98aff' : '#7ef5ff';
+            this.spawnShockRing(ev.x, ev.z, lynxHex, 1.05, 0.22, 0.55);
           } else if (ev.towerId === 'hedgehog') {
             this.spawnSparks(ev.x, 0.85, ev.z, ev.dirX, 0.15, ev.dirZ, '#ffcf6b', 10, 10.5, 0.42);
           }
+          if (ev.isArmorBreak) {
+            this.spawnSlashArc(ev.x, ev.z, 0.3, '#6ef3ff', 1.25);
+            this.spawnSlashArc(ev.x, ev.z, -1.2, '#ffd54f', 1.2);
+          }
           if (ev.isFreeze || ev.branchId === 'owl_glacier' || ev.branchId === 'lynx_frostbite') {
-            this.spawnShockRing(ev.x, ev.z, '#c9f6ff', 1.65, 0.36);
-            this.spawnSparks(ev.x, 0.9, ev.z, 0, 0, 0, '#dffaff', 10, 5.5);
+            this.spawnShockRing(ev.x, ev.z, '#c9f6ff', ev.isFreeze ? 2.1 : 1.55, 0.36);
+            this.spawnSparks(ev.x, 0.9, ev.z, 0, 0.3, 0, '#dffaff', ev.isFreeze ? 14 : 9, 6.2);
+            if (ev.isFreeze) {
+              this.spawnIceCrystalBurst(ev.x, ev.z, 1.35, 6);
+              this.spawnFlashLight(ev.x, 1.1, ev.z, '#9eefff', 2.8, 4.5, 0.22);
+            }
             this.onFreezeImpact?.();
           }
           if (ev.splash) {
@@ -3026,14 +3439,36 @@ export class SceneManager {
               : hId === 'ay_kurdu'
                 ? '#67e8f9'
                 : '#95e06c';
-        this.spawnShockRing(ev.x, ev.z, '#ffffff', 1.6, 0.16);
-        this.spawnShockRing(ev.x, ev.z, ringCol, hId === 'kizil_kuyruk' ? 5.2 : 3.0);
-        if (hId !== 'kizil_kuyruk') {
-          this.spawnScorch(ev.x, ev.z, 1.1);
-          this.cameraCtrl.addTrauma(hId === 'kaya_dis' ? 0.42 : 0.34);
+        this.spawnShockRing(ev.x, ev.z, '#ffffff', 1.5, 0.16);
+        this.spawnShockRing(ev.x, ev.z, ringCol, hId === 'kizil_kuyruk' ? 4.8 : ev.radius ?? 3.0, 0.38);
+        if (hId === 'ay_kurdu') {
+          const baseAng = this.heroRig?.body.rotation.y ?? 0;
+          this.spawnSlashArc(ev.x, ev.z, baseAng + 0.35, '#7ef5ff', 1.9);
+          this.spawnSlashArc(ev.x, ev.z, baseAng - 0.35, '#ffffff', 1.75);
+          this.spawnSlashArc(ev.x, ev.z, baseAng + Math.PI * 0.5, '#67e8f9', 1.65);
+          this.spawnIceCrystalBurst(ev.x, ev.z, 1.55, 5);
+          this.cameraCtrl.addTrauma(0.28);
+        } else if (hId === 'kizil_kuyruk') {
+          this.spawnFlashLight(ev.x, 1.1, ev.z, '#44f0a6', 2.8, 6.0, 0.38);
+          this.spawnShockRing(ev.x, ev.z, '#8affcf', 2.2, 0.32, 0.45);
+          if (ev.buffedSlotIds && simRef) {
+            this.spawnHeroBuffArcs(ev.x, ev.z, ev.buffedSlotIds, simRef, '#44f0a6');
+          }
+        } else if (hId === 'kaya_dis') {
+          this.spawnScorch(ev.x, ev.z, 1.15);
+          this.spawnMiniEarthSpikes(ev.x, ev.z, 1.45, 4, '#e8a848', 0.52);
+          this.cameraCtrl.addTrauma(0.42);
           this.cameraCtrl.addZoomPunch(1.1);
+        } else {
+          const baseAng = this.heroRig?.body.rotation.y ?? 0;
+          this.spawnSlashArc(ev.x, ev.z, baseAng, '#b5ff80', 1.95);
+          this.spawnSlashArc(ev.x, ev.z, baseAng + 2.1, '#ffe27a', 1.85);
+          this.spawnSlashArc(ev.x, ev.z, baseAng - 2.1, '#ffffff', 1.7);
+          this.spawnScorch(ev.x, ev.z, 1.0);
+          this.cameraCtrl.addTrauma(0.34);
+          this.cameraCtrl.addZoomPunch(1.0);
         }
-        this.spawnSparks(ev.x, 0.45, ev.z, 0, 0, 0, ringCol, hId === 'ay_kurdu' ? 18 : 16, 8);
+        this.spawnSparks(ev.x, 0.45, ev.z, 0, 0.35, 0, ringCol, 18, 8.5);
         this.spawnParticles(ev.x, 0.45, ev.z, ringCol, 12, 1.2);
       } else if (ev.type === 'HERO_LEVELED') {
         this.spawnShockRing(ev.x, ev.z, '#ffffff', 1.5, 0.18);
@@ -3314,9 +3749,9 @@ export class SceneManager {
   }
 
   private spawnPineconeRainVfx(tx: number, tz: number): void {
-    this.spawnFlashLight(tx, 1.5, tz, '#ff8d2e', 5.5, 9.0, 0.55);
-    this.spawnShockRing(tx, tz, '#ffffff', 2.1, 0.22);
-    this.spawnShockRing(tx, tz, '#ff9f43', 3.6, 0.48);
+    this.spawnFlashLight(tx, 1.5, tz, '#ff8d2e', 5.8, 9.5, 0.6);
+    this.spawnShockRing(tx, tz, '#ffffff', 2.2, 0.22);
+    this.spawnShockRing(tx, tz, '#ff9f43', 3.4, 0.52);
 
     const targets: Array<[number, number]> = [[tx, tz]];
     const count = this.reducedMotion ? 3 : 6;
@@ -3328,7 +3763,7 @@ export class SceneManager {
 
     targets.forEach(([lx, lz], idx) => {
       const meteor = this.instantiateSkillMesh('skill_pinecone_meteor', '#ff7a18', 0.26);
-      meteor.scale.setScalar(idx === 0 ? 1.45 : 1.1);
+      meteor.scale.setScalar(idx === 0 ? 1.55 : 1.12);
       const sx = lx + 2.7 + (idx % 3) * 0.35;
       const sy = 11.2 + idx * 0.55;
       const sz = lz - 2.4;
@@ -3336,6 +3771,7 @@ export class SceneManager {
       meteor.visible = false;
       this.dynamicGroup.add(meteor);
 
+      const mTrail = !this.reducedMotion ? this.acquireTrail('#ff7a22', idx === 0 ? 0.24 : 0.16) : null;
       const delay = idx * 0.055;
       const flightDur = this.reducedMotion ? 0.16 : 0.27;
       const holdDur = 0.22;
@@ -3353,36 +3789,47 @@ export class SceneManager {
             meteor.visible = true;
             const p = tFlight / flightDur;
             const e = p * p;
-            meteor.position.set(sx + (lx - sx) * e, sy + (0.12 - sy) * e, sz + (lz - sz) * e);
+            const mx = sx + (lx - sx) * e;
+            const my = sy + (0.12 - sy) * e;
+            const mz = sz + (lz - sz) * e;
+            meteor.position.set(mx, my, mz);
             meteor.lookAt(endVec);
             meteor.rotateZ(tFlight * 16);
+            if (mTrail) {
+              pushTrailPoint(mTrail, mx, my, mz);
+              rebuildTrail(mTrail);
+            }
             sparkAccum += dt;
             if (!this.reducedMotion && sparkAccum >= 0.032) {
               sparkAccum = 0;
-              this.spawnSparks(meteor.position.x, meteor.position.y, meteor.position.z, 0.4, 0.8, -0.4, '#ffb647', 2, 4.5, 0.4);
+              this.spawnSparks(mx, my, mz, 0.4, 0.8, -0.4, '#ffb647', 2, 4.5, 0.4);
             }
             return true;
           }
           if (!impacted) {
             impacted = true;
+            if (mTrail) mTrail.fading = true;
             meteor.position.set(lx, 0.08, lz);
-            this.spawnShockRing(lx, lz, '#ff9f43', idx === 0 ? 2.6 : 1.75, 0.32);
-            this.spawnScorch(lx, lz, idx === 0 ? 2.2 : 1.25);
-            this.spawnSparks(lx, 0.42, lz, 0, 0.8, 0, '#ffcf6b', idx === 0 ? 20 : 9, 9.5);
-            this.spawnParticles(lx, 0.55, lz, '#ff7722', idx === 0 ? 14 : 6, 1.3);
+            this.spawnShockRing(lx, lz, '#ff9f43', idx === 0 ? 2.8 : 1.85, 0.34);
+            this.spawnScorch(lx, lz, idx === 0 ? 2.25 : 1.3);
+            this.spawnSparks(lx, 0.42, lz, 0, 0.85, 0, '#ffcf6b', idx === 0 ? 22 : 10, 9.8);
+            this.spawnParticles(lx, 0.55, lz, '#ff7722', idx === 0 ? 15 : 6, 1.35);
             if (idx === 0) {
-              this.cameraCtrl.addTrauma(0.56);
-              this.cameraCtrl.addZoomPunch(1.8);
+              this.cameraCtrl.addTrauma(0.58);
+              this.cameraCtrl.addZoomPunch(1.85);
             } else {
               this.cameraCtrl.addTrauma(0.14);
             }
           }
           const post = tFlight - flightDur;
           const shrink = Math.max(0.01, 1 - post / holdDur);
-          meteor.scale.setScalar((idx === 0 ? 1.45 : 1.1) * shrink);
+          meteor.scale.setScalar((idx === 0 ? 1.55 : 1.12) * shrink);
           return post < holdDur;
         },
-        dispose: () => this.disposeSkillObject(meteor),
+        dispose: () => {
+          if (mTrail) mTrail.fading = true;
+          this.disposeSkillObject(meteor);
+        },
       });
     });
   }
@@ -3394,15 +3841,22 @@ export class SceneManager {
     magnet.scale.setScalar(1.38);
     magnet.position.copy(this.magnetPos);
     this.dynamicGroup.add(magnet);
-    this.spawnFlashLight(hx, 2.2, hz, '#4cf0ff', 3.4, 7.5, 0.7);
-    this.spawnShockRing(hx, hz, '#4cf0ff', 3.2, 0.4);
+    this.spawnFlashLight(hx, 2.2, hz, '#4cf0ff', 3.6, 8.0, 0.75);
+    this.spawnShockRing(hx, hz, '#4cf0ff', 3.4, 0.42);
 
-    // Pull an immediate ring of golden acorns toward the hovering magnet
+    // Pull golden acorns toward the hovering magnet + magnetic pulse arcs from live enemies
     const burstCount = this.reducedMotion ? 3 : 6;
     for (let i = 0; i < burstCount; i++) {
       const a = (i * Math.PI * 2) / burstCount;
       const dist = 2.6 + (i % 2) * 1.1;
       this.spawnGoldenAcornPull(hx + Math.cos(a) * dist, hz + Math.sin(a) * dist);
+    }
+    if (!this.reducedMotion && this.lastSim) {
+      const pulled = this.lastSim.enemies.filter((e) => e.hp > 0).slice(0, 6);
+      for (const e of pulled) {
+        this.spawnGoldenAcornPull(e.x, e.z);
+        this.spawnShockRing(e.x, e.z, '#5ef2ff', 0.9, 0.25);
+      }
     }
 
     let elapsed = 0;
@@ -3470,6 +3924,7 @@ export class SceneManager {
   private spawnHeroUltimateVfx(ev: Extract<SimEvent, { type: 'HERO_ULTIMATE' }>): void {
     const fxX = ev.fromX ?? ev.x;
     const fxZ = ev.fromZ ?? ev.z;
+    const rad = ev.radius ?? 3.6;
     const col =
       ev.variant === 'fox_storm'
         ? '#44f0a6'
@@ -3483,26 +3938,89 @@ export class SceneManager {
                 ? '#ffd84f'
                 : '#80f272';
 
-    this.spawnFlashLight(ev.x, 1.6, ev.z, col, 4.8, 8.5, 0.65);
-    this.spawnShockRing(ev.x, ev.z, '#ffffff', 1.8, 0.18);
-    this.spawnShockRing(ev.x, ev.z, col, 3.8, 0.45);
-    this.cameraCtrl.addTrauma(0.5);
-    this.cameraCtrl.addZoomPunch(1.5);
+    this.spawnFlashLight(ev.x, 1.8, ev.z, col, 5.2, 9.5, 0.72);
+    this.spawnShockRing(ev.x, ev.z, '#ffffff', rad * 0.62, 0.18);
+    this.spawnShockRing(ev.x, ev.z, col, rad * 1.15, 0.48);
+    this.cameraCtrl.addTrauma(ev.variant === 'boar_charge' ? 0.62 : 0.52);
+    this.cameraCtrl.addZoomPunch(1.65);
+
+    if (ev.buffedSlotIds && ev.buffedSlotIds.length > 0 && this.lastSim) {
+      this.spawnHeroBuffArcs(ev.x, ev.z, ev.buffedSlotIds, this.lastSim, col);
+    }
+
+    if (ev.variant === 'wolf_howl') {
+      // Northern Howl: Lunar ice column descending into frost rings + 8 glowing crystalline ice spires + snow flurry!
+      const pillarMat = new THREE.MeshBasicMaterial({
+        color: '#88f4ff',
+        transparent: true,
+        opacity: 0.48,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        toneMapped: false,
+      });
+      const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 1.15, 6.8, 16, 1, true), pillarMat);
+      pillar.userData.ownResources = true;
+      pillar.position.set(ev.x, 3.4, ev.z);
+      this.dynamicGroup.add(pillar);
+
+      const coreMat = new THREE.MeshBasicMaterial({
+        color: '#ffffff',
+        transparent: true,
+        opacity: 0.65,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        toneMapped: false,
+      });
+      const coreBeam = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.35, 6.8, 10), coreMat);
+      coreBeam.userData.ownResources = true;
+      coreBeam.position.set(ev.x, 3.4, ev.z);
+      this.dynamicGroup.add(coreBeam);
+
+      let pElapsed = 0;
+      const pDur = 0.65;
+      this.skillEffects.push({
+        update: (dt) => {
+          pElapsed += dt;
+          const k = Math.min(1, pElapsed / pDur);
+          pillar.rotation.y += dt * 4.5;
+          pillar.scale.set(1 + k * 0.9, 1, 1 + k * 0.9);
+          pillarMat.opacity = 0.48 * Math.pow(1 - k, 1.3);
+          coreMat.opacity = 0.65 * Math.pow(1 - k, 1.6);
+          return k < 1;
+        },
+        dispose: () => {
+          this.disposeSkillObject(pillar);
+          this.disposeSkillObject(coreBeam);
+        },
+      });
+
+      this.spawnShockRing(ev.x, ev.z, '#bff8ff', rad * 1.32, 0.56);
+      this.spawnShockRing(ev.x, ev.z, '#ffffff', rad * 0.85, 0.32, 0.45);
+      this.spawnIceCrystalBurst(ev.x, ev.z, 2.15, 8);
+      this.spawnSparks(ev.x, 0.85, ev.z, 0, 0.65, 0, '#d8fbff', 28, 10.5);
+      this.spawnParticles(ev.x, 0.85, ev.z, '#7ef5ff', 18, 1.45);
+      return;
+    }
 
     if (ev.variant === 'fox_storm') {
+      // 7 trailing emerald alchemy flasks orbiting outward from Kızıl Kuyruk
       const drops: Array<[number, number]> = [
         [ev.x, ev.z],
-        [ev.x - 1.5, ev.z + 1.1],
-        [ev.x + 1.5, ev.z + 1.0],
-        [ev.x - 1.3, ev.z - 1.2],
-        [ev.x + 1.4, ev.z - 1.1],
+        [ev.x - 1.7, ev.z + 1.15],
+        [ev.x + 1.7, ev.z + 1.05],
+        [ev.x - 1.45, ev.z - 1.3],
+        [ev.x + 1.55, ev.z - 1.2],
+        [ev.x, ev.z + 2.1],
+        [ev.x, ev.z - 2.0],
       ];
       drops.forEach(([lx, lz], idx) => {
         const flask = this.instantiateSkillMesh('skill_alchemy_flask', '#44f0a6', 0.22);
-        flask.scale.setScalar(1.1);
-        flask.position.set(fxX, 1.2, fxZ);
+        flask.scale.setScalar(1.15);
+        flask.position.set(fxX, 1.25, fxZ);
         this.dynamicGroup.add(flask);
-        const dur = 0.28 + idx * 0.045;
+        const fTrail = !this.reducedMotion ? this.acquireTrail('#44f0a6', 0.14) : null;
+        const dur = 0.25 + idx * 0.04;
         let elapsed = 0;
         let shattered = false;
         this.skillEffects.push({
@@ -3510,55 +4028,77 @@ export class SceneManager {
             elapsed += dt;
             if (!shattered) {
               const p = Math.min(1, elapsed / dur);
-              flask.position.set(
-                fxX + (lx - fxX) * p,
-                1.2 * (1 - p) + Math.sin(p * Math.PI) * (3.2 + idx * 0.25),
-                fxZ + (lz - fxZ) * p,
-              );
-              flask.rotation.x += dt * 11;
-              flask.rotation.z += dt * 8;
+              const px = fxX + (lx - fxX) * p;
+              const py = 1.25 * (1 - p) + Math.sin(p * Math.PI) * (3.1 + idx * 0.2);
+              const pz = fxZ + (lz - fxZ) * p;
+              flask.position.set(px, py, pz);
+              flask.rotation.x += dt * 12;
+              flask.rotation.z += dt * 9;
+              if (fTrail) {
+                pushTrailPoint(fTrail, px, py, pz);
+                rebuildTrail(fTrail);
+              }
               if (p >= 1) {
                 shattered = true;
                 flask.visible = false;
-                this.spawnShockRing(lx, lz, '#3ff598', 1.85, 0.35);
-                this.spawnSparks(lx, 0.45, lz, 0, 1.1, 0, '#78ffca', 12, 8.5);
+                if (fTrail) fTrail.fading = true;
+                this.spawnShockRing(lx, lz, '#3ff598', 1.9, 0.36);
+                this.spawnSparks(lx, 0.45, lz, 0, 1.1, 0, '#78ffca', 12, 8.8);
                 this.spawnParticles(lx, 0.45, lz, '#2ef28d', 8, 1.3);
               }
               return true;
             }
             return elapsed < dur + 0.12;
           },
-          dispose: () => this.disposeSkillObject(flask),
+          dispose: () => {
+            if (fTrail) fTrail.fading = true;
+            this.disposeSkillObject(flask);
+          },
         });
       });
 
-      // Bubbling alchemy rune pool decal
-      const poolMesh = new THREE.Mesh(
-        new THREE.CircleGeometry(2.6, 28),
-        new THREE.MeshBasicMaterial({ color: '#2ef28d', transparent: true, opacity: 0.34, depthWrite: false }),
-      );
-      poolMesh.userData.ownResources = true;
-      poolMesh.rotation.x = -Math.PI / 2;
-      poolMesh.position.set(ev.x, 0.055, ev.z);
-      this.dynamicGroup.add(poolMesh);
+      // Counter-rotating Emerald Alchemy Rune Circle
+      const runeGroup = new THREE.Group();
+      const outerMat = new THREE.MeshBasicMaterial({
+        color: '#44f0a6',
+        transparent: true,
+        opacity: 0.68,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        toneMapped: false,
+      });
+      const outerR = new THREE.Mesh(new THREE.RingGeometry(2.65, 2.85, 36), outerMat);
+      outerR.rotation.x = -Math.PI / 2;
+      const innerR = new THREE.Mesh(new THREE.RingGeometry(1.55, 1.72, 24, 1, 0, Math.PI * 1.55), outerMat);
+      innerR.rotation.x = -Math.PI / 2;
+      innerR.position.y = 0.004;
+      runeGroup.add(outerR, innerR);
+      runeGroup.userData.ownResources = true;
+      runeGroup.position.set(ev.x, 0.072, ev.z);
+      this.dynamicGroup.add(runeGroup);
       let poolElapsed = 0;
       let bubbleAccum = 0;
+      const runeDur = 3.5;
       this.skillEffects.push({
         update: (dt) => {
           poolElapsed += dt;
           bubbleAccum += dt;
-          const k = Math.max(0, 1 - poolElapsed / 2.4);
-          (poolMesh.material as THREE.MeshBasicMaterial).opacity = 0.34 * k;
-          poolMesh.scale.setScalar(0.85 + Math.sin(poolElapsed * 8) * 0.06);
-          if (!this.reducedMotion && bubbleAccum >= 0.14 && poolElapsed < 2.0) {
+          const k = Math.max(0, 1 - poolElapsed / runeDur);
+          outerMat.opacity = 0.68 * Math.min(1, k * 2.2);
+          outerR.rotation.z += dt * 1.1;
+          innerR.rotation.z -= dt * 2.4;
+          if (!this.reducedMotion && bubbleAccum >= 0.12 && poolElapsed < runeDur - 0.3) {
             bubbleAccum = 0;
             const ang = Math.random() * Math.PI * 2;
-            const r = Math.random() * 2.0;
-            this.spawnParticles(ev.x + Math.cos(ang) * r, 0.25, ev.z + Math.sin(ang) * r, '#6effbe', 2, 0.8);
+            const r = Math.random() * 2.4;
+            this.spawnParticles(ev.x + Math.cos(ang) * r, 0.25, ev.z + Math.sin(ang) * r, '#6effbe', 2, 0.85);
           }
-          return poolElapsed < 2.4;
+          return poolElapsed < runeDur;
         },
-        dispose: () => this.disposeSkillObject(poolMesh),
+        dispose: () => {
+          this.disposeSkillObject(runeGroup);
+        },
       });
       return;
     }
@@ -3566,37 +4106,63 @@ export class SceneManager {
     if (ev.variant === 'royal') {
       const bx = ev.x + 0.55;
       const bz = ev.z + 0.25;
+      // Golden cathedral light pillar greeting the planted banner
+      const rPillarMat = new THREE.MeshBasicMaterial({
+        color: '#ffe47a',
+        transparent: true,
+        opacity: 0.45,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        toneMapped: false,
+      });
+      const rPillar = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 1.1, 6.6, 16, 1, true), rPillarMat);
+      rPillar.userData.ownResources = true;
+      rPillar.position.set(bx, 3.3, bz);
+      this.dynamicGroup.add(rPillar);
+      let rpEl = 0;
+      this.skillEffects.push({
+        update: (dt) => {
+          rpEl += dt;
+          const p = Math.min(1, rpEl / 0.55);
+          rPillar.scale.set(1 + p * 0.5, 1, 1 + p * 0.5);
+          rPillarMat.opacity = 0.45 * (1 - p);
+          return p < 1;
+        },
+        dispose: () => this.disposeSkillObject(rPillar),
+      });
+
       const banner = this.instantiateSkillMesh('skill_royal_banner', '#ffd84f', 0.4);
-      banner.scale.setScalar(1.38);
-      banner.position.set(bx, 5.2, bz);
+      banner.scale.setScalar(1.42);
+      banner.position.set(bx, 5.4, bz);
       this.dynamicGroup.add(banner);
       let elapsed = 0;
       let planted = false;
       let pulseAccum = 0;
-      const life = 6.2;
+      const life = 7.8;
       this.skillEffects.push({
         update: (dt) => {
           elapsed += dt;
           if (elapsed < 0.15) {
             const p = easeOutCubic(elapsed / 0.15);
-            banner.position.y = 5.2 * (1 - p);
+            banner.position.y = 5.4 * (1 - p);
             return true;
           }
           if (!planted) {
             planted = true;
             banner.position.y = 0;
-            this.spawnShockRing(bx, bz, '#ffd84f', 2.6, 0.4);
-            this.spawnSparks(bx, 0.5, bz, 0, 1.0, 0, '#ffe875', 18, 8.0);
+            this.spawnShockRing(bx, bz, '#ffd84f', 2.8, 0.42);
+            this.spawnSparks(bx, 0.5, bz, 0, 1.0, 0, '#ffe875', 22, 8.5);
           }
           banner.rotation.z = Math.sin(elapsed * 3.8) * 0.035;
           pulseAccum += dt;
           if (pulseAccum >= 1.15) {
             pulseAccum = 0;
-            this.spawnShockRing(bx, bz, '#ffe17d', 3.4, 0.55);
+            this.spawnShockRing(bx, bz, '#ffe17d', 3.6, 0.55);
           }
           if (elapsed > life - 0.4) {
             const k = Math.max(0.01, (life - elapsed) / 0.4);
-            banner.scale.setScalar(1.38 * k);
+            banner.scale.setScalar(1.42 * k);
           }
           return elapsed < life;
         },
@@ -3605,25 +4171,52 @@ export class SceneManager {
       return;
     }
 
-    // Seismic earth spikes for boar_charge, viking, and classic
-    if (ev.variant === 'boar_charge' || ev.variant === 'viking') {
+    // Visual Dash / Leap motion for boar_charge and viking
+    if ((ev.variant === 'boar_charge' || ev.variant === 'viking') && Math.hypot(ev.x - fxX, ev.z - fxZ) > 0.25) {
+      const isLeap = ev.variant === 'viking';
+      this.heroCastMotion = {
+        fromX: fxX,
+        fromZ: fxZ,
+        toX: ev.x,
+        toZ: ev.z,
+        elapsed: 0,
+        duration: isLeap ? 0.26 : 0.22,
+        arcHeight: isLeap ? 2.5 : 0.2,
+        mode: isLeap ? 'leap' : 'charge',
+        trail: !this.reducedMotion ? this.acquireTrail(isLeap ? '#ff7b3b' : '#ffd24c', 0.24) : null,
+      };
       const steps = 4;
       for (let i = 0; i < steps; i++) {
-        const p = i / steps;
-        this.spawnParticles(fxX + (ev.x - fxX) * p, 0.4, fxZ + (ev.z - fxZ) * p, col, 4, 1.15);
-      }
-      if (ev.variant === 'viking') {
-        this.spawnSlashArc(ev.x, ev.z, 0.4, '#ffb56b', 2.2);
-        this.spawnSlashArc(ev.x, ev.z, -1.1, '#ffe27a', 2.0);
+        const p = (i + 0.5) / steps;
+        const cx = fxX + (ev.x - fxX) * p;
+        const cz = fxZ + (ev.z - fxZ) * p;
+        this.spawnParticles(cx, 0.35, cz, col, 4, 1.15);
+        if (ev.variant === 'boar_charge') {
+          this.spawnShockRing(cx, cz, '#e8a848', 1.25, 0.28);
+          this.spawnMiniEarthSpikes(cx, cz, 0.35, 2, '#e8a848', 0.44);
+        }
       }
     }
 
-    this.spawnScorch(ev.x, ev.z, 1.75);
-    this.spawnSparks(ev.x, 0.55, ev.z, 0, 0.9, 0, col, 24, 9.5);
+    if (ev.variant === 'viking') {
+      this.spawnSlashArc(ev.x, ev.z, 0.4, '#ffb56b', 2.4);
+      this.spawnSlashArc(ev.x, ev.z, -1.1, '#ffe27a', 2.15);
+      this.spawnSlashArc(ev.x, ev.z, 2.0, '#ff6830', 1.9);
+    } else if (ev.variant === 'classic') {
+      // Bear War-Roar soundwave rings rising from chest height + ironhide shield pulse
+      this.spawnShockRing(ev.x, ev.z, '#fff1b8', 2.2, 0.24, 0.85);
+      this.spawnShockRing(ev.x, ev.z, '#95e06c', 3.4, 0.42, 0.65);
+      this.spawnHeroDomeFlash(ev.x, ev.z, '#e8a848', 1.05, 0.45);
+    } else if (ev.variant === 'boar_charge') {
+      this.spawnHeroDomeFlash(ev.x, ev.z, '#ffd27a', 1.22, 0.5);
+    }
+
+    this.spawnScorch(ev.x, ev.z, 1.85);
+    this.spawnSparks(ev.x, 0.55, ev.z, 0, 0.9, 0, col, 26, 9.8);
     this.spawnParticles(ev.x, 0.55, ev.z, col, 16, 1.35);
 
-    const spikeCount = ev.variant === 'boar_charge' ? 8 : ev.variant === 'viking' ? 6 : 5;
-    const radius = ev.variant === 'boar_charge' ? 2.15 : 1.75;
+    const spikeCount = ev.variant === 'boar_charge' ? 8 : 6;
+    const radius = ev.variant === 'boar_charge' ? 2.2 : 1.8;
     for (let i = 0; i < spikeCount; i++) {
       const ang = (i * Math.PI * 2) / spikeCount + 0.2;
       const sx = ev.x + Math.cos(ang) * radius;
@@ -3657,6 +4250,183 @@ export class SceneManager {
           return sp < 1;
         },
         dispose: () => this.disposeSkillObject(spike),
+      });
+    }
+  }
+
+  private spawnJaggedLightning(
+    start: THREE.Vector3,
+    end: THREE.Vector3,
+    coreColor: string,
+    haloColor: string,
+    thickness = 0.085,
+    life = 0.21,
+    forks = 1,
+  ): void {
+    const pts: THREE.Vector3[] = [start.clone()];
+    const segments = 5;
+    for (let i = 1; i < segments; i++) {
+      const t = i / segments;
+      const p = new THREE.Vector3().lerpVectors(start, end, t);
+      p.x += (Math.random() - 0.5) * 0.62;
+      p.y += (Math.random() - 0.5) * 0.28;
+      p.z += (Math.random() - 0.5) * 0.62;
+      pts.push(p);
+    }
+    pts.push(end.clone());
+    this.spawnEnergyBeam(pts, haloColor, thickness, life);
+    this.spawnEnergyBeam(pts, '#ffffff', thickness * 0.38, life * 0.68);
+    if (haloColor !== coreColor) {
+      this.spawnEnergyBeam(pts, coreColor, thickness * 0.65, life * 0.85);
+    }
+    for (let f = 0; f < forks; f++) {
+      const mid = pts[Math.min(pts.length - 2, 1 + f * 2)];
+      const branchEnd = new THREE.Vector3(
+        mid.x + (Math.random() - 0.5) * 1.4,
+        Math.max(0.2, mid.y - 0.35 + Math.random() * 0.6),
+        mid.z + (Math.random() - 0.5) * 1.4,
+      );
+      this.spawnEnergyBeam([mid.clone(), branchEnd], coreColor, thickness * 0.52, life * 0.72);
+    }
+  }
+
+  private spawnIceCrystalBurst(x: number, z: number, radius: number, count: number): void {
+    for (let i = 0; i < count; i++) {
+      const ang = (i * Math.PI * 2) / count + 0.15;
+      const sx = x + Math.cos(ang) * radius * 0.78;
+      const sz = z + Math.sin(ang) * radius * 0.78;
+      const mat = new THREE.MeshBasicMaterial({
+        color: i % 2 === 0 ? '#9ef5ff' : '#d8fbff',
+        transparent: true,
+        opacity: 0.9,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        toneMapped: false,
+      });
+      const crystal = new THREE.Mesh(this.iceSpikeGeo, mat);
+      crystal.userData.ownResources = false; // shared iceSpikeGeo must not be disposed per instance
+      crystal.position.set(sx, 0.1, sz);
+      crystal.rotation.z = -Math.cos(ang) * 0.36;
+      crystal.rotation.x = Math.sin(ang) * 0.36;
+      crystal.scale.set(1.25, 0.1, 1.25);
+      this.dynamicGroup.add(crystal);
+      let elapsed = 0;
+      const dur = 0.68;
+      this.skillEffects.push({
+        update: (dt) => {
+          elapsed += dt;
+          const p = elapsed / dur;
+          const yScale = p < 0.18 ? 0.1 + easeOutCubic(p / 0.18) * 1.9 : 2.0 * Math.max(0.05, 1 - (p - 0.18) / 0.82);
+          crystal.scale.set(1.25, yScale, 1.25);
+          crystal.position.y = 0.25 * yScale;
+          mat.opacity = 0.9 * Math.max(0, 1 - p * 0.95);
+          return p < 1;
+        },
+        dispose: () => {
+          this.dynamicGroup.remove(crystal);
+          mat.dispose();
+        },
+      });
+    }
+  }
+
+  private spawnMiniEarthSpikes(
+    x: number,
+    z: number,
+    radius: number,
+    count: number,
+    colorHex: string,
+    scale = 0.5,
+  ): void {
+    for (let i = 0; i < count; i++) {
+      const ang = (i * Math.PI * 2) / count + 0.25;
+      const sx = x + Math.cos(ang) * radius;
+      const sz = z + Math.sin(ang) * radius;
+      const spike = this.instantiateSkillMesh('skill_earth_spike', colorHex, 0.25);
+      spike.position.set(sx, -0.02, sz);
+      spike.rotation.y = -ang + Math.PI / 2;
+      spike.rotation.x = 0.18;
+      spike.scale.set(scale, 0.05, scale);
+      this.dynamicGroup.add(spike);
+      let elapsed = 0;
+      const dur = 0.56;
+      this.skillEffects.push({
+        update: (dt) => {
+          elapsed += dt;
+          const p = elapsed / dur;
+          const sy = p < 0.2 ? 0.05 + easeOutCubic(p / 0.2) * scale : scale * Math.max(0.02, 1 - (p - 0.2) / 0.8);
+          spike.scale.y = sy;
+          return p < 1;
+        },
+        dispose: () => this.disposeSkillObject(spike),
+      });
+    }
+  }
+
+  private spawnHeroDomeFlash(x: number, z: number, colorHex: string, radius: number, dur = 0.45): void {
+    const mat = new THREE.MeshBasicMaterial({
+      color: colorHex,
+      transparent: true,
+      opacity: 0.42,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(radius, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), mat);
+    dome.userData.ownResources = true;
+    dome.position.set(x, 0.05, z);
+    this.dynamicGroup.add(dome);
+    let elapsed = 0;
+    this.skillEffects.push({
+      update: (dt) => {
+        elapsed += dt;
+        const p = Math.min(1, elapsed / dur);
+        dome.scale.setScalar(0.85 + easeOutCubic(p) * 0.35);
+        mat.opacity = 0.42 * (1 - p);
+        return p < 1;
+      },
+      dispose: () => this.disposeSkillObject(dome),
+    });
+  }
+
+  private spawnHeroBuffArcs(
+    hx: number,
+    hz: number,
+    slotIds: string[],
+    sim: SimulationEngine,
+    colorHex: string,
+  ): void {
+    for (const sid of slotIds.slice(0, 6)) {
+      const slot = sim.slots.get(sid);
+      if (!slot || !slot.tower) continue;
+      const orb = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.14, 0),
+        new THREE.MeshBasicMaterial({ color: colorHex, toneMapped: false }),
+      );
+      orb.userData.ownResources = true;
+      orb.position.set(hx, 1.0, hz);
+      this.dynamicGroup.add(orb);
+      let elapsed = 0;
+      const dur = 0.32;
+      this.skillEffects.push({
+        update: (dt) => {
+          elapsed += dt;
+          const p = Math.min(1, elapsed / dur);
+          orb.position.set(
+            hx + (slot.x - hx) * p,
+            1.0 + (1.3 - 1.0) * p + Math.sin(p * Math.PI) * 1.15,
+            hz + (slot.z - hz) * p,
+          );
+          orb.rotation.y += dt * 12;
+          if (p >= 1) {
+            this.spawnShockRing(slot.x, slot.z, colorHex, 1.3, 0.28, 0.14);
+            this.spawnSparks(slot.x, 1.2, slot.z, 0, 0.6, 0, colorHex, 6, 5.5);
+            return false;
+          }
+          return true;
+        },
+        dispose: () => this.disposeSkillObject(orb),
       });
     }
   }
@@ -3699,18 +4469,47 @@ export class SceneManager {
     return this.distanceToRoad(x, z) <= threshold;
   }
 
-  updateTargetingReticle(mode: 'rain' | 'hero_leap' | null, x = 0, z = 0): void {
+  updateTargetingReticle(
+    mode: 'rain' | 'hero_leap' | null,
+    x = 0,
+    z = 0,
+    opts?: { radius?: number; color?: string; heroX?: number; heroZ?: number; showLink?: boolean },
+  ): void {
     if (!mode) {
       this.targetingReticle.visible = false;
+      this.targetingLinkLine.visible = false;
       return;
     }
     this.targetingReticle.visible = true;
     this.targetingReticle.position.set(x, 0.085, z);
-    const radius = mode === 'rain' ? 3.0 : 3.4;
+    const radius = opts?.radius ?? (mode === 'rain' ? 3.1 : 3.5);
     this.targetingReticle.scale.setScalar(radius);
-    const mat = this.targetingReticle.material as THREE.MeshBasicMaterial;
-    mat.color.set(mode === 'rain' ? '#ff9f43' : '#52e8ff');
-    mat.opacity = 0.72 + Math.sin(this.animTime * 8) * 0.18;
+    this.reticleInnerMesh.rotation.z = this.animTime * 2.8;
+    const color = opts?.color ?? (mode === 'rain' ? '#ff9f43' : '#52e8ff');
+    const pulse = 0.72 + Math.sin(this.animTime * 8) * 0.18;
+    this.reticleOuterMat.color.set(color);
+    this.reticleOuterMat.opacity = pulse;
+    this.reticleInnerMat.opacity = 0.45 + Math.sin(this.animTime * 6) * 0.18;
+    this.reticleFillMat.color.set(color);
+    this.reticleFillMat.opacity = 0.1 + Math.sin(this.animTime * 6) * 0.04;
+
+    if (opts?.showLink && opts.heroX !== undefined && opts.heroZ !== undefined) {
+      const dx = x - opts.heroX;
+      const dz = z - opts.heroZ;
+      const len = Math.hypot(dx, dz);
+      if (len > 0.25) {
+        this.targetingLinkLine.visible = true;
+        this.targetingLinkLine.position.set((opts.heroX + x) * 0.5, 0.092, (opts.heroZ + z) * 0.5);
+        this.targetingLinkLine.scale.set(1, len, 1);
+        this.targetingLinkLine.rotation.set(-Math.PI / 2, 0, -Math.atan2(dx, dz));
+        this.targetingLinkMat.color.set(color);
+        this.targetingLinkMat.opacity = 0.48 + Math.sin(this.animTime * 8) * 0.18;
+      } else {
+        this.targetingLinkLine.visible = false;
+      }
+    } else {
+      this.targetingLinkLine.visible = false;
+    }
   }
 
   pickWorld(clientX: number, clientY: number): { slotId: string | null; barrelId: string | null; x: number; z: number } | null {

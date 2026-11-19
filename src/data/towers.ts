@@ -484,7 +484,7 @@ export const TOWERS: Record<TowerId, TowerSpec> = {
     canHitGround: true,
     defaultPriority: 'first',
     smartModeHint: 'armored_first',
-    accentColor: '#a66bff',
+    accentColor: '#62cfff',
     tier1: {
       cost: 80,
       damage: 17,

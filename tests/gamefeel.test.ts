@@ -18,7 +18,7 @@ import {
   popScale,
 } from '../src/core/JuiceController.ts';
 import { FIXED_DT, SimulationEngine } from '../src/core/SimulationEngine.ts';
-import { ENEMY_LIST, type HeroId } from '../src/data/enemies.ts';
+import { ENEMY_LIST, type HeroClassId, type HeroId } from '../src/data/enemies.ts';
 import { LEVELS } from '../src/data/levels.ts';
 import { TOWER_LIST } from '../src/data/towers.ts';
 import {
@@ -472,5 +472,106 @@ describe('24-stage obstacle clearances, hero collinear navigation & all unit rig
     simBadger.step(FIXED_DT);
     for (let i = 0; i < 90; i++) simBadger.step(FIXED_DT);
     assert.ok(simBadger.resinPools.some((p) => p.kind === 'inferno'), 'badger_inferno must emit inferno pool kind');
+  });
+
+  it('triggers all hero ultimates, Kaya Dis corridor crush, distinct freezeVisualTimer vs stun, and deterministic commander spells', () => {
+    const heroCases: Array<{ heroId: HeroId; heroClass?: HeroClassId; wantVariant: string }> = [
+      { heroId: 'boz_pence', heroClass: 'classic', wantVariant: 'classic' },
+      { heroId: 'boz_pence', heroClass: 'viking', wantVariant: 'viking' },
+      { heroId: 'boz_pence', heroClass: 'royal', wantVariant: 'royal' },
+      { heroId: 'kizil_kuyruk', wantVariant: 'fox_storm' },
+      { heroId: 'kaya_dis', wantVariant: 'boar_charge' },
+      { heroId: 'ay_kurdu', wantVariant: 'wolf_howl' },
+    ];
+
+    for (const c of heroCases) {
+      const sim = new SimulationEngine(LEVELS[0], {
+        seed: 7701,
+        heroId: c.heroId,
+        heroClass: c.heroClass ?? 'auto',
+        extraStartGold: 300,
+        waitForFirstWave: true,
+      });
+      const nearSlot = LEVELS[0].slots[0];
+      sim.dispatch({ type: 'BUILD_TOWER', slotId: nearSlot.id, towerId: 'squirrel' }, 'p1', 0);
+      sim.step(FIXED_DT);
+      if (c.wantVariant === 'royal' || c.wantVariant === 'wolf_howl' || c.wantVariant === 'fox_storm') {
+        sim.hero.x = nearSlot.x + 1.0;
+        sim.hero.z = nearSlot.z;
+        sim.hero.targetX = sim.hero.x;
+        sim.hero.targetZ = sim.hero.z;
+      }
+      const foe = sim.spawnEnemy('scout_bot', 300, 0.01, 5, { x: sim.hero.x + 0.8, z: sim.hero.z, wpIndex: 2, progress: 6 });
+      sim.drainEvents();
+      sim.dispatch({ type: 'CAST_HERO_ULTIMATE', x: foe.x, z: foe.z }, 'p1', 0);
+      sim.step(FIXED_DT);
+      const ult = sim.drainEvents().find((e) => e.type === 'HERO_ULTIMATE');
+      assert.ok(ult && ult.type === 'HERO_ULTIMATE', `${c.wantVariant} must emit HERO_ULTIMATE`);
+      assert.equal(ult.variant, c.wantVariant);
+      assert.equal(ult.heroId, c.heroId);
+      assert.ok((ult.radius ?? 0) >= 3.3);
+      if (c.wantVariant === 'royal' || c.wantVariant === 'wolf_howl' || c.wantVariant === 'fox_storm') {
+        assert.ok(ult.buffedSlotIds?.includes(nearSlot.id), `${c.wantVariant} should report nearby buffed towers`);
+      }
+      if (c.wantVariant === 'wolf_howl') {
+        assert.ok(foe.freezeVisualTimer >= 1.5 && foe.stunTimer >= 1.5, 'wolf_howl must set freezeVisualTimer');
+      } else {
+        assert.equal(foe.freezeVisualTimer, 0, `${c.wantVariant} stun/slow must not show ice cage`);
+      }
+    }
+
+    // Kaya Dis corridor crush along charge line
+    const simBoar = new SimulationEngine(LEVELS[0], { seed: 7702, heroId: 'kaya_dis', waitForFirstWave: true });
+    simBoar.hero.x = -2.0;
+    simBoar.hero.z = 5.0;
+    const midCorridor = simBoar.spawnEnemy('scout_bot', 300, 0.01, 5, { x: 0.0, z: 1.0, wpIndex: 3, progress: 12 });
+    const progBefore = midCorridor.progress;
+    simBoar.dispatch({ type: 'CAST_HERO_ULTIMATE', x: 2.0, z: -3.0 }, 'p1', 0);
+    simBoar.step(FIXED_DT);
+    assert.ok(midCorridor.hp < 300 && midCorridor.stunTimer > 0 && midCorridor.progress < progBefore);
+    assert.equal(midCorridor.freezeVisualTimer, 0);
+
+    // Owl Glacier 4th shot sets freezeVisualTimer while Tortoise Quake stun leaves freezeVisualTimer = 0
+    const simProc = new SimulationEngine(LEVELS[0], { seed: 7703, extraStartGold: 1000, waitForFirstWave: true });
+    simProc.hero.dead = true;
+    simProc.hero.respawnTimer = 999;
+    simProc.dispatch({ type: 'BUILD_TOWER', slotId: 'slot_1', towerId: 'owl' }, 'p1', 0);
+    simProc.step(FIXED_DT);
+    simProc.dispatch({ type: 'UPGRADE_TOWER', slotId: 'slot_1' }, 'p1', 0);
+    simProc.step(FIXED_DT);
+    simProc.dispatch({ type: 'EVOLVE_TOWER', slotId: 'slot_1', branchId: 'owl_glacier' }, 'p1', 0);
+    simProc.step(FIXED_DT);
+    const s1 = simProc.slots.get('slot_1')!;
+    const icedBot = simProc.spawnEnemy('crystal_golem', 5000, 0.01, 10, { x: s1.x + 1.2, z: s1.z, wpIndex: 1, progress: 5 });
+    for (let i = 0; i < 240 && icedBot.freezeVisualTimer <= 0; i++) simProc.step(FIXED_DT);
+    assert.ok(icedBot.freezeVisualTimer > 0, 'owl_glacier 4th shot must trigger freezeVisualTimer');
+
+    // Deterministic Pinecone Rain + Acorn Magnet replay checksum
+    const runSpells = () => {
+      const s = new SimulationEngine(LEVELS[0], { seed: 7704, waitForFirstWave: true });
+      const b = s.spawnEnemy('shield_loader', 400, 0.5, 10, { x: 0, z: 2, wpIndex: 3, progress: 10 });
+      s.drainEvents();
+      s.dispatch({ type: 'CAST_PINECONE_RAIN', x: b.x, z: b.z }, 'p1', 0);
+      s.dispatch({ type: 'CAST_ACORN_MAGNET' }, 'p1', 2);
+      const events = [];
+      for (let i = 0; i < 60; i++) {
+        s.step(FIXED_DT);
+        events.push(...s.drainEvents());
+      }
+      return {
+        checksum: s.getChecksum(),
+        poolKind: s.resinPools[0]?.kind,
+        rainEv: events.find((e) => e.type === 'PINECONE_RAIN'),
+        magnetEv: events.find((e) => e.type === 'ACORN_MAGNET'),
+        slowTimer: b.slowTimer,
+      };
+    };
+    const rA = runSpells();
+    const rB = runSpells();
+    assert.equal(rA.checksum, rB.checksum);
+    assert.equal(rA.poolKind, 'inferno');
+    assert.ok(rA.rainEv && rA.rainEv.type === 'PINECONE_RAIN' && rA.rainEv.hits === 1);
+    assert.ok(rA.magnetEv && rA.magnetEv.type === 'ACORN_MAGNET' && (rA.magnetEv.hits ?? 0) >= 1);
+    assert.ok(rA.slowTimer > 0);
   });
 });

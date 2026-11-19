@@ -21,6 +21,7 @@ if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 
 import blender_build_chibi_units as cb  # noqa: E402
+from blender_custom_tower_bases import build_custom_tower_base  # noqa: E402
 
 ADV_C = cb.ADV_C
 ADV_A = cb.ADV_A
@@ -208,190 +209,305 @@ def build_hat_samurai():
 
 
 # ---------------------------------------------------------------------------
-# New Chibi Head Builders (Badger, Falcon, Tortoise, Lynx, Silver Wolf)
+# New Chibi Head & Tail Builders (Raccoon, Raven, Mole, Ermine, Silver Wolf)
 # ---------------------------------------------------------------------------
 
-def build_badger_head(goggles=False, hood_col=None, flask_crown=False):
-    hr = cb.make_empty("AnimalHeadRoot")
-    elems = [
-        {"co": (0.0, -0.02, 0.22), "radius": 0.44, "sx": 1.14, "sy": 0.96, "sz": 0.88},
-        {"co": (0.0, -0.24, 0.06), "radius": 0.32, "sx": 1.10, "sy": 0.94, "sz": 0.72},
-        {"co": (0.0, -0.36, 0.04), "radius": 0.18, "sx": 0.98, "sy": 1.05, "sz": 0.74},
+def attach_raccoon_tail(hips_local, scale, parent):
+    fur_light = cb.get_solid_mat("RaccoonTailLight", "#9c826c", roughness=0.68)
+    fur_dark = cb.get_solid_mat("RaccoonTailDark", "#251f26", roughness=0.68)
+    # 5 chunky ringed tail segments curling upward behind hips (+Y in Blender)
+    segs = [
+        (0.0, 0.08, 0.00, 0.14, fur_light),
+        (0.0, 0.22, 0.08, 0.17, fur_dark),
+        (0.0, 0.36, 0.20, 0.20, fur_light),
+        (0.0, 0.44, 0.36, 0.21, fur_dark),
+        (0.0, 0.42, 0.52, 0.16, fur_dark),
     ]
-    # Dark charcoal-brown fur base + bold white center blaze + dark eye stripes
-    head = cb.sculpt_metaball_mesh("BgHead", elems, target_dims=(1.06, 0.96, 0.84), target_center_xy=(0.0, -0.03),
-                                   bottom_z=1.24, swatch_col=8, resolution=0.038, smooth_iter=6)
+    for idx, (ox, oy, oz, rad, mat) in enumerate(segs):
+        cb.make_smooth_subdiv_prim(
+            f"RaccoonTailSeg_{idx}",
+            "SPHERE",
+            hips_local + Vector((ox * scale, oy * scale, oz * scale)),
+            scale=(rad * scale * 1.15, rad * scale * 1.05, rad * scale * 1.12),
+            solid_mat=mat,
+            segs=14,
+            subdiv=1,
+            parent=parent,
+        )
+
+
+def attach_ermine_tail(hips_local, scale, parent):
+    fur_white = cb.get_solid_mat("ErmineTailWhite", "#f5f8ff", roughness=0.60)
+    fur_tip = cb.get_solid_mat("ErmineTailBlackTip", "#171921", roughness=0.62)
+    segs = [
+        (0.0, 0.08, 0.00, 0.12, fur_white),
+        (0.0, 0.22, 0.07, 0.15, fur_white),
+        (0.0, 0.34, 0.20, 0.17, fur_white),
+        (0.0, 0.40, 0.36, 0.18, fur_tip),
+        (0.0, 0.36, 0.52, 0.14, fur_tip),
+    ]
+    for idx, (ox, oy, oz, rad, mat) in enumerate(segs):
+        cb.make_smooth_subdiv_prim(
+            f"ErmineTailSeg_{idx}",
+            "SPHERE",
+            hips_local + Vector((ox * scale, oy * scale, oz * scale)),
+            scale=(rad * scale * 1.05, rad * scale * 1.05, rad * scale * 1.15),
+            solid_mat=mat,
+            segs=14,
+            subdiv=1,
+            parent=parent,
+        )
+
+
+def build_raccoon_head(beret_hex="#219649", goggles=False, alch_orb=False):
+    hr = cb.make_empty("AnimalHeadRoot")
+    fur_main = cb.get_solid_mat("RaccoonMainFur", "#8f7560", roughness=0.66)
+    fur_cream = cb.get_solid_mat("RaccoonCreamFur", "#f7e5cd", roughness=0.62)
+    fur_dark = cb.get_solid_mat("RaccoonMaskDark", "#251e26", roughness=0.65)
+    black_nose = cb.get_solid_mat("RaccoonNoseMat", "#18151a", roughness=0.22)
+
+    elems = [
+        {"co": (0.0, -0.02, 0.24), "radius": 0.46, "sx": 1.18, "sy": 0.96, "sz": 0.88},
+        {"co": (-0.28, -0.14, 0.06), "radius": 0.30, "sx": 1.22, "sy": 0.92, "sz": 0.78},
+        {"co": (0.28, -0.14, 0.06), "radius": 0.30, "sx": 1.22, "sy": 0.92, "sz": 0.78},
+    ]
+    head = cb.sculpt_metaball_mesh(
+        "RkHead", elems, target_dims=(1.18, 0.98, 0.90), target_center_xy=(0.0, -0.03),
+        bottom_z=1.22, swatch_col=1, resolution=0.038, smooth_iter=6,
+    )
+    head.data.materials.clear()
+    head.data.materials.append(fur_main)
     head.parent = hr
 
-    dark_fur = cb.get_solid_mat("BadgerStripeDark", "#211f26", roughness=0.68)
+    # Fluffy raccoon ears + white rim tufts + signature dark bandit eye mask
     for sx in (-1, 1):
-        eh = cb.make_empty(f"BgEar_{sx}", loc=(sx * 0.42, 0.02, 1.92), parent=hr)
-        cb.make_smooth_subdiv_prim("EarOut", "SPHERE", (0, 0, 0), scale=(0.13, 0.075, 0.14),
-                                   solid_mat=dark_fur, segs=14, subdiv=1, parent=eh)
-        cb.make_smooth_subdiv_prim("EarTip", "SPHERE", (0, -0.01, 0.06), scale=(0.08, 0.05, 0.07),
-                                   swatch_col=8, segs=12, subdiv=1, parent=eh)
-        # Signature badger black cheek/eye mask stripes
-        cb.make_smooth_subdiv_prim(f"BgStripe_{sx}", "SPHERE", (sx * 0.25, -0.34, 1.62),
-                                   scale=(0.18, 0.14, 0.24), rot_deg=(0, sx * 10, sx * 14),
-                                   solid_mat=dark_fur, segs=14, subdiv=1, parent=hr)
+        eh = cb.make_empty(f"RkEar_{sx}", loc=(sx * 0.40, 0.02, 1.94), parent=hr)
+        eh.rotation_euler = (math.radians(4), math.radians(sx * -22), math.radians(sx * -8))
+        cb.make_smooth_subdiv_prim("EarOut", "CONE", (0, 0, 0.14), scale=(0.14, 0.08, 0.18),
+                                   solid_mat=fur_main, segs=14, radius=1.0, depth=2.0, subdiv=0, parent=eh)
+        cb.make_smooth_subdiv_prim("EarIn", "CONE", (0, -0.03, 0.12), scale=(0.08, 0.04, 0.12),
+                                   solid_mat=fur_cream, segs=12, radius=1.0, depth=2.0, subdiv=0, parent=eh)
+        # Signature dark eye bandit mask + bright cream cheek floof
+        cb.make_smooth_subdiv_prim(f"RkMask_{sx}", "SPHERE", (sx * 0.25, -0.40, 1.62),
+                                   scale=(0.21, 0.13, 0.17), rot_deg=(0, sx * 12, sx * -14),
+                                   solid_mat=fur_dark, segs=14, subdiv=1, parent=hr)
+        cb.make_smooth_subdiv_prim(f"RkCheek_{sx}", "SPHERE", (sx * 0.38, -0.22, 1.44),
+                                   scale=(0.24, 0.16, 0.18), solid_mat=fur_cream, segs=14, subdiv=1, parent=hr)
 
     hit, loc, _ = cb.raycast_front(head, 0.0, 1.48)
     my = loc.y if hit else -0.46
-    cb.make_smooth_subdiv_prim("BgMuzzle", "SPHERE", (0.0, my - 0.02, 1.48),
-                               scale=(0.24, 0.18, 0.14), swatch_col=3, segs=14, subdiv=1, parent=hr)
-    cb.make_smooth_subdiv_prim("BgNose", "SPHERE", (0.0, my - 0.17, 1.52),
-                               scale=(0.085, 0.065, 0.058), swatch_col=5, segs=12, subdiv=1, parent=hr)
-    cb.add_chibi_eyes(head, hr, eye_x=0.23, eye_z=1.61, eye_rx=0.078, eye_rz=0.088, iris_col_hex="#ff9a2e", brow_col=5)
+    cb.make_smooth_subdiv_prim("RkMuzzle", "SPHERE", (0.0, my - 0.02, 1.48),
+                               scale=(0.25, 0.18, 0.14), solid_mat=fur_cream, segs=14, subdiv=1, parent=hr)
+    cb.make_smooth_subdiv_prim("RkNose", "SPHERE", (0.0, my - 0.17, 1.52),
+                               scale=(0.082, 0.064, 0.056), solid_mat=black_nose, segs=12, subdiv=1, parent=hr)
+    cb.add_chibi_eyes(head, hr, eye_x=0.24, eye_z=1.62, eye_rx=0.092, eye_rz=0.104,
+                      iris_col_hex="#9c541f", brow_col=5, angry_brow=False)
 
     gear = []
-    if hood_col is not None:
-        gear.append(cb.make_headband_ring("NativeHat_BgBand", center=(0.0, -0.03, 1.85), rx=0.50, ry=0.44,
-                                          tube_r=0.050, swatch_col=hood_col, parent=hr))
+    # Alchemist beret tilted jauntily + brown leather band & gold buckle
+    beret_mat = cb.get_solid_mat(f"RkBeret_{beret_hex}", beret_hex, roughness=0.58)
+    leather_mat = cb.get_solid_mat("RkBeretBand", "#6b3e1f", roughness=0.65)
+    gold_mat = cb.get_solid_mat("RkBeretBuckle", "#f5be36", roughness=0.25, metallic=0.82)
+    gear.append(cb.make_smooth_subdiv_prim("NativeHat_RkBeret", "SPHERE", (-0.08, -0.02, 1.98),
+                                           scale=(0.56, 0.50, 0.24), rot_deg=(4, 14, 0),
+                                           solid_mat=beret_mat, segs=18, subdiv=1, parent=hr))
+    gear.append(cb.make_headband_ring("NativeHat_RkBand", center=(0.0, -0.02, 1.88), rx=0.52, ry=0.45,
+                                      tube_r=0.048, solid_mat=leather_mat, parent=hr))
+    gear.append(cb.make_smooth_subdiv_prim("NativeHat_RkBuckle", "CUBE", (0.0, -0.49, 1.90),
+                                           scale=(0.14, 0.04, 0.14), solid_mat=gold_mat, subdiv=2, parent=hr))
     if goggles:
-        brass = cb.get_solid_mat("BgBrassMat", "#f0b438", roughness=0.28, metallic=0.75)
-        lens_g = cb.get_solid_mat("BgLensGreen", "#3ef27a", roughness=0.12, emission=0.7)
-        gear.append(cb.make_headband_ring("NativeHat_BgStrap", center=(0.0, -0.03, 1.86), rx=0.52, ry=0.45,
-                                          tube_r=0.044, swatch_col=5, parent=hr))
+        brass = cb.get_solid_mat("RkGoggleBrass", "#f0b438", roughness=0.28, metallic=0.75)
+        lens_g = cb.get_solid_mat("RkGoggleGreen", "#3ef27a", roughness=0.12, emission=0.8)
         for sx in (-1, 1):
-            gear.append(cb.make_smooth_subdiv_prim(f"NativeHat_BgRim_{sx}", "CYL", (sx * 0.22, -0.45, 1.88),
-                                                   scale=(0.16, 0.16, 0.09), rot_deg=(76, sx * -10, 0),
+            gear.append(cb.make_smooth_subdiv_prim(f"NativeHat_RkRim_{sx}", "CYL", (sx * 0.21, -0.46, 1.90),
+                                                   scale=(0.14, 0.14, 0.08), rot_deg=(76, sx * -10, 0),
                                                    solid_mat=brass, segs=16, radius=1.0, depth=1.0, parent=hr))
-            gear.append(cb.make_smooth_subdiv_prim(f"NativeHat_BgLens_{sx}", "SPHERE", (sx * 0.22, -0.49, 1.89),
-                                                   scale=(0.125, 0.045, 0.125), solid_mat=lens_g, segs=12, parent=hr))
-    if flask_crown:
-        em = cb.get_solid_mat("BgAlchCrown", "#3df5a7", roughness=0.18, emission=0.9)
-        gear.append(cb.make_smooth_subdiv_prim("NativeHat_BgFlaskCrest", "SPHERE", (0.0, -0.35, 2.02),
-                                               scale=(0.13, 0.13, 0.18), solid_mat=em, segs=12, parent=hr))
+            gear.append(cb.make_smooth_subdiv_prim(f"NativeHat_RkLens_{sx}", "SPHERE", (sx * 0.21, -0.50, 1.91),
+                                                   scale=(0.105, 0.04, 0.105), solid_mat=lens_g, segs=12, parent=hr))
+    if alch_orb:
+        orb = cb.get_solid_mat("RkCrownFlask", "#42f59e", roughness=0.14, emission=0.95)
+        gear.append(cb.make_smooth_subdiv_prim("NativeHat_RkGem", "SPHERE", (0.0, -0.34, 2.08),
+                                               scale=(0.11, 0.11, 0.15), solid_mat=orb, segs=12, parent=hr))
     return hr, gear
 
 
-def build_falcon_head(plumage_col=2, aviator_cap=False, storm_crest=False):
+def build_raven_head(hood_hex="#b52330", storm_crest=False):
     hr = cb.make_empty("AnimalHeadRoot")
+    midnight = cb.get_solid_mat("RavenPlumageBlue", "#2d3b66", roughness=0.58)
+    beak_mat = cb.get_solid_mat("RavenBeakSlate", "#5a6b8c", roughness=0.34, metallic=0.20)
+    blush_mat = cb.get_solid_mat("RavenCheekBlush", "#f06a82", roughness=0.66)
+
     elems = [
-        {"co": (0.0, -0.02, 0.24), "radius": 0.44, "sx": 1.06, "sy": 1.00, "sz": 0.92},
-        {"co": (0.0, -0.18, 0.10), "radius": 0.28, "sx": 0.96, "sy": 0.98, "sz": 0.78},
+        {"co": (0.0, -0.02, 0.24), "radius": 0.45, "sx": 1.08, "sy": 1.00, "sz": 0.92},
+        {"co": (0.0, -0.20, 0.08), "radius": 0.30, "sx": 1.06, "sy": 0.96, "sz": 0.78},
     ]
-    head = cb.sculpt_metaball_mesh("FlHead", elems, target_dims=(0.98, 0.94, 0.86), target_center_xy=(0.0, -0.03),
-                                   bottom_z=1.24, swatch_col=plumage_col, resolution=0.038, smooth_iter=6)
+    head = cb.sculpt_metaball_mesh(
+        "RvHead", elems, target_dims=(1.06, 0.98, 0.88), target_center_xy=(0.0, -0.03),
+        bottom_z=1.22, swatch_col=6, resolution=0.038, smooth_iter=6,
+    )
+    head.data.materials.clear()
+    head.data.materials.append(midnight)
     head.parent = hr
 
-    # Cream throat/cheeks + hooked golden beak + swept feather brow tufts
-    cb.make_smooth_subdiv_prim("FlThroat", "SPHERE", (0.0, -0.26, 1.44),
-                               scale=(0.34, 0.22, 0.18), swatch_col=3, segs=16, subdiv=1, parent=hr)
-    hit, loc, _ = cb.raycast_front(head, 0.0, 1.54)
-    by = loc.y if hit else -0.46
-    cb.make_smooth_subdiv_prim("FlBeakTop", "CONE", (0.0, by - 0.12, 1.55),
-                               scale=(0.12, 0.14, 0.19), rot_deg=(104, 0, 0),
-                               swatch_col=14, segs=14, radius=1.0, depth=2.0, subdiv=0, parent=hr)
-    cb.make_smooth_subdiv_prim("FlBeakTip", "CONE", (0.0, by - 0.25, 1.49),
-                               scale=(0.055, 0.055, 0.09), rot_deg=(150, 0, 0),
-                               swatch_col=5, segs=10, radius=1.0, depth=2.0, subdiv=0, parent=hr)
-
+    # Rosy cheeks & crisp pointed chibi raven beak
     for sx in (-1, 1):
-        cb.make_smooth_subdiv_prim(f"FlPlume_{sx}", "CONE", (sx * 0.26, 0.12, 1.98),
-                                   scale=(0.09, 0.06, 0.22), rot_deg=(-58, sx * 22, sx * -12),
-                                   swatch_col=1, segs=12, radius=1.0, depth=2.0, subdiv=0, parent=hr)
-
-    cb.add_chibi_eyes(head, hr, eye_x=0.25, eye_z=1.64, eye_rx=0.088, eye_rz=0.094, iris_col_hex="#ffb624", brow_col=1)
+        cb.make_smooth_subdiv_prim(f"RvBlush_{sx}", "SPHERE", (sx * 0.29, -0.36, 1.46),
+                                   scale=(0.12, 0.06, 0.08), solid_mat=blush_mat, segs=12, subdiv=1, parent=hr)
+    hit, loc, _ = cb.raycast_front(head, 0.0, 1.49)
+    by = loc.y if hit else -0.46
+    cb.make_smooth_subdiv_prim("RvBeak", "CONE", (0.0, by - 0.13, 1.50),
+                               scale=(0.12, 0.11, 0.20), rot_deg=(104, 0, 0),
+                               solid_mat=beak_mat, segs=14, radius=1.0, depth=2.0, subdiv=0, parent=hr)
+    cb.add_chibi_eyes(head, hr, eye_x=0.25, eye_z=1.62, eye_rx=0.098, eye_rz=0.106,
+                      iris_col_hex="#ffb824", brow_col=12, angry_brow=False)
 
     gear = []
-    if aviator_cap:
-        cap_mat = cb.get_solid_mat("FalconAviatorLeather", "#4b6935", roughness=0.62)
-        brass = cb.get_solid_mat("FalconBrassTrim", "#e8a832", roughness=0.30, metallic=0.72)
-        gear.append(cb.make_smooth_subdiv_prim("NativeHat_FlCap", "SPHERE", (0.0, -0.01, 1.88),
-                                               scale=(0.51, 0.47, 0.28), solid_mat=cap_mat, segs=16, subdiv=1, parent=hr))
-        gear.append(cb.make_headband_ring("NativeHat_FlRim", center=(0.0, -0.02, 1.82), rx=0.51, ry=0.45,
-                                          tube_r=0.042, solid_mat=brass, parent=hr))
+    # Signature crimson cowl pulled back slightly above brow with side hood flaps
+    hood_mat = cb.get_solid_mat(f"RavenHood_{hood_hex}", hood_hex, roughness=0.62)
+    gold_mat = cb.get_solid_mat("RavenGoldClasp", "#f5be36", roughness=0.24, metallic=0.80)
+    gear.append(cb.make_smooth_subdiv_prim("NativeHat_RvHoodTop", "SPHERE", (0.0, 0.10, 1.88),
+                                           scale=(0.56, 0.54, 0.40), rot_deg=(-14, 0, 0),
+                                           solid_mat=hood_mat, segs=18, subdiv=1, parent=hr))
+    for sx in (-1, 1):
+        gear.append(cb.make_smooth_subdiv_prim(f"NativeHat_RvHoodFlap_{sx}", "SPHERE", (sx * 0.44, -0.02, 1.58),
+                                               scale=(0.15, 0.34, 0.34), rot_deg=(0, sx * 10, sx * -10),
+                                               solid_mat=hood_mat, segs=14, subdiv=1, parent=hr))
+    gear.append(cb.make_smooth_subdiv_prim("NativeHat_RvHoodPeak", "CONE", (0.0, 0.40, 2.04),
+                                           scale=(0.24, 0.24, 0.28), rot_deg=(54, 0, 0),
+                                           solid_mat=hood_mat, segs=14, radius=1.0, depth=2.0, subdiv=0, parent=hr))
+    # Golden feather brooch below chin
+    cb.make_smooth_subdiv_prim("RvFeatherClasp", "SPHERE", (-0.12, -0.44, 1.24),
+                               scale=(0.14, 0.05, 0.07), rot_deg=(10, 0, 28),
+                               solid_mat=gold_mat, segs=12, subdiv=1, parent=hr)
     if storm_crest:
-        bolt = cb.get_solid_mat("FalconStormCyan", "#4cf2ff", roughness=0.14, emission=1.1)
+        bolt = cb.get_solid_mat("RavenStormBolt", "#5ef4ff", roughness=0.14, emission=1.15)
         for sx in (-1, 0, 1):
-            gear.append(cb.make_smooth_subdiv_prim(f"NativeHat_FlBolt_{sx}", "CONE", (sx * 0.18, -0.02, 2.08),
+            gear.append(cb.make_smooth_subdiv_prim(f"NativeHat_RvBolt_{sx}", "CONE", (sx * 0.18, -0.04, 2.24),
                                                    scale=(0.055, 0.04, 0.19), rot_deg=(-18, sx * -16, 0),
                                                    solid_mat=bolt, segs=10, radius=1.0, depth=2.0, subdiv=0, parent=hr))
     return hr, gear
 
 
-def build_tortoise_head(brass_helm=False, visor_shield=False):
+def build_mole_head(lamp_tier=1, armored_rim=False):
     hr = cb.make_empty("AnimalHeadRoot")
-    skin_mat = cb.get_solid_mat("TortoiseSageGreen", "#6b913c", roughness=0.62)
-    beak_mat = cb.get_solid_mat("TortoiseBeakTan", "#a89864", roughness=0.55)
+    fur_mat = cb.get_solid_mat("MoleVelvetBrown", "#6e4937", roughness=0.66)
+    muzzle_mat = cb.get_solid_mat("MoleCreamSnout", "#f2d8bc", roughness=0.60)
+    pink_nose = cb.get_solid_mat("MolePinkButtonNose", "#f56c88", roughness=0.35)
+    blush_mat = cb.get_solid_mat("MoleCheekBlush", "#ed7b8c", roughness=0.66)
+    tooth_mat = cb.get_solid_mat("MoleToothWhite", "#ffffff", roughness=0.22)
+    brass_mat = cb.get_solid_mat("MoleBrassSpec", "#e8ae35", roughness=0.26, metallic=0.80)
+    dark_bronze = cb.get_solid_mat("MoleBronzeBezel", "#6e4c14", roughness=0.36, metallic=0.72)
+
     elems = [
-        {"co": (0.0, -0.04, 0.22), "radius": 0.44, "sx": 1.16, "sy": 1.02, "sz": 0.88},
-        {"co": (0.0, -0.26, 0.06), "radius": 0.30, "sx": 1.24, "sy": 0.92, "sz": 0.72},
+        {"co": (0.0, -0.04, 0.22), "radius": 0.45, "sx": 1.16, "sy": 1.00, "sz": 0.88},
+        {"co": (0.0, -0.26, 0.06), "radius": 0.30, "sx": 1.18, "sy": 0.94, "sz": 0.72},
     ]
-    head = cb.sculpt_metaball_mesh("TrHead", elems, target_dims=(1.08, 0.98, 0.82), target_center_xy=(0.0, -0.04),
-                                   bottom_z=1.24, swatch_col=6, resolution=0.038, smooth_iter=6)
+    head = cb.sculpt_metaball_mesh(
+        "MlHead", elems, target_dims=(1.14, 1.00, 0.86), target_center_xy=(0.0, -0.04),
+        bottom_z=1.22, swatch_col=4, resolution=0.038, smooth_iter=6,
+    )
     head.data.materials.clear()
-    head.data.materials.append(skin_mat)
+    head.data.materials.append(fur_mat)
     head.parent = hr
 
-    hit, loc, _ = cb.raycast_front(head, 0.0, 1.48)
-    jy = loc.y if hit else -0.48
-    cb.make_smooth_subdiv_prim("TrJaw", "SPHERE", (0.0, jy - 0.02, 1.45),
-                               scale=(0.30, 0.16, 0.14), solid_mat=beak_mat, segs=16, subdiv=1, parent=hr)
-    cb.make_smooth_subdiv_prim("TrRidge", "SPHERE", (0.0, jy - 0.10, 1.56),
-                               scale=(0.14, 0.12, 0.08), solid_mat=skin_mat, segs=12, subdiv=1, parent=hr)
-    cb.add_chibi_eyes(head, hr, eye_x=0.25, eye_z=1.62, eye_rx=0.080, eye_rz=0.088, iris_col_hex="#b57024", brow_col=5)
+    hit, loc, _ = cb.raycast_front(head, 0.0, 1.46)
+    my = loc.y if hit else -0.48
+    cb.make_smooth_subdiv_prim("MlMuzzle", "SPHERE", (0.0, my - 0.02, 1.44),
+                               scale=(0.27, 0.17, 0.15), solid_mat=muzzle_mat, segs=16, subdiv=1, parent=hr)
+    cb.make_smooth_subdiv_prim("MlPinkNose", "SPHERE", (0.0, my - 0.16, 1.50),
+                               scale=(0.092, 0.072, 0.065), solid_mat=pink_nose, segs=14, subdiv=1, parent=hr)
+    cb.make_smooth_subdiv_prim("MlBuckTooth", "CUBE", (0.0, my - 0.11, 1.36),
+                               scale=(0.085, 0.038, 0.072), solid_mat=tooth_mat, subdiv=2, parent=hr)
+    for sx in (-1, 1):
+        cb.make_smooth_subdiv_prim(f"MlBlush_{sx}", "SPHERE", (sx * 0.34, -0.36, 1.45),
+                                   scale=(0.13, 0.07, 0.09), solid_mat=blush_mat, segs=12, subdiv=1, parent=hr)
+
+    cb.add_chibi_eyes(head, hr, eye_x=0.23, eye_z=1.63, eye_rx=0.090, eye_rz=0.098,
+                      iris_col_hex="#9c541f", brow_col=5, angry_brow=False)
+
+    # Open hollow brass spectacles around expressive eyes (no opaque cylinder!)
+    for sx in (-1, 1):
+        rim = cb.make_headband_ring(
+            f"MlSpecFrame_{sx}", center=(0.0, 0.0, 0.0), rx=0.128, ry=0.128,
+            tube_r=0.020, solid_mat=brass_mat, parent=hr,
+        )
+        rim.location = (sx * 0.23, -0.505, 1.63)
+        rim.rotation_euler = (math.radians(90), 0, 0)
+    cb.make_smooth_subdiv_prim("MlSpecBridge", "CUBE", (0.0, -0.505, 1.63),
+                               scale=(0.14, 0.025, 0.025), solid_mat=brass_mat, subdiv=1, parent=hr)
 
     gear = []
-    if brass_helm:
-        brass = cb.get_solid_mat("TortoiseHelmBrass", "#d49830", roughness=0.30, metallic=0.76)
-        gear.append(cb.make_smooth_subdiv_prim("NativeHat_TrDome", "SPHERE", (0.0, -0.02, 1.88),
-                                               scale=(0.54, 0.49, 0.28), solid_mat=brass, segs=18, subdiv=1, parent=hr))
-        gear.append(cb.make_smooth_subdiv_prim("NativeHat_TrFin", "CUBE", (0.0, -0.04, 2.04),
-                                               scale=(0.08, 0.62, 0.16), solid_mat=brass, subdiv=2, parent=hr))
-    if visor_shield:
-        steel = cb.get_solid_mat("TortoiseBastionSteel", "#5e748c", roughness=0.34, metallic=0.80)
-        gear.append(cb.make_headband_ring("NativeHat_TrArmorBand", center=(0.0, -0.03, 1.84),
-                                          rx=0.54, ry=0.48, tube_r=0.056, solid_mat=steel, parent=hr))
+    # Yellow-brass miner helmet with dark bronze bezel & glowing amber headlamp
+    helm_mat = cb.get_solid_mat(f"MoleHelmMat_{armored_rim}", "#7c8d9e" if armored_rim else "#f2c230",
+                                roughness=0.28, metallic=0.68 if armored_rim else 0.48)
+    lamp_mat = cb.get_solid_mat(f"MoleLampCrystal_{lamp_tier}", "#ffe05c", roughness=0.08, emission=1.4 + lamp_tier * 0.25)
+    gear.append(cb.make_smooth_subdiv_prim("NativeHat_MlDome", "SPHERE", (0.0, -0.02, 1.88),
+                                           scale=(0.56, 0.50, 0.30), solid_mat=helm_mat, segs=18, subdiv=1, parent=hr))
+    gear.append(cb.make_headband_ring("NativeHat_MlBrim", center=(0.0, -0.04, 1.80), rx=0.58, ry=0.51,
+                                      tube_r=0.056, solid_mat=brass_mat, parent=hr))
+    gear.append(cb.make_smooth_subdiv_prim("NativeHat_MlLampSocket", "CYL", (0.0, -0.49, 1.94),
+                                           scale=(0.125, 0.125, 0.11), rot_deg=(84, 0, 0),
+                                           solid_mat=dark_bronze, segs=16, radius=1.0, depth=1.0, parent=hr))
+    gear.append(cb.make_smooth_subdiv_prim("NativeHat_MlLampGem", "SPHERE", (0.0, -0.55, 1.95),
+                                           scale=(0.095, 0.06, 0.095), solid_mat=lamp_mat, segs=14, parent=hr))
     return hr, gear
 
 
-def build_lynx_head(scarf_rune=False, frost_crown=False):
+def build_ermine_head(scarf_hex="#2563eb", crown_crystals=False, twin_violet=False):
     hr = cb.make_empty("AnimalHeadRoot")
+    white_fur = cb.get_solid_mat("ErmineSnowWhite", "#f7faff", roughness=0.56)
+    pink_ear = cb.get_solid_mat("ErminePinkInnerEar", "#f598b0", roughness=0.64)
+    pink_nose = cb.get_solid_mat("ErminePinkNose", "#e85d7e", roughness=0.35)
+    blush_mat = cb.get_solid_mat("ErmineCheekBlush", "#ff94aa", roughness=0.65)
+
     elems = [
-        {"co": (0.0, -0.02, 0.22), "radius": 0.43, "sx": 1.14, "sy": 0.96, "sz": 0.88},
-        {"co": (-0.28, -0.14, 0.05), "radius": 0.28, "sx": 1.18, "sy": 0.88, "sz": 0.78},
-        {"co": (0.28, -0.14, 0.05), "radius": 0.28, "sx": 1.18, "sy": 0.88, "sz": 0.78},
+        {"co": (0.0, -0.02, 0.22), "radius": 0.44, "sx": 1.12, "sy": 0.98, "sz": 0.88},
+        {"co": (-0.25, -0.14, 0.05), "radius": 0.28, "sx": 1.14, "sy": 0.90, "sz": 0.78},
+        {"co": (0.25, -0.14, 0.05), "radius": 0.28, "sx": 1.14, "sy": 0.90, "sz": 0.78},
     ]
-    head = cb.sculpt_metaball_mesh("LxHead", elems, target_dims=(1.08, 0.94, 0.84), target_center_xy=(0.0, -0.03),
-                                   bottom_z=1.24, swatch_col=2, resolution=0.038, smooth_iter=6)
+    head = cb.sculpt_metaball_mesh(
+        "ErHead", elems, target_dims=(1.12, 0.96, 0.86), target_center_xy=(0.0, -0.03),
+        bottom_z=1.22, swatch_col=8, resolution=0.038, smooth_iter=6,
+    )
+    head.data.materials.clear()
+    head.data.materials.append(white_fur)
     head.parent = hr
 
-    dark_tuft = cb.get_solid_mat("LynxTuftDark", "#1d1a24", roughness=0.65)
+    # Small rounded ermine ears (no lynx tufts!) with pink inner cushion
     for sx in (-1, 1):
-        eh = cb.make_empty(f"LxEar_{sx}", loc=(sx * 0.34, 0.02, 1.92), parent=hr)
-        eh.rotation_euler = (math.radians(5), math.radians(sx * -18), math.radians(sx * -8))
-        cb.make_smooth_subdiv_prim("EarOut", "CONE", (0, 0, 0.17), scale=(0.15, 0.09, 0.21),
-                                   swatch_col=2, segs=16, radius=1.0, depth=2.0, subdiv=0, parent=eh)
-        cb.make_smooth_subdiv_prim("EarIn", "CONE", (0, -0.03, 0.14), scale=(0.08, 0.045, 0.14),
-                                   swatch_col=3, segs=14, radius=1.0, depth=2.0, subdiv=0, parent=eh)
-        # Characteristic upright black lynx ear tufts
-        cb.make_smooth_subdiv_prim("EarTuft", "CONE", (0, 0, 0.37), scale=(0.042, 0.036, 0.14),
-                                   solid_mat=dark_tuft, segs=10, radius=1.0, depth=2.0, subdiv=0, parent=eh)
-        # Fluffy cheek ruffs
-        cb.make_smooth_subdiv_prim(f"LxCheek_{sx}", "SPHERE", (sx * 0.38, -0.18, 1.42),
-                                   scale=(0.22, 0.14, 0.20), swatch_col=3, segs=14, subdiv=1, parent=hr)
+        eh = cb.make_empty(f"ErEar_{sx}", loc=(sx * 0.36, 0.00, 1.94), parent=hr)
+        eh.rotation_euler = (math.radians(4), math.radians(sx * -26), math.radians(sx * -6))
+        cb.make_smooth_subdiv_prim("EarOut", "SPHERE", (0, 0, 0.04), scale=(0.145, 0.085, 0.145),
+                                   solid_mat=white_fur, segs=16, subdiv=1, parent=eh)
+        cb.make_smooth_subdiv_prim("EarIn", "SPHERE", (0, -0.05, 0.04), scale=(0.092, 0.045, 0.092),
+                                   solid_mat=pink_ear, segs=12, subdiv=1, parent=eh)
+        cb.make_smooth_subdiv_prim(f"ErBlush_{sx}", "SPHERE", (sx * 0.32, -0.36, 1.46),
+                                   scale=(0.13, 0.065, 0.085), solid_mat=blush_mat, segs=12, subdiv=1, parent=hr)
 
     hit, loc, _ = cb.raycast_front(head, 0.0, 1.48)
     my = loc.y if hit else -0.45
-    cb.make_smooth_subdiv_prim("LxMuzzle", "SPHERE", (0.0, my + 0.02, 1.48),
-                               scale=(0.28, 0.16, 0.14), swatch_col=3, segs=16, subdiv=1, parent=hr)
-    cb.make_smooth_subdiv_prim("LxNose", "SPHERE", (0.0, my - 0.11, 1.53),
-                               scale=(0.075, 0.055, 0.050), swatch_col=13, segs=12, subdiv=1, parent=hr)
-    cb.add_chibi_eyes(head, hr, eye_x=0.23, eye_z=1.61, eye_rx=0.084, eye_rz=0.096, iris_col_hex="#ffb42e", brow_col=1)
+    cb.make_smooth_subdiv_prim("ErMuzzle", "SPHERE", (0.0, my - 0.01, 1.46),
+                               scale=(0.24, 0.15, 0.13), solid_mat=white_fur, segs=14, subdiv=1, parent=hr)
+    cb.make_smooth_subdiv_prim("ErNose", "SPHERE", (0.0, my - 0.14, 1.51),
+                               scale=(0.068, 0.052, 0.048), solid_mat=pink_nose, segs=12, subdiv=1, parent=hr)
+    cb.add_chibi_eyes(head, hr, eye_x=0.22, eye_z=1.62, eye_rx=0.094, eye_rz=0.104,
+                      iris_col_hex="#36b5ff", brow_col=6, angry_brow=False)
 
     gear = []
-    if scarf_rune:
-        rune_v = cb.get_solid_mat("LynxRuneViolet", "#8c54ff", roughness=0.25, emission=0.75)
-        gear.append(cb.make_headband_ring("NativeHat_LxBand", center=(0.0, -0.03, 1.84),
-                                          rx=0.50, ry=0.43, tube_r=0.048, solid_mat=rune_v, parent=hr))
-    if frost_crown:
-        ice = cb.get_solid_mat("LynxFrostGem", "#5cf4ff", roughness=0.14, emission=0.95)
+    # Trim cozy knit neck scarf with trailing end & glowing frost snowflake brooch
+    scarf_mat = cb.get_solid_mat(f"ErmineScarf_{scarf_hex}", scarf_hex, roughness=0.68)
+    flake_mat = cb.get_solid_mat("ErmineSnowflakeGem", "#80f4ff" if not twin_violet else "#c98aff", roughness=0.12, emission=1.1)
+    cb.make_headband_ring("ErScarfRing", center=(0.0, -0.02, 1.21), rx=0.28, ry=0.26,
+                          tube_r=0.062, solid_mat=scarf_mat, parent=hr)
+    cb.make_smooth_subdiv_prim("ErScarfTail", "CUBE", (0.16, -0.28, 1.06),
+                               scale=(0.11, 0.04, 0.18), rot_deg=(-8, 0, -14), solid_mat=scarf_mat, subdiv=2, parent=hr)
+    cb.make_smooth_subdiv_prim("ErSnowflakeBrooch", "SPHERE", (0.14, -0.30, 1.21),
+                               scale=(0.085, 0.045, 0.085), solid_mat=flake_mat, segs=8, parent=hr)
+    if crown_crystals:
         for sx in (-1, 0, 1):
-            gear.append(cb.make_smooth_subdiv_prim(f"NativeHat_LxIce_{sx}", "CONE", (sx * 0.20, -0.42, 1.94),
-                                                   scale=(0.06, 0.05, 0.16), rot_deg=(10, sx * -14, 0),
-                                                   solid_mat=ice, segs=8, radius=1.0, depth=2.0, subdiv=0, parent=hr))
+            gear.append(cb.make_smooth_subdiv_prim(f"NativeHat_ErCrystal_{sx}", "CONE", (sx * 0.16, -0.42, 1.92),
+                                                   scale=(0.055, 0.045, 0.16 if sx == 0 else 0.11), rot_deg=(12, sx * -14, 0),
+                                                   solid_mat=flake_mat, segs=8, radius=1.0, depth=2.0, subdiv=0, parent=hr))
     return hr, gear
 
 
@@ -433,134 +549,159 @@ def hex_building(color, name):
     return os.path.join(HEX_B, color, f"building_{name}_{color}.gltf")
 
 
+def _add_cog_turntable(parent, center, radius, mat_brass):
+    spin = cb.make_empty("SpinPart", loc=center)
+    cb.set_parent_keep(spin, parent)
+    ring = cb.make_smooth_subdiv_prim(
+        "MoleCogHub", "CYL", center,
+        scale=(radius, radius, 0.055), solid_mat=mat_brass, segs=18, radius=1.0, depth=1.0,
+    )
+    cb.set_parent_keep(ring, spin)
+    for i in range(8):
+        ang = i * (math.pi / 4.0)
+        tx = center[0] + math.cos(ang) * (radius + 0.045)
+        ty = center[1] + math.sin(ang) * (radius + 0.045)
+        tooth = cb.make_smooth_subdiv_prim(
+            f"MoleCogTooth_{i}", "CUBE", (tx, ty, center[2]),
+            scale=(0.055, 0.055, 0.050), rot_deg=(0, 0, math.degrees(ang)),
+            solid_mat=mat_brass, subdiv=1,
+        )
+        cb.set_parent_keep(tooth, spin)
+    return spin
+
+
 def build_new_tower_glb(model_name):
     cb.clear_scene()
     root = cb.make_empty("TowerRoot")
-    warm = cb.ensure_warm_hex_atlas()
 
     if model_name.startswith("tower_badger_"):
-        color = "yellow"
+        # Chibi Rakun İksirci -> Fosforlu Mantar Kulesi (Seçenek 1)
         suf = model_name.replace("tower_badger_", "")
         tier = 1 if suf == "t1" else 2 if suf == "t2" else 3
-        ht = {1: 1.24, 2: 1.48, 3: 1.66}[tier]
-        _, o = cb.place(hex_building(color, "tower_base"), parent=root, height=ht)
-        cb.retexture(o, "hexagons_medieval", warm)
-        mn, mx = cb.mesh_bounds(o)
-        deck_z = mx.z - (mx.z - mn.z) * 0.085
-
-        if tier >= 2:
-            _, fo = cb.place(os.path.join(HEX_P, "flag_green.gltf"), parent=root, height=0.60,
-                             loc=(-0.38, 0.30, deck_z - 0.02))
-            cb.retexture(fo, "hexagons_medieval", warm)
-        if suf in ("inferno", "corrosion"):
-            flask_col = "#ff7c24" if suf == "inferno" else "#3bf274"
-            _, go = cb.place(os.path.join(Q, "rpg_items_pack/Crystal3.glb"), parent=root, height=0.28,
-                             loc=(0.48, -0.34, 0.0), rot_deg=(0, 12, 0))
-            cb.set_flat_color(go, "*", flask_col, emission_hex=flask_col, emission_strength=1.25, force=True)
+        _, deck_z = build_custom_tower_base("badger", suf, tier, root)
 
         turret_head = cb.make_empty("TurretHead", loc=(0, 0, deck_z), parent=root)
+        armor_col = "#219649" if suf in ("t1", "t2") else "#bd3a22" if suf == "inferno" else "#7d35d4"
         tex = cb.ensure_kaykit_variant_tex(
             "mage",
-            f"badger_{suf}",
-            paw_hex="#5c4c48",
-            hue_shift=0.18 if suf == "corrosion" else -0.15 if suf == "inferno" else 0.05,
-            sat_mult=1.15,
+            f"raccoon_{suf}",
+            paw_hex="#342b29",
+            hue_shift=0.14 if suf == "corrosion" else -0.18 if suf == "inferno" else 0.08,
+            sat_mult=1.18,
+            armor_tint=armor_col,
+            armor_mix=0.40,
         )
-        head, _ = build_badger_head(
+        head, _ = build_raccoon_head(
+            beret_hex=armor_col,
             goggles=(suf in ("t2", "inferno", "corrosion")),
-            hood_col=13 if suf == "inferno" else 15 if suf == "corrosion" else 14,
-            flask_crown=(suf == "corrosion"),
+            alch_orb=(suf == "corrosion"),
         )
-        _, wg = cb.build_tower_crew_mounted(
+        cg, wg = cb.build_tower_crew_mounted(
             turret_head, "Mage.glb", ("1H_Wand",), "Spellcasting", 6,
-            head, deck_z, tex_path=tex, offset=(0.04, 0.04),
+            head, deck_z, tex_path=tex, offset=(0.04, 0.04), tail_fn=attach_raccoon_tail,
         )
-        # Alchemy mortar cannon barrel on WeaponGroup
+        # Cross chest potion bandolier vials on CharacterGroup front (-Y)
+        strap_mat = cb.get_solid_mat("RaccoonBandolierLeather", "#5c3419", roughness=0.62)
+        strap = cb.make_smooth_subdiv_prim(
+            "RaccoonBandolier", "CUBE", (0.04, -0.11, deck_z + 0.28),
+            scale=(0.045, 0.045, 0.26), rot_deg=(0, 48, 0), solid_mat=strap_mat, subdiv=1,
+        )
+        cb.set_parent_keep(strap, cg)
+        vial_colors = ("#3ef582", "#35d4ff", "#ffe14d") if suf != "inferno" else ("#ff7e29", "#ffd23b", "#ff4224")
+        for idx, vx in enumerate((-0.05, 0.04, 0.13)):
+            vmat = cb.get_solid_mat(f"RaccoonVial_{suf}_{idx}", vial_colors[idx], roughness=0.14, emission=0.85)
+            vial = cb.make_smooth_subdiv_prim(
+                f"RaccoonVial_{idx}", "CYL", (vx, -0.14, deck_z + 0.24 + idx * 0.045),
+                scale=(0.026, 0.026, 0.070), rot_deg=(8, 35, 0), solid_mat=vmat, segs=10, radius=1.0, depth=1.0,
+            )
+            cb.set_parent_keep(vial, cg)
+
+        # Brass potion mortar cannon + glowing brew orb on WeaponGroup
         cauldron_mat = cb.get_solid_mat(
-            f"BadgerCauldron_{suf}",
+            f"RaccoonCauldron_{suf}",
             "#3c4754" if suf != "inferno" else "#78311e",
-            roughness=0.38,
-            metallic=0.7,
+            roughness=0.36, metallic=0.72,
         )
-        glow_mat = cb.get_solid_mat(
-            f"BadgerBrew_{suf}",
-            "#ff7e1f" if suf == "inferno" else "#3bf27a",
-            roughness=0.15,
-            emission=1.2,
+        brass_mat = cb.get_solid_mat("RaccoonMortarBrass", "#e5ac39", roughness=0.26, metallic=0.82)
+        glow_col = "#ff7e1f" if suf == "inferno" else "#b766ff" if suf == "corrosion" else "#3bf27a"
+        glow_mat = cb.get_solid_mat(f"RaccoonBrew_{suf}", glow_col, roughness=0.14, emission=1.25)
+        barrel = cb.make_smooth_subdiv_prim(
+            "RaccoonMortarTube", "CYL", (0.28, -0.18, deck_z + 0.16),
+            scale=(0.155, 0.155, 0.34), rot_deg=(58, 0, 0), solid_mat=cauldron_mat, segs=16, radius=1.0, depth=1.0,
         )
-        barrel = cb.make_smooth_subdiv_prim("BadgerMortarTube", "CYL", (0.28, -0.18, deck_z + 0.16),
-                                            scale=(0.16, 0.16, 0.34), rot_deg=(58, 0, 0), solid_mat=cauldron_mat, segs=16, radius=1.0, depth=1.0)
-        brew = cb.make_smooth_subdiv_prim("BadgerBrewCore", "SPHERE", (0.28, -0.30, deck_z + 0.24),
-                                          scale=(0.12, 0.12, 0.12), solid_mat=glow_mat, segs=12)
+        collar = cb.make_smooth_subdiv_prim(
+            "RaccoonMortarCollar", "CYL", (0.28, -0.25, deck_z + 0.21),
+            scale=(0.175, 0.175, 0.075), rot_deg=(58, 0, 0), solid_mat=brass_mat, segs=16, radius=1.0, depth=1.0,
+        )
+        brew = cb.make_smooth_subdiv_prim(
+            "RaccoonBrewCore", "SPHERE", (0.28, -0.32, deck_z + 0.25),
+            scale=(0.12, 0.12, 0.12), solid_mat=glow_mat, segs=12,
+        )
         cb.set_parent_keep(barrel, wg)
+        cb.set_parent_keep(collar, wg)
         cb.set_parent_keep(brew, wg)
 
     elif model_name.startswith("tower_falcon_"):
-        color = "red"
+        # Chibi Kuzgun Nişancı -> Gotik Çan & Fener Kulesi (Seçenek 2)
         suf = model_name.replace("tower_falcon_", "")
         tier = 1 if suf == "t1" else 2 if suf == "t2" else 3
-        ht = {1: 1.30, 2: 1.54, 3: 1.74}[tier]
-        _, o = cb.place(hex_building(color, "tower_base"), parent=root, height=ht)
-        cb.retexture(o, "hexagons_medieval", warm)
-        mn, mx = cb.mesh_bounds(o)
-        deck_z = mx.z - (mx.z - mn.z) * 0.085
+        _, deck_z = build_custom_tower_base("falcon", suf, tier, root)
 
-        if tier >= 2:
-            _, fo = cb.place(os.path.join(HEX_P, "flag_blue.gltf"), parent=root, height=0.64,
-                             loc=(-0.38, 0.30, deck_z - 0.02))
-            cb.retexture(fo, "hexagons_medieval", warm)
         turret_head = cb.make_empty("TurretHead", loc=(0, 0, deck_z), parent=root)
+        hood_col = "#b52330" if suf != "tempest" else "#2c4fa8"
         tex = cb.ensure_kaykit_variant_tex(
-            "rogue", f"falcon_{suf}", paw_hex="#c49448",
-            hue_shift=0.35 if suf == "tempest" else 0.12, sat_mult=1.18,
+            "rogue", f"raven_v2_{suf}", paw_hex="#2d3b66",
+            hue_shift=0.22 if suf == "tempest" else -0.35, sat_mult=1.15,
+            armor_tint=hood_col, armor_mix=0.55,
         )
-        head, _ = build_falcon_head(
-            plumage_col=7 if suf != "skyhunter" else 14,
-            aviator_cap=(suf in ("t2", "skyhunter")),
-            storm_crest=(suf == "tempest"),
-        )
-        cg, wg = cb.build_tower_crew_mounted(
+        head, _ = build_raven_head(hood_hex=hood_col, storm_crest=(suf == "tempest"))
+        _, wg = cb.build_tower_crew_mounted(
             turret_head, "Rogue.glb", ("1H_Crossbow",), "1H_Ranged_Aiming", 4,
             head, deck_z, tex_path=tex, offset=(0.04, 0.04),
         )
-        bh, bo = cb.place(os.path.join(Q, "medieval_weapons_pack/Bow_Golden.glb"), max_xy=0.58 if suf == "skyhunter" else 0.46,
-                          loc=(-0.22, -0.18, deck_z + 0.22), rot_deg=(10, -20, -90), ground=False)
+        bh, _ = cb.place(os.path.join(Q, "medieval_weapons_pack/Bow_Golden.glb"),
+                         max_xy=0.58 if suf == "skyhunter" else 0.46,
+                         loc=(-0.22, -0.18, deck_z + 0.22), rot_deg=(10, -20, -90), ground=False)
         cb.set_parent_keep(bh, wg)
+        # Cyan lightning arrow loaded at the bow
+        bolt_mat = cb.get_solid_mat("RavenCyanArrow", "#4ef2ff", roughness=0.14, emission=1.15)
+        arrow_shaft = cb.make_smooth_subdiv_prim(
+            "RavenLightningShaft", "CYL", (-0.22, -0.32, deck_z + 0.23),
+            scale=(0.018, 0.018, 0.34), rot_deg=(90, 0, 0), solid_mat=bolt_mat, segs=8, radius=1.0, depth=1.0,
+        )
+        arrow_tip = cb.make_smooth_subdiv_prim(
+            "RavenLightningTip", "CONE", (-0.22, -0.52, deck_z + 0.23),
+            scale=(0.052, 0.052, 0.095), rot_deg=(90, 0, 0), solid_mat=bolt_mat, segs=8, radius=1.0, depth=2.0, subdiv=0,
+        )
+        cb.set_parent_keep(arrow_shaft, wg)
+        cb.set_parent_keep(arrow_tip, wg)
+
         if suf == "tempest":
             cb.spin_orbit_crystals(turret_head, z=0.20, count=3, radius=0.62, color="#6ef2ff", emi="#2cd8ff", height=0.16)
-        elif suf == "skyhunter":
-            _, to = cb.place(os.path.join(HEX_P, "target.gltf"), parent=root, height=0.40, loc=(0.54, 0.34, 0), rot_z=-25)
-            cb.retexture(to, "hexagons_medieval", warm)
 
     elif model_name.startswith("tower_tortoise_"):
-        color = "green"
+        # Chibi Köstebek Mühendis -> Maden Tüneli İstihkâmı (Seçenek 1)
         suf = model_name.replace("tower_tortoise_", "")
         tier = 1 if suf == "t1" else 2 if suf == "t2" else 3
-        ht = {1: 1.18, 2: 1.40, 3: 1.58}[tier]
-        _, o = cb.place(hex_building(color, "tower_base"), parent=root, height=ht)
-        cb.retexture(o, "hexagons_medieval", warm)
-        mn, mx = cb.mesh_bounds(o)
-        deck_z = mx.z - (mx.z - mn.z) * 0.085
+        _, deck_z = build_custom_tower_base("tortoise", suf, tier, root)
 
         turret_head = cb.make_empty("TurretHead", loc=(0, 0, deck_z), parent=root)
         tex = cb.ensure_kaykit_variant_tex(
-            "knight", f"tortoise_{suf}", paw_hex="#6b913c",
-            hue_shift=0.08, sat_mult=1.1, armor_tint="#b88438" if suf == "quake" else "#5b7d8f", armor_mix=0.45,
+            "knight", f"mole_{suf}", paw_hex="#7a513e",
+            hue_shift=0.05, sat_mult=1.12,
+            armor_tint="#cc902d" if suf != "bastion" else "#567085", armor_mix=0.48,
         )
-        head, _ = build_tortoise_head(brass_helm=(suf in ("t2", "quake")), visor_shield=(suf == "bastion"))
-        cg, wg = cb.build_tower_crew_mounted(
+        head, _ = build_mole_head(lamp_tier=tier, armored_rim=(suf == "bastion"))
+        _, wg = cb.build_tower_crew_mounted(
             turret_head, "Knight.glb", ("Spike_Shield",), "Blocking" if suf == "bastion" else "Idle", 4,
             head, deck_z, tex_path=tex, offset=(0.04, 0.05),
         )
-        # Carved tortoise shell behind character back
-        shell_mat = cb.get_solid_mat(f"TortoiseShell_{suf}", "#755a2b" if suf != "bastion" else "#48685c", roughness=0.48, metallic=0.25)
-        shell_trim = cb.get_solid_mat("TortoiseShellTrim", "#d9a238", roughness=0.30, metallic=0.72)
-        cb.make_smooth_subdiv_prim("TortoiseShell", "SPHERE", (0.04, 0.24, deck_z + 0.28),
-                                   scale=(0.30, 0.16, 0.34), rot_deg=(-12, 0, 0), solid_mat=shell_mat, segs=16, subdiv=1, parent=cg)
-        cb.make_smooth_subdiv_prim("TortoiseShellRim", "SPHERE", (0.04, 0.20, deck_z + 0.28),
-                                   scale=(0.32, 0.11, 0.36), rot_deg=(-12, 0, 0), solid_mat=shell_trim, segs=14, subdiv=0, parent=cg)
-        ch, co = cb.place(os.path.join(Q, "platformer_game_pack/Cannon.glb"), max_xy=0.50 if tier >= 2 else 0.38,
-                          loc=(0.24, -0.22, deck_z + 0.02), rot_deg=(0, 0, -90))
+        # Spinning brass engineering cogwheel turntable on turret head
+        brass_gear = cb.get_solid_mat("MoleCogBrass", "#e3a72e", roughness=0.25, metallic=0.84)
+        _add_cog_turntable(turret_head, (0.0, 0.0, deck_z + 0.06), 0.30, brass_gear)
+
+        ch, _ = cb.place(os.path.join(Q, "platformer_game_pack/Cannon.glb"), max_xy=0.50 if tier >= 2 else 0.38,
+                         loc=(0.24, -0.22, deck_z + 0.02), rot_deg=(0, 0, -90))
         cb.set_parent_keep(ch, wg)
         if suf in ("quake", "bastion"):
             ch2, _ = cb.place(os.path.join(Q, "platformer_game_pack/Cannon.glb"), max_xy=0.46,
@@ -568,36 +709,38 @@ def build_new_tower_glb(model_name):
             cb.set_parent_keep(ch2, wg)
 
     elif model_name.startswith("tower_lynx_"):
-        color = "blue"
+        # Chibi Kakım Buz Okçusu -> Safir Buzul Kristali (Seçenek 3)
         suf = model_name.replace("tower_lynx_", "")
         tier = 1 if suf == "t1" else 2 if suf == "t2" else 3
-        ht = {1: 1.26, 2: 1.48, 3: 1.68}[tier]
-        _, o = cb.place(hex_building(color, "tower_base"), parent=root, height=ht)
-        cb.retexture(o, "hexagons_medieval", warm)
-        mn, mx = cb.mesh_bounds(o)
-        deck_z = mx.z - (mx.z - mn.z) * 0.085
+        _, deck_z = build_custom_tower_base("lynx", suf, tier, root)
 
-        if tier >= 2:
-            _, fo = cb.place(os.path.join(HEX_P, "flag_blue.gltf"), parent=root, height=0.62,
-                             loc=(-0.38, 0.30, deck_z - 0.02))
-            cb.retexture(fo, "hexagons_medieval", warm)
         turret_head = cb.make_empty("TurretHead", loc=(0, 0, deck_z), parent=root)
+        scarf_col = "#2563eb" if suf != "flurry" else "#5645d6"
         tex = cb.ensure_kaykit_variant_tex(
-            "rogue", f"lynx_{suf}", paw_hex="#d49c58",
-            hue_shift=-0.22 if suf == "flurry" else 0.14, sat_mult=1.18,
+            "rogue", f"ermine_v2_{suf}", paw_hex="#f2f6ff",
+            hue_shift=-0.12 if suf == "flurry" else 0.08, sat_mult=0.95,
+            armor_tint="#3b6ea8" if suf != "flurry" else "#5c4bc4", armor_mix=0.35,
         )
-        head, _ = build_lynx_head(scarf_rune=(suf in ("t2", "flurry")), frost_crown=(suf == "frostbite"))
+        head, _ = build_ermine_head(
+            scarf_hex=scarf_col,
+            crown_crystals=(suf in ("t2", "frostbite")),
+            twin_violet=(suf == "flurry"),
+        )
         _, wg = cb.build_tower_crew_mounted(
             turret_head, "Rogue.glb", ("1H_Crossbow",), "2H_Ranged_Aiming", 4,
-            head, deck_z, tex_path=tex, offset=(0.04, 0.04),
+            head, deck_z, tex_path=tex, offset=(0.04, 0.04), tail_fn=attach_ermine_tail,
             extra_hand_props=((os.path.join(ADV_A, "crossbow_2handed.gltf"), "handslot.r", 1.05),) if tier >= 2 else (),
         )
         rh, ro = cb.place(os.path.join(Q, "modular_sci_fi_guns_pack/Crossbow_2.glb"), max_xy=0.52 if tier >= 2 else 0.40,
                           loc=(-0.22, -0.20, deck_z + 0.18), rot_deg=(0, 0, -90))
+        xbow_col = "#66eeff" if suf != "flurry" else "#9b78ff"
         cb.set_flat_color(ro, ("White", "Grey", "LightGrey", "Accent"),
-                          "#b46eff" if suf != "frostbite" else "#54eeff",
-                          emission_hex="#9c4eff" if suf != "frostbite" else "#38e8ff", emission_strength=1.0, roughness=0.3)
+                          xbow_col, emission_hex=xbow_col, emission_strength=1.05, roughness=0.25)
         cb.set_parent_keep(rh, wg)
+        if suf in ("frostbite", "flurry"):
+            orb_col = "#72f2ff" if suf == "frostbite" else "#a88cff"
+            cb.spin_orbit_crystals(turret_head, z=0.22, count=4 if suf == "frostbite" else 3,
+                                   radius=0.60, color=orb_col, emi=orb_col, height=0.17)
     else:
         raise ValueError(f"Unknown new tower model: {model_name}")
 

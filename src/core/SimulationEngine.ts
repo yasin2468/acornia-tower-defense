@@ -68,7 +68,22 @@ export type SimEvent =
   | { type: 'TOWER_SOLD'; slotId: string; refund: number }
   | { type: 'STUMP_CLEARED'; slotId: string }
   | { type: 'SMOKE_CLEARED'; slotId: string }
-  | { type: 'TOWER_FIRED'; slotId: string; towerId: TowerId; fromX: number; fromZ: number; toX: number; toZ: number; targetIds: number[]; isChain?: boolean; isLine?: boolean; isAoe?: boolean }
+  | {
+      type: 'TOWER_FIRED';
+      slotId: string;
+      towerId: TowerId;
+      branchId?: EvolutionBranchId;
+      fromX: number;
+      fromZ: number;
+      toX: number;
+      toZ: number;
+      targetIds: number[];
+      isChain?: boolean;
+      isLine?: boolean;
+      isAoe?: boolean;
+      isCrit?: boolean;
+      isFreeze?: boolean;
+    }
   | {
       type: 'PROJECTILE_IMPACT';
       towerId: TowerId;
@@ -80,6 +95,8 @@ export type SimEvent =
       aoeRadius: number;
       isCrit: boolean;
       isFreeze: boolean;
+      isStun?: boolean;
+      isArmorBreak?: boolean;
       splash?: boolean;
     }
   | {
@@ -109,19 +126,22 @@ export type SimEvent =
       heavy?: boolean;
     }
   | { type: 'BOSS_PHASE_TWO'; enemyId: number; bossId?: EnemyId; smokedSlotId?: string; x: number; z: number }
-  | { type: 'PINECONE_RAIN'; x: number; z: number; hits: number }
-  | { type: 'ACORN_MAGNET'; x: number; z: number; duration: number }
+  | { type: 'PINECONE_RAIN'; x: number; z: number; hits: number; radius: number }
+  | { type: 'ACORN_MAGNET'; x: number; z: number; duration: number; hits?: number }
   | { type: 'BARREL_EXPLODED'; barrelId: string; x: number; z: number; hits: number }
   | { type: 'HERO_ATTACK'; x: number; z: number; targetX: number; targetZ: number; ranged?: boolean; heroId?: HeroId; isCrit?: boolean }
-  | { type: 'HERO_CLAW_SHOCK'; x: number; z: number; hits: number; heroId?: HeroId }
+  | { type: 'HERO_CLAW_SHOCK'; x: number; z: number; hits: number; heroId?: HeroId; radius?: number; buffedSlotIds?: string[] }
   | {
       type: 'HERO_ULTIMATE';
       variant: 'classic' | 'viking' | 'royal' | 'fox_storm' | 'boar_charge' | 'wolf_howl';
+      heroId?: HeroId;
       x: number;
       z: number;
       fromX?: number;
       fromZ?: number;
       hits: number;
+      radius?: number;
+      buffedSlotIds?: string[];
     }
   | { type: 'HERO_RALLY'; x: number; z: number }
   | { type: 'HERO_LEVELED'; level: number; x: number; z: number }
@@ -175,6 +195,7 @@ export interface EnemyInstance {
   slowPct: number;
   slowTimer: number;
   stunTimer: number;
+  freezeVisualTimer: number;
   hitFlashTimer: number;
   armorHalved: boolean;
   phase2Triggered: boolean;
@@ -408,6 +429,17 @@ export class SimulationEngine {
     return { x: px, z: pz };
   }
 
+  private collectHeroBuffedSlotIds(hx: number, hz: number, rangeRadius: number): string[] {
+    const ids: string[] = [];
+    for (const slot of this.slots.values()) {
+      if (!slot.tower) continue;
+      if (Math.hypot(slot.x - hx, slot.z - hz) <= rangeRadius) {
+        ids.push(slot.id);
+      }
+    }
+    return ids;
+  }
+
   private computePathLengths(): void {
     this.pathLengths = [];
     this.totalPathLength = 0;
@@ -627,19 +659,20 @@ export class SimulationEngine {
           if (Math.hypot(tx - h.x, tz - h.z) > 0.05) {
             h.facingAngle = Math.atan2(tx - h.x, tz - h.z);
           }
+          const radius = 3.6;
           h.skillCooldown = heroCd(18);
-          h.skillActiveTimer = 7.0;
-          h.alchemyAuraTimer = Math.max(h.alchemyAuraTimer, 7.0);
-          const dmg = Math.round(75 * lvlMult * cardMult * this.talentMods.heroDamageMult * giantDmgMult);
+          h.skillActiveTimer = 7.5;
+          h.alchemyAuraTimer = Math.max(h.alchemyAuraTimer, 7.5);
+          const dmg = Math.round(78 * lvlMult * cardMult * this.talentMods.heroDamageMult * giantDmgMult);
           for (const e of [...this.enemies]) {
             if (e.hp <= 0) continue;
-            if (Math.hypot(e.x - tx, e.z - tz) <= 3.5) {
+            if (Math.hypot(e.x - tx, e.z - tz) <= radius) {
               hits += 1;
               const hadArmor = e.armor > 0;
-              e.armor = Math.max(0, e.armor * 0.7);
-              e.slowPct = Math.max(e.slowPct, 0.35);
-              e.slowTimer = Math.max(e.slowTimer, 2.2 * this.talentMods.statusDurationMult);
-              this.damageEnemy(e, dmg, 0.25, false, false, hadArmor, {
+              e.armor = Math.max(0, e.armor * 0.65);
+              e.slowPct = Math.max(e.slowPct, 0.4);
+              e.slowTimer = Math.max(e.slowTimer, 2.8 * this.talentMods.statusDurationMult);
+              this.damageEnemy(e, dmg, 0.3, false, false, hadArmor, {
                 dirX: e.x - tx,
                 dirZ: e.z - tz,
                 heavy: true,
@@ -649,13 +682,25 @@ export class SimulationEngine {
           this.resinPools.push({
             x: tx,
             z: tz,
-            radius: 2.4,
-            dps: Math.round(14 * lvlMult * cardMult * this.talentMods.heroDamageMult),
-            slowPct: 0.25,
-            timer: 2.4 * this.talentMods.statusDurationMult,
+            radius: 2.8,
+            dps: Math.round(16 * lvlMult * cardMult * this.talentMods.heroDamageMult),
+            slowPct: 0.28,
+            timer: 3.6 * this.talentMods.statusDurationMult,
             kind: 'acid',
           });
-          this.events.push({ type: 'HERO_ULTIMATE', variant: 'fox_storm', x: tx, z: tz, fromX, fromZ, hits });
+          const buffedSlotIds = this.collectHeroBuffedSlotIds(h.x, h.z, 6.0 + this.talentMods.heroAuraRadiusBonus);
+          this.events.push({
+            type: 'HERO_ULTIMATE',
+            variant: 'fox_storm',
+            heroId: 'kizil_kuyruk',
+            x: tx,
+            z: tz,
+            fromX,
+            fromZ,
+            hits,
+            radius,
+            buffedSlotIds,
+          });
           break;
         }
 
@@ -677,63 +722,126 @@ export class SimulationEngine {
           h.targetZ = tz;
           h.repositionTimer = 0;
           h.skillCooldown = heroCd(17);
-          h.skillActiveTimer = 6.0;
+          h.skillActiveTimer = 6.5;
           h.activeBuff = 'ironhide';
-          const dmg = Math.round(90 * lvlMult * cardMult * this.talentMods.heroDamageMult * giantDmgMult);
+          const radius = 3.5;
+          const dmg = Math.round(94 * lvlMult * cardMult * this.talentMods.heroDamageMult * giantDmgMult);
+          const hitUids = new Set<number>();
           for (const e of [...this.enemies]) {
             if (e.isFlying || e.hp <= 0) continue;
-            if (Math.hypot(e.x - tx, e.z - tz) <= 3.4) {
+            if (Math.hypot(e.x - tx, e.z - tz) <= radius) {
+              hitUids.add(e.uid);
               hits += 1;
-              e.stunTimer = Math.max(e.stunTimer, 1.6);
-              this.pushEnemyBack(e, 1.1);
-              this.damageEnemy(e, dmg, 0.4, true, false, false, {
+              const hadArmor = e.armor > 0;
+              e.armor = Math.max(0, e.armor * 0.8);
+              e.stunTimer = Math.max(e.stunTimer, 1.7);
+              this.pushEnemyBack(e, 1.2);
+              this.damageEnemy(e, dmg, 0.42, true, false, hadArmor, {
                 dirX: e.x - tx,
                 dirZ: e.z - tz,
                 heavy: true,
               });
             }
           }
-          this.events.push({ type: 'HERO_ULTIMATE', variant: 'boar_charge', x: tx, z: tz, fromX, fromZ, hits });
+          // Crush ground bots along the charge corridor from (fromX, fromZ) to (tx, tz)
+          const segX = tx - fromX;
+          const segZ = tz - fromZ;
+          const segLen = Math.hypot(segX, segZ);
+          if (segLen > 0.25) {
+            const ux = segX / segLen;
+            const uz = segZ / segLen;
+            const pathDmg = Math.round(dmg * 0.6);
+            for (const e of [...this.enemies]) {
+              if (e.isFlying || e.hp <= 0 || hitUids.has(e.uid)) continue;
+              const relX = e.x - fromX;
+              const relZ = e.z - fromZ;
+              const proj = relX * ux + relZ * uz;
+              if (proj < -0.3 || proj > segLen + 0.3) continue;
+              const perp = Math.abs(relX * -uz + relZ * ux);
+              if (perp <= 1.35) {
+                hitUids.add(e.uid);
+                hits += 1;
+                e.stunTimer = Math.max(e.stunTimer, 1.0);
+                this.pushEnemyBack(e, 0.7);
+                this.damageEnemy(e, pathDmg, 0.35, false, false, false, {
+                  dirX: ux,
+                  dirZ: uz,
+                  heavy: true,
+                });
+              }
+            }
+          }
+          this.events.push({
+            type: 'HERO_ULTIMATE',
+            variant: 'boar_charge',
+            heroId: 'kaya_dis',
+            x: tx,
+            z: tz,
+            fromX,
+            fromZ,
+            hits,
+            radius,
+          });
           break;
         }
 
         if (this.heroId === 'ay_kurdu') {
+          const radius = 4.0;
           h.skillCooldown = heroCd(18);
-          h.skillActiveTimer = 6.5;
+          h.skillActiveTimer = 7.0;
           h.activeBuff = 'banner';
-          h.hp = Math.min(h.maxHp, h.hp + Math.round(h.maxHp * 0.2));
-          const dmg = Math.round(80 * lvlMult * cardMult * this.talentMods.heroDamageMult * giantDmgMult);
+          h.hp = Math.min(h.maxHp, h.hp + Math.round(h.maxHp * 0.22));
+          const dmg = Math.round(84 * lvlMult * cardMult * this.talentMods.heroDamageMult * giantDmgMult);
           for (const e of [...this.enemies]) {
             if (e.hp <= 0) continue;
-            if (Math.hypot(e.x - h.x, e.z - h.z) <= 3.8) {
+            if (Math.hypot(e.x - h.x, e.z - h.z) <= radius) {
               hits += 1;
-              e.stunTimer = Math.max(e.stunTimer, 1.4);
-              e.slowPct = Math.max(e.slowPct, 0.35);
-              e.slowTimer = Math.max(e.slowTimer, 3.0 * this.talentMods.statusDurationMult);
-              this.damageEnemy(e, dmg, 0.3, true, false, false, {
+              e.stunTimer = Math.max(e.stunTimer, 1.6);
+              e.freezeVisualTimer = Math.max(e.freezeVisualTimer, 1.6);
+              e.slowPct = Math.max(e.slowPct, 0.4);
+              e.slowTimer = Math.max(e.slowTimer, 3.5 * this.talentMods.statusDurationMult);
+              this.damageEnemy(e, dmg, 0.32, true, false, false, {
                 dirX: e.x - h.x,
                 dirZ: e.z - h.z,
                 heavy: true,
               });
             }
           }
-          this.events.push({ type: 'HERO_ULTIMATE', variant: 'wolf_howl', x: h.x, z: h.z, fromX, fromZ, hits });
+          const buffedSlotIds = this.collectHeroBuffedSlotIds(h.x, h.z, 4.5 + this.talentMods.heroAuraRadiusBonus);
+          this.events.push({
+            type: 'HERO_ULTIMATE',
+            variant: 'wolf_howl',
+            heroId: 'ay_kurdu',
+            x: h.x,
+            z: h.z,
+            fromX,
+            fromZ,
+            hits,
+            radius,
+            buffedSlotIds,
+          });
           break;
         }
 
         const variant = resolveHeroVisualVariant(this.heroClass, h.level);
+        let ultRadius = 3.8;
+        let buffedSlotIds: string[] | undefined;
 
         if (variant === 'classic') {
+          ultRadius = 3.8;
           h.skillCooldown = heroCd(18);
-          h.hp = Math.min(h.maxHp, h.hp + Math.round(h.maxHp * 0.25));
-          const dmg = Math.round(65 * lvlMult * cardMult * this.talentMods.heroDamageMult * giantDmgMult);
+          h.skillActiveTimer = 5.0;
+          h.activeBuff = 'ironhide';
+          h.hp = Math.min(h.maxHp, h.hp + Math.round(h.maxHp * 0.28));
+          const dmg = Math.round(70 * lvlMult * cardMult * this.talentMods.heroDamageMult * giantDmgMult);
           for (const e of [...this.enemies]) {
             if (e.hp <= 0) continue;
-            if (Math.hypot(e.x - h.x, e.z - h.z) <= 3.6) {
+            if (Math.hypot(e.x - h.x, e.z - h.z) <= ultRadius) {
               hits += 1;
+              const hadArmor = e.armor > 0;
               e.armor = Math.max(0, e.armor * 0.75);
               e.stunTimer = Math.max(e.stunTimer, 1.8);
-              this.damageEnemy(e, dmg, 0.25, false, false, e.armor > 0, {
+              this.damageEnemy(e, dmg, 0.25, false, false, hadArmor, {
                 dirX: e.x - h.x,
                 dirZ: e.z - h.z,
                 heavy: true,
@@ -741,6 +849,7 @@ export class SimulationEngine {
             }
           }
         } else if (variant === 'viking') {
+          ultRadius = 3.3;
           const leading = this.enemies
             .filter((e) => !e.isFlying && e.hp > 0)
             .sort((a, b) => b.progress - a.progress)[0];
@@ -758,15 +867,15 @@ export class SimulationEngine {
           h.targetZ = tz;
           h.repositionTimer = 0;
           h.skillCooldown = heroCd(16);
-          h.skillActiveTimer = 6.0;
+          h.skillActiveTimer = 6.5;
           h.activeBuff = 'berserk';
-          const dmg = Math.round(85 * lvlMult * cardMult * this.talentMods.heroDamageMult * giantDmgMult);
+          const dmg = Math.round(90 * lvlMult * cardMult * this.talentMods.heroDamageMult * giantDmgMult);
           for (const e of [...this.enemies]) {
             if (e.hp <= 0) continue;
-            if (Math.hypot(e.x - tx, e.z - tz) <= 3.2) {
+            if (Math.hypot(e.x - tx, e.z - tz) <= ultRadius) {
               hits += 1;
-              e.stunTimer = Math.max(e.stunTimer, 1.0);
-              this.damageEnemy(e, dmg, 0.25, true, false, false, {
+              e.stunTimer = Math.max(e.stunTimer, 1.1);
+              this.damageEnemy(e, dmg, 0.28, true, false, false, {
                 dirX: e.x - tx,
                 dirZ: e.z - tz,
                 heavy: true,
@@ -774,26 +883,39 @@ export class SimulationEngine {
             }
           }
         } else {
+          ultRadius = 3.8;
           h.skillCooldown = heroCd(20);
           h.skillActiveTimer = 8.0;
           h.activeBuff = 'banner';
           h.hp = Math.min(h.maxHp, h.hp + Math.round(h.maxHp * 0.35));
-          const dmg = Math.round(50 * lvlMult * cardMult * this.talentMods.heroDamageMult * giantDmgMult);
+          const dmg = Math.round(58 * lvlMult * cardMult * this.talentMods.heroDamageMult * giantDmgMult);
           for (const e of [...this.enemies]) {
             if (e.hp <= 0) continue;
-            if (Math.hypot(e.x - h.x, e.z - h.z) <= 3.5) {
+            if (Math.hypot(e.x - h.x, e.z - h.z) <= ultRadius) {
               hits += 1;
-              e.stunTimer = Math.max(e.stunTimer, 1.2);
-              this.damageEnemy(e, dmg, 0.2, false, false, false, {
+              e.stunTimer = Math.max(e.stunTimer, 1.25);
+              this.damageEnemy(e, dmg, 0.25, false, false, false, {
                 dirX: e.x - h.x,
                 dirZ: e.z - h.z,
                 heavy: true,
               });
             }
           }
+          buffedSlotIds = this.collectHeroBuffedSlotIds(h.x, h.z, 4.5 + this.talentMods.heroAuraRadiusBonus);
         }
 
-        this.events.push({ type: 'HERO_ULTIMATE', variant, x: h.x, z: h.z, fromX, fromZ, hits });
+        this.events.push({
+          type: 'HERO_ULTIMATE',
+          variant,
+          heroId: this.heroId,
+          x: h.x,
+          z: h.z,
+          fromX,
+          fromZ,
+          hits,
+          radius: ultRadius,
+          buffedSlotIds,
+        });
         break;
       }
       case 'CAST_PINECONE_RAIN': {
@@ -801,13 +923,19 @@ export class SimulationEngine {
         this.pineconeRainCooldown = Number(
           Math.max(8, 24 * this.talentMods.spellCooldownMult - this.rainCooldownReduceSec).toFixed(2),
         );
-        const rainDmg = Math.round(45 * this.talentMods.rainDamageMult);
+        const radius = 3.1;
+        const rainDmg = Math.round(
+          (54 + (this.level.id - 1) * 4 + Math.max(0, this.currentWaveIndex) * 7) * this.talentMods.rainDamageMult,
+        );
         let hits = 0;
         for (const e of [...this.enemies]) {
           if (e.hp <= 0) continue;
           const dist = Math.hypot(e.x - cmd.x, e.z - cmd.z);
-          if (dist <= 3.0) {
+          if (dist <= radius) {
             hits += 1;
+            if (!e.isBoss) {
+              e.stunTimer = Math.max(e.stunTimer, 0.45);
+            }
             this.damageEnemy(e, rainDmg, 0.25, false, false, false, {
               dirX: e.x - cmd.x,
               dirZ: e.z - cmd.z,
@@ -815,7 +943,16 @@ export class SimulationEngine {
             });
           }
         }
-        this.events.push({ type: 'PINECONE_RAIN', x: cmd.x, z: cmd.z, hits });
+        this.resinPools.push({
+          x: cmd.x,
+          z: cmd.z,
+          radius: 2.1,
+          dps: Math.round(12 * Math.max(1, 1 + Math.max(0, this.currentWaveIndex) * 0.12) * this.talentMods.rainDamageMult),
+          slowPct: 0.2,
+          timer: 2.2 * this.talentMods.statusDurationMult,
+          kind: 'inferno',
+        });
+        this.events.push({ type: 'PINECONE_RAIN', x: cmd.x, z: cmd.z, hits, radius });
         break;
       }
       case 'CAST_ACORN_MAGNET': {
@@ -823,11 +960,19 @@ export class SimulationEngine {
         this.magnetCooldown = Number((30 * this.talentMods.spellCooldownMult).toFixed(2));
         const magnetDuration = 8 + this.talentMods.magnetBonusDurationSec;
         this.magnetActiveTimer = magnetDuration;
+        let pulledHits = 0;
+        for (const e of this.enemies) {
+          if (e.hp <= 0) continue;
+          pulledHits += 1;
+          e.slowPct = Math.max(e.slowPct, 0.25);
+          e.slowTimer = Math.max(e.slowTimer, 1.8 * this.talentMods.statusDurationMult);
+        }
         this.events.push({
           type: 'ACORN_MAGNET',
           x: this.hero.dead ? 0 : this.hero.x,
           z: this.hero.dead ? 0 : this.hero.z,
           duration: magnetDuration,
+          hits: pulledHits,
         });
         break;
       }
@@ -989,6 +1134,7 @@ export class SimulationEngine {
       slowPct: 0,
       slowTimer: 0,
       stunTimer: 0,
+      freezeVisualTimer: 0,
       hitFlashTimer: 0,
       armorHalved: false,
       phase2Triggered: false,
@@ -1175,8 +1321,33 @@ export class SimulationEngine {
         h.clawShockCooldown -= dt;
         if (h.clawShockCooldown <= 0) {
           h.clawShockCooldown = heroSpec.clawShockInterval;
-          h.alchemyAuraTimer = Math.max(h.alchemyAuraTimer, 5.0);
-          this.events.push({ type: 'HERO_CLAW_SHOCK', x: h.x, z: h.z, hits: 0, heroId: this.heroId });
+          h.alchemyAuraTimer = Math.max(h.alchemyAuraTimer, 5.5);
+          h.hp = Math.min(h.maxHp, h.hp + Math.round(h.maxHp * 0.08));
+          const mistDmg = Math.round(heroSpec.damage * 0.45 * lvlMult * cardMult * this.talentMods.heroDamageMult);
+          let mistHits = 0;
+          for (const e of [...this.enemies]) {
+            if (e.hp <= 0) continue;
+            if (Math.hypot(e.x - h.x, e.z - h.z) <= 2.6) {
+              mistHits += 1;
+              e.slowPct = Math.max(e.slowPct, 0.25);
+              e.slowTimer = Math.max(e.slowTimer, 1.8 * this.talentMods.statusDurationMult);
+              this.damageEnemy(e, mistDmg, 0.15, false, false, false, {
+                dirX: e.x - h.x,
+                dirZ: e.z - h.z,
+                heavy: false,
+              });
+            }
+          }
+          const buffedSlotIds = this.collectHeroBuffedSlotIds(h.x, h.z, 6.0 + this.talentMods.heroAuraRadiusBonus);
+          this.events.push({
+            type: 'HERO_CLAW_SHOCK',
+            x: h.x,
+            z: h.z,
+            hits: mistHits,
+            heroId: this.heroId,
+            radius: 6.0,
+            buffedSlotIds,
+          });
         }
       }
       const rangedTarget = this.enemies
@@ -1247,12 +1418,25 @@ export class SimulationEngine {
               });
             }
           }
-          this.events.push({ type: 'HERO_CLAW_SHOCK', x: h.x, z: h.z, hits, heroId: this.heroId });
+          this.events.push({
+            type: 'HERO_CLAW_SHOCK',
+            x: h.x,
+            z: h.z,
+            hits,
+            heroId: this.heroId,
+            radius: shockRadius,
+          });
         }
 
         h.attackCooldown -= dt;
         if (h.attackCooldown <= 0) {
-          h.attackCooldown = heroSpec.attackInterval * (h.activeBuff === 'berserk' ? 0.5 : 1.0);
+          const speedFactor =
+            h.activeBuff === 'berserk'
+              ? 0.5
+              : this.heroId === 'ay_kurdu' && h.skillActiveTimer > 0
+                ? 0.72
+                : 1.0;
+          h.attackCooldown = heroSpec.attackInterval * speedFactor;
           const target = nearbyGround[0];
           const dmg = Math.round(
             heroSpec.damage * lvlMult * cardMult * cls.damageMult * this.talentMods.heroDamageMult * giantDmgMult,
@@ -1263,6 +1447,19 @@ export class SimulationEngine {
             dirZ: target.z - h.z,
             heavy: true,
           });
+          if (h.activeBuff === 'berserk') {
+            const cleaveDmg = Math.max(1, Math.round(dmg * 0.45));
+            for (const other of [...this.enemies]) {
+              if (other.uid === target.uid || other.isFlying || other.hp <= 0) continue;
+              if (Math.hypot(other.x - target.x, other.z - target.z) <= 1.35) {
+                this.damageEnemy(other, cleaveDmg, 0.15, false, false, false, {
+                  dirX: other.x - h.x,
+                  dirZ: other.z - h.z,
+                  heavy: false,
+                });
+              }
+            }
+          }
           this.grantHeroXp(12);
           this.events.push({
             type: 'HERO_ATTACK',
@@ -1340,6 +1537,7 @@ export class SimulationEngine {
       }
 
       if (e.hitFlashTimer > 0) e.hitFlashTimer = Math.max(0, e.hitFlashTimer - dt);
+      if (e.freezeVisualTimer > 0) e.freezeVisualTimer = Math.max(0, e.freezeVisualTimer - dt);
       if (e.slowTimer > 0) {
         e.slowTimer = Math.max(0, e.slowTimer - dt);
         if (e.slowTimer === 0) e.slowPct = 0;
@@ -1644,12 +1842,15 @@ export class SimulationEngine {
           type: 'TOWER_FIRED',
           slotId: tower.slotId,
           towerId: tower.towerId,
+          branchId: tower.branchId,
           fromX: tower.x,
           fromZ: tower.z,
           toX: target.x,
           toZ: target.z,
           targetIds: hitIds,
           isChain: true,
+          isCrit,
+          isFreeze: isFourthShot,
         });
       } else if (stats.pierceLine) {
         const dx = target.x - tower.x;
@@ -1679,12 +1880,15 @@ export class SimulationEngine {
           type: 'TOWER_FIRED',
           slotId: tower.slotId,
           towerId: tower.towerId,
+          branchId: tower.branchId,
           fromX: tower.x,
           fromZ: tower.z,
           toX: endX,
           toZ: endZ,
           targetIds: hitIds,
           isLine: true,
+          isCrit,
+          isFreeze: isFourthShot,
         });
       } else {
         this.projectiles.push({
@@ -1706,12 +1910,15 @@ export class SimulationEngine {
           type: 'TOWER_FIRED',
           slotId: tower.slotId,
           towerId: tower.towerId,
+          branchId: tower.branchId,
           fromX: tower.x,
           fromZ: tower.z,
           toX: target.x,
           toZ: target.z,
           targetIds: [target.uid],
           isAoe: Boolean(stats.aoeRadius),
+          isCrit,
+          isFreeze: isFourthShot,
         });
       }
     }
@@ -1745,7 +1952,7 @@ export class SimulationEngine {
         const heavyHit = Boolean(
           p.stats.aoeRadius || p.towerId === 'hedgehog' || p.towerId === 'tortoise' || p.isCrit,
         );
-        this.events.push({
+        const impactEv: Extract<SimEvent, { type: 'PROJECTILE_IMPACT' }> = {
           type: 'PROJECTILE_IMPACT',
           towerId: p.towerId,
           branchId: p.branchId,
@@ -1756,8 +1963,11 @@ export class SimulationEngine {
           aoeRadius: p.stats.aoeRadius ?? 0,
           isCrit: p.isCrit,
           isFreeze,
+          isStun: false,
+          isArmorBreak: false,
           splash: isSplash,
-        });
+        };
+        this.events.push(impactEv);
 
         if (p.stats.aoeRadius) {
           for (const e of this.enemies) {
@@ -1765,12 +1975,14 @@ export class SimulationEngine {
               const rx = e.x - impactX;
               const rz = e.z - impactZ;
               const rlen = Math.hypot(rx, rz);
-              this.applyTowerHitEffects(e, p.damage, p.stats, p.isCrit, p.isFourthShot, {
+              const eff = this.applyTowerHitEffects(e, p.damage, p.stats, p.isCrit, p.isFourthShot, {
                 dirX: rlen > 0.05 ? rx : ux,
                 dirZ: rlen > 0.05 ? rz : uz,
                 heavy: true,
                 towerId: p.towerId,
               });
+              if (eff.stunned) impactEv.isStun = true;
+              if (eff.armorBroken) impactEv.isArmorBreak = true;
             }
           }
           if (p.stats.resinDuration && p.stats.resinDps) {
@@ -1791,12 +2003,14 @@ export class SimulationEngine {
             });
           }
         } else if (target) {
-          this.applyTowerHitEffects(target, p.damage, p.stats, p.isCrit, p.isFourthShot, {
+          const eff = this.applyTowerHitEffects(target, p.damage, p.stats, p.isCrit, p.isFourthShot, {
             dirX: ux,
             dirZ: uz,
             heavy: heavyHit,
             towerId: p.towerId,
           });
+          if (eff.stunned) impactEv.isStun = true;
+          if (eff.armorBroken) impactEv.isArmorBreak = true;
           if (isSplash) {
             const splashDmg = Math.max(1, Math.round(p.damage * 0.35));
             for (const e of [...this.enemies]) {
@@ -1844,7 +2058,7 @@ export class SimulationEngine {
     isCrit: boolean,
     isFourthShot: boolean,
     hitMeta?: { dirX?: number; dirZ?: number; heavy?: boolean; towerId?: TowerId },
-  ): void {
+  ): { armorBroken: boolean; stunned: boolean; froze: boolean } {
     let dmg = rawDamage;
     if (enemy.isBoss && stats.bossBonusPct) {
       dmg *= 1 + stats.bossBonusPct;
@@ -1868,11 +2082,16 @@ export class SimulationEngine {
       enemy.slowPct = Math.max(enemy.slowPct, stats.slowPct);
       enemy.slowTimer = Math.max(enemy.slowTimer, stats.slowDuration * this.talentMods.statusDurationMult);
     }
+    let froze = false;
     if (isFourthShot && stats.freezeDuration) {
       enemy.stunTimer = Math.max(enemy.stunTimer, stats.freezeDuration);
+      enemy.freezeVisualTimer = Math.max(enemy.freezeVisualTimer, stats.freezeDuration);
+      froze = true;
     }
+    let stunned = false;
     if (stats.stunChance && stats.stunDuration && this.rng.next() < stats.stunChance) {
       enemy.stunTimer = Math.max(enemy.stunTimer, stats.stunDuration);
+      stunned = true;
     }
     let pierce = stats.armorPiercePct ?? 0;
     if (this.relics.includes('frost_thorns')) {
@@ -1882,6 +2101,7 @@ export class SimulationEngine {
     }
 
     this.damageEnemy(enemy, dmg, pierce, isCrit, false, armorBroken, hitMeta);
+    return { armorBroken, stunned, froze };
   }
 
   private damageEnemy(
