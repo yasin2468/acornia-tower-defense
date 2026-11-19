@@ -13,6 +13,21 @@ import { CommandBus, type GameCommand, type GameCommandInput } from './CommandBu
 import { SeededRNG } from './SeededRNG.ts';
 
 export const FIXED_DT = 1 / 60;
+export const STAR_3_HP_THRESHOLD = 135;
+export const STAR_2_HP_THRESHOLD = 80;
+export const VICTORY_OAK_REWARD = 120;
+export const VICTORY_GEM_REWARD = 15;
+
+export function computeBattleStars(baseHp: number, ironMode: boolean): 1 | 2 | 3 {
+  if (ironMode) return 3;
+  if (baseHp >= STAR_3_HP_THRESHOLD) return 3;
+  if (baseHp >= STAR_2_HP_THRESHOLD) return 2;
+  return 1;
+}
+
+export function computeSellRefund(totalSpent: number, refundRate = SELL_REFUND_RATE): number {
+  return Math.floor(totalSpent * refundRate);
+}
 
 export type SimEvent =
   | { type: 'TOWER_BUILT'; slotId: string; towerId: TowerId; x: number; z: number }
@@ -382,7 +397,7 @@ export class SimulationEngine {
         const slot = this.slots.get(cmd.slotId);
         const tower = slot?.tower;
         if (!slot || !tower) return;
-        const refund = Math.floor(tower.totalSpent * SELL_REFUND_RATE);
+        const refund = computeSellRefund(tower.totalSpent);
         this.gold += refund;
         slot.tower = null;
         this.events.push({ type: 'TOWER_SOLD', slotId: slot.id, refund });
@@ -1296,13 +1311,7 @@ export class SimulationEngine {
 
     if (allWavesSpawned) {
       this.status = 'won';
-      const stars = this.ironMode
-        ? 3
-        : this.baseHp >= 135
-          ? 3
-          : this.baseHp >= 80
-            ? 2
-            : 1;
+      const stars = computeBattleStars(this.baseHp, this.ironMode);
       this.events.push({ type: 'GAME_WON', stars });
     }
   }

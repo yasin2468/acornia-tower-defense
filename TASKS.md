@@ -21,12 +21,17 @@ aynı anda değiştirmez. Durumlar: `planlandi` → `devam` → `dogrulaniyor` �
 | P4 | Dalga 1 hazırlık fazı (`waitForFirstWave`), sonraki dalga önizleme şeridi (`#bw-wave-preview`), vurgulu `Savaşı Başlat` / erken bonus & üst `#bw-boss-bar` | Carbon | dogrulandi | `tests/gameplay.test.ts` (2/2 hazırlık & erken bonus testi, toplam 70/70 pass) + `tsc/build` ✓ + canlı QA `0` hata ✓ |
 | G1 | Tekli UV atlas birleştirme (`scripts/blender_optimize_env.py`), `InstancedMesh` yığınlama ve ağaç `THREE.LOD` optimizasyonu | Carbon | dogrulandi | `83c2dc4` · `tests/drawcall.test.ts` (7/7 pass, GLB 1-mesh/1-mat doğrulaması + LOD + 72/72 tüm testler + build ✓) |
 | O1 | Gerçek RFC 6455 WebSocket rölesi (`wsRelay.ts` + Vite `/ws`), `NetworkService`, 2P Co-op & 1v1 PvP + `SmartBotDirector` yedeği | Carbon | dogrulandi | `tests/multiplayer.test.ts` (4/4 gerçek soket testi, toplam 76/76 pass) + `tsc/build` ✓ + tarayıcıda canlı oda + PvP `#bw-multi-bar` 0 hata ✓ |
+| T-A | Kopya yıldız/ödül sabitlerinin tekilleştirilmesi, Three.js `manualChunks` paket bölme ve seviye-öncelikli lazy GLB yükleme | Carbon | dogrulandi | `tests/drawcall.test.ts` (8/8 pass, toplam 77/77 pass) + `tsc` OK + `vite build` 0 chunk uyarısı ✓ |
 
 ## Kuyruk (Carbon doldurur)
 
 | # | İş | Not |
 |---|---|---|
-| — | Kuyruk boş — `T1..O1` tüm görevler doğrulandı | tamamlandı |
+| F3-1 | 4 dallı Taktik Yetenek Ağacı (`SaveManager` v4 + `SimulationEngine` + `MetaView`) | devam |
+| F3-2 | 2 yeni kahraman: Kızıl Kuyruk (`hero_fox.glb`) ve Kaya Diş (`hero_boar.glb`) | sirada |
+| F3-3 | Orman Günlüğü (`360°` 3D vitrin + Zümrüt ödülü) & Akustik Biyom Müzikleri (`F3-6`) | sirada |
+| F3-4 | Kayıp Orman Seferi (5 aşamalı Roguelike oyun sonu + 6 Orman Tılsımı) | sirada |
+| F3-5 | 14 Günlük PvP Kupa Ligi, Harita Pin/Emoji, 30 Kademeli Sezonluk Orman Bileti & Haptics/SDK kancaları | sirada |
 
 ## Devir notu
 GLM'e iş verirken satır numarasını yaz: `TASKS T2` + tek cümle hedef + kabul kriteri.

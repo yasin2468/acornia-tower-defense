@@ -1,11 +1,22 @@
 import './styles.css';
 import { JuiceController } from './core/JuiceController.ts';
-import { FIXED_DT, SimulationEngine, type SimEvent } from './core/SimulationEngine.ts';
+import {
+  FIXED_DT,
+  SimulationEngine,
+  VICTORY_GEM_REWARD,
+  VICTORY_OAK_REWARD,
+  type SimEvent,
+} from './core/SimulationEngine.ts';
 import { ENEMIES } from './data/enemies.ts';
 import { LEVELS } from './data/levels.ts';
 import { t, tParams } from './i18n/locales.ts';
 import { SoundEngine } from './audio/SoundEngine.ts';
-import { preloadAllModels } from './rendering/AssetLoader.ts';
+import {
+  ensureModelsLoaded,
+  getLevelModelDependencies,
+  preloadBootModels,
+  warmRemainingModelsInBackground,
+} from './rendering/AssetLoader.ts';
 import { SceneManager } from './rendering/SceneManager.ts';
 import {
   AdService,
@@ -62,7 +73,7 @@ let lastRenderUiMs = 0;
 let lastStatePingMs = 0;
 
 const metaView = new MetaView(saveManager, adService, billingService, network, {
-  onStartLevel: (levelId, ironMode) => startLevel(levelId, ironMode),
+  onStartLevel: (levelId, ironMode) => void startLevel(levelId, ironMode),
   onRefresh: () => renderMeta(),
 });
 
@@ -72,7 +83,7 @@ const battleView = new BattleView(
   billingService,
   remoteConfig,
   {
-    onRestart: () => startLevel(currentLevelId, currentIronMode),
+    onRestart: () => void startLevel(currentLevelId, currentIronMode),
     onExitToMap: () => exitToMap(),
     onSendPvpMerc: (enemyId, cost) => {
       if (!activeSim || activeSim.status !== 'playing' || activeSim.gold < cost) return;
@@ -89,7 +100,7 @@ network.onStateChange = () => {
 };
 
 network.onMatchStart = (info) => {
-  startLevel(info.levelId, false, info.seed, true);
+  void startLevel(info.levelId, false, info.seed, true);
 };
 
 network.onRemoteCommand = (cmd, playerId, tick) => {
@@ -136,7 +147,12 @@ function renderMeta(): void {
   metaView.render(uiRoot);
 }
 
-function startLevel(levelId: number, ironMode: boolean, customSeed?: number, isMultiMatch = false): void {
+async function startLevel(
+  levelId: number,
+  ironMode: boolean,
+  customSeed?: number,
+  isMultiMatch = false,
+): Promise<void> {
   if (!isMultiMatch && network.state !== 'idle') {
     network.leaveRoom();
   }
@@ -149,6 +165,13 @@ function startLevel(levelId: number, ironMode: boolean, customSeed?: number, isM
   juice.reset();
 
   const save = saveManager.get();
+  const deps = getLevelModelDependencies(
+    spec,
+    ['hero_bear', 'hero_bear_viking', 'hero_bear_royal'],
+    save.equippedHat,
+  );
+  await ensureModelsLoaded(deps);
+
   activeSim = new SimulationEngine(spec, {
     seed: customSeed,
     ironMode,
@@ -243,8 +266,8 @@ function processBattleEvents(events: SimEvent[]): void {
       saveManager.update((d) => {
         d.levelStars[currentLevelId] = Math.max(d.levelStars[currentLevelId] ?? 0, ev.stars);
         if (currentIronMode) d.ironCleared[currentLevelId] = true;
-        d.oakCoins += 120;
-        d.emeraldGems += 15;
+        d.oakCoins += VICTORY_OAK_REWARD;
+        d.emeraldGems += VICTORY_GEM_REWARD;
       });
       analytics.track('level_win', { levelId: currentLevelId, stars: ev.stars });
     } else if (ev.type === 'GAME_LOST') {
@@ -393,17 +416,18 @@ function renderBootError(err: unknown): void {
 async function boot(): Promise<void> {
   try {
     renderLoadingSplash(5);
-    await preloadAllModels((loaded, total) => {
+    await preloadBootModels((loaded, total) => {
       const pct = Math.max(8, Math.round((loaded / total) * 100));
       const fill = uiRoot.querySelector<HTMLElement>('.loading-fill');
       const sub = uiRoot.querySelector<HTMLElement>('.loading-sub');
       if (fill) fill.style.width = `${pct}%`;
       if (sub) sub.textContent = `${t(saveManager.get().settings.locale, 'loading.models')} ${pct}%`;
     });
+    warmRemainingModelsInBackground();
 
     const roomParam = urlParams.get('room');
     if (isPromoMode) {
-      startLevel(1, false);
+      await startLevel(1, false);
     } else if (roomParam && /^\d{4}$/.test(roomParam)) {
       metaView.activeTab = 'multi';
       metaView.roomCode = roomParam;

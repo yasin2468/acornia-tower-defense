@@ -1,5 +1,11 @@
 import { easeOutCubic, GhostHpTracker, popScale } from '../core/JuiceController.ts';
-import type { SimulationEngine } from '../core/SimulationEngine.ts';
+import {
+  computeBattleStars,
+  computeSellRefund,
+  VICTORY_GEM_REWARD,
+  VICTORY_OAK_REWARD,
+  type SimulationEngine,
+} from '../core/SimulationEngine.ts';
 import { ENEMIES, resolveHeroVisualVariant, type EnemyId } from '../data/enemies.ts';
 import { TOWER_LIST, TOWERS, type TargetingPriority, type TowerId } from '../data/towers.ts';
 import { t, tParams, type Locale } from '../i18n/locales.ts';
@@ -707,7 +713,7 @@ export class BattleView {
     const tw = slot.tower;
     const spec = TOWERS[tw.towerId];
     const curStats = sim.getTowerStats(tw);
-    const refund = Math.floor(tw.totalSpent * 0.6);
+    const refund = computeSellRefund(tw.totalSpent);
     const starsTxt = `${'★'.repeat(tw.tier)}${'☆'.repeat(3 - tw.tier)}`;
 
     let statLine = `${t(loc, 'hud.damage')} ${curStats.damage} · ${t(loc, 'hud.rate')} ${curStats.fireRate} · ${t(loc, 'hud.range')} ${curStats.range}`;
@@ -871,12 +877,12 @@ export class BattleView {
     }
 
     if (sim.status === 'won') {
-      const stars = sim.ironMode ? 3 : sim.baseHp >= 135 ? 3 : sim.baseHp >= 80 ? 2 : 1;
+      const stars = computeBattleStars(sim.baseHp, sim.ironMode);
       return `
         <div class="modal-backdrop">
           <div class="modal-card">
             <div style="font-size:20px; font-weight:800; color:var(--accent-gold);">${t(loc, 'hud.victory')} · ${'★'.repeat(stars)}</div>
-            <div style="font-size:13px; color:var(--text-muted);">+120 ${t(loc, 'cur.oak')} · +15 ${t(loc, 'cur.gem')}</div>
+            <div style="font-size:13px; color:var(--text-muted);">+${VICTORY_OAK_REWARD} ${t(loc, 'cur.oak')} · +${VICTORY_GEM_REWARD} ${t(loc, 'cur.gem')}</div>
             <button class="btn btn-gold" id="btn-double-reward">${t(loc, 'hud.doubleReward')}</button>
             <button class="btn btn-primary" id="btn-exit-map">${t(loc, 'hud.exitMap')}</button>
           </div>
@@ -944,8 +950,8 @@ export class BattleView {
       doubleBtn.onclick = async () => {
         await this.adService.showRewarded('victory_2x');
         this.saveManager.update((d) => {
-          d.oakCoins += 120;
-          d.emeraldGems += 15;
+          d.oakCoins += VICTORY_OAK_REWARD;
+          d.emeraldGems += VICTORY_GEM_REWARD;
         });
         this.callbacks.onExitToMap();
       };

@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import * as THREE from 'three';
+import { computeBattleStars, computeSellRefund, STAR_2_HP_THRESHOLD, STAR_3_HP_THRESHOLD } from '../src/core/SimulationEngine.ts';
+import { LEVELS } from '../src/data/levels.ts';
+import { BOOT_ESSENTIAL_MODELS, getLevelModelDependencies, MODEL_NAMES } from '../src/rendering/AssetLoader.ts';
 import { countDrawCalls } from '../src/rendering/DrawCallCounter.ts';
 import { createPropLOD } from '../src/rendering/ModelFactory.ts';
 
@@ -131,5 +134,24 @@ describe('DrawCallCounter (C1, G1 olcum ayagi)', () => {
     lod.update(cam);
     assert.equal(lod.getCurrentLevel(), 1);
     assert.equal(countDrawCalls(lod).estimatedDrawCalls, 1);
+  });
+
+  it('T-A: tek kaynak yıldız/iade yardımcıları ve seviye-öncelikli lazy GLB bağımlılıkları tutarlıdır', () => {
+    assert.equal(computeBattleStars(STAR_3_HP_THRESHOLD, false), 3);
+    assert.equal(computeBattleStars(STAR_2_HP_THRESHOLD, false), 2);
+    assert.equal(computeBattleStars(STAR_2_HP_THRESHOLD - 1, false), 1);
+    assert.equal(computeBattleStars(1, true), 3);
+    assert.equal(computeSellRefund(125), 75);
+
+    assert.ok(BOOT_ESSENTIAL_MODELS.length < MODEL_NAMES.length, 'acilis seti tum 43 modelden kucuk olmali');
+    const l1Deps = getLevelModelDependencies(LEVELS[0], ['hero_bear'], 'none');
+    assert.ok(l1Deps.includes('env_stump'));
+    assert.ok(!l1Deps.includes('env_crystal'), 'Lv1 orman bolumunde kristal indirilmemeli');
+    assert.ok(!l1Deps.includes('enemy_cryo_colossus'), 'Lv1 bolumunde buz boss indirilmemeli');
+
+    const l12Deps = getLevelModelDependencies(LEVELS[11], ['hero_bear'], 'wizard');
+    assert.ok(l12Deps.includes('hat_wizard'));
+    assert.ok(l12Deps.includes('enemy_cryo_colossus'));
+    assert.ok(l12Deps.includes('enemy_crystal_golem'), 'Faz 2 cagrilan crystal_golem otomatik dahil olmali');
   });
 });
