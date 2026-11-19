@@ -113,17 +113,18 @@ describe('Palamut Kalesi deterministic simulation & economy', () => {
     assert.equal(sim.slots.get('slot_1')!.tower!.smokedTimer, 0);
   });
 
-  it('validates 12 campaign levels across 4 biomes with clean road/slot clearances', () => {
-    assert.equal(LEVELS.length, 12);
+  it('validates 16 campaign levels across 5 biomes with clean road/slot clearances', () => {
+    assert.equal(LEVELS.length, 16);
     for (const biome of ['forest', 'canyon', 'cavern', 'snow'] as const) {
       assert.equal(LEVELS.filter((l) => l.biome === biome).length, 3, `biome ${biome}`);
     }
+    assert.equal(LEVELS.filter((l) => l.biome === 'foundry').length, 4, 'biome foundry');
 
     assert.equal(isLevelUnlocked(1, {}), true);
     assert.equal(isLevelUnlocked(4, {}), true);
     assert.equal(isLevelUnlocked(5, {}), false);
     assert.equal(isLevelUnlocked(5, { 4: 2 }), true);
-    assert.equal(isLevelUnlocked(12, { 11: 1 }), true);
+    assert.equal(isLevelUnlocked(16, { 15: 1 }), true);
 
     const distSeg = (px: number, pz: number, ax: number, az: number, bx: number, bz: number) => {
       const vx = bx - ax;
@@ -134,20 +135,44 @@ describe('Palamut Kalesi deterministic simulation & economy', () => {
     };
 
     for (const lvl of LEVELS.slice(3)) {
+      const lanes = [lvl.path, ...(lvl.secondaryPath ? [lvl.secondaryPath] : [])];
       for (const s of lvl.slots) {
         assert.ok(Math.abs(s.x) <= 4.9 && s.z >= -8.5 && s.z <= 9.0, `Lv${lvl.id} ${s.id} out of bounds`);
-        for (let i = 0; i < lvl.path.length - 1; i++) {
-          const a = lvl.path[i];
-          const b = lvl.path[i + 1];
-          const d = distSeg(s.x, s.z, a.x, a.z, b.x, b.z);
-          assert.ok(d >= 1.52, `Lv${lvl.id} ${s.id} road clearance ${d.toFixed(2)}m < 1.52m`);
+        for (const lane of lanes) {
+          for (let i = 0; i < lane.length - 1; i++) {
+            const a = lane[i];
+            const b = lane[i + 1];
+            const d = distSeg(s.x, s.z, a.x, a.z, b.x, b.z);
+            assert.ok(d >= 1.52, `Lv${lvl.id} ${s.id} road clearance ${d.toFixed(2)}m < 1.52m`);
+          }
         }
       }
     }
   });
 
-  it('executes all 5 new monster mechanics deterministically (dash, split, heal aura, regen, cryo boss phase 2)', () => {
-    assert.equal(ENEMY_LIST.length, 10);
+  it('executes all 14 monster specs deterministically plus hero slot-clear movement & magnet event', () => {
+    assert.equal(ENEMY_LIST.length, 14);
+
+    // Hero MOVE_HERO pushes target out of slot radius, sets repositionTimer, and stays clear of slots
+    const simHero = new SimulationEngine(LEVELS[0], { seed: 599 });
+    const slot1 = LEVELS[0].slots[0];
+    simHero.dispatch({ type: 'MOVE_HERO', x: slot1.x, z: slot1.z }, 'p1', 0);
+    simHero.step(FIXED_DT);
+    assert.ok(simHero.hero.repositionTimer > 0);
+    assert.ok(Math.hypot(simHero.hero.targetX - slot1.x, simHero.hero.targetZ - slot1.z) >= 0.85);
+    for (let i = 0; i < 45; i++) {
+      simHero.step(FIXED_DT);
+      for (const s of simHero.slots.values()) {
+        assert.ok(Math.hypot(simHero.hero.x - s.x, simHero.hero.z - s.z) >= 0.76);
+      }
+    }
+
+    // CAST_ACORN_MAGNET emits ACORN_MAGNET event for 3D VFX/SFX
+    simHero.drainEvents();
+    simHero.dispatch({ type: 'CAST_ACORN_MAGNET' }, 'p1', 0);
+    simHero.step(FIXED_DT);
+    const magnetEv = simHero.drainEvents().find((e) => e.type === 'ACORN_MAGNET');
+    assert.ok(magnetEv, 'ACORN_MAGNET event emitted');
 
     // 1. Turbo Hopper dashes at 1.45x base speed during dash window
     const simDash = new SimulationEngine(LEVELS[3], { seed: 500 });

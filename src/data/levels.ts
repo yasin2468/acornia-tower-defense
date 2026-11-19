@@ -32,7 +32,7 @@ export interface WaveSpec {
 
 export interface LevelSpec {
   id: number;
-  biome: 'forest' | 'canyon' | 'cavern' | 'snow';
+  biome: 'forest' | 'canyon' | 'cavern' | 'snow' | 'foundry';
   nameKey: string;
   unlocked: boolean;
   isBossStage?: boolean;
@@ -198,14 +198,14 @@ export const LEVELS: LevelSpec[] = [
       {
         waveNumber: 1,
         clearBonus: 19,
-        groups: [{ enemyId: 'scout_bot', count: 14, spacing: 0.9, hpOverride: 62, speedOverride: 2.35, bountyOverride: 5 }],
+        groups: [{ enemyId: 'scout_bot', count: 18, spacing: 0.72, hpOverride: 48, speedOverride: 2.35, bountyOverride: 4 }],
       },
       {
         waveNumber: 2,
         clearBonus: 19,
         groups: [
-          { enemyId: 'swarm_saw', count: 19, spacing: 0.34, hpOverride: 32, speedOverride: 3.15, bountyOverride: 3 },
-          { enemyId: 'scout_bot', count: 9, spacing: 0.85, hpOverride: 45, speedOverride: 2.4, bountyOverride: 5 },
+          { enemyId: 'swarm_saw', count: 24, spacing: 0.28, hpOverride: 25, speedOverride: 3.15, bountyOverride: 3 },
+          { enemyId: 'scout_bot', count: 10, spacing: 0.75, hpOverride: 41, speedOverride: 2.4, bountyOverride: 5 },
         ],
       },
       {
@@ -219,8 +219,8 @@ export const LEVELS: LevelSpec[] = [
         waveNumber: 4,
         clearBonus: 24,
         groups: [
-          { enemyId: 'hover_drone', count: 13, spacing: 0.65, hpOverride: 73, speedOverride: 2.35, bountyOverride: 6 },
-          { enemyId: 'scout_bot', count: 9, spacing: 0.75, hpOverride: 49, speedOverride: 2.4, bountyOverride: 5 },
+          { enemyId: 'hover_drone', count: 15, spacing: 0.56, hpOverride: 63, speedOverride: 2.35, bountyOverride: 6 },
+          { enemyId: 'scout_bot', count: 11, spacing: 0.65, hpOverride: 40, speedOverride: 2.4, bountyOverride: 5 },
         ],
       },
       {
@@ -228,14 +228,14 @@ export const LEVELS: LevelSpec[] = [
         clearBonus: 28,
         groups: [
           { enemyId: 'shield_loader', count: 6, spacing: 1.25, hpOverride: 178, speedOverride: 1.4, bountyOverride: 12 },
-          { enemyId: 'swarm_saw', count: 17, spacing: 0.28, hpOverride: 33, speedOverride: 3.2, bountyOverride: 3 },
+          { enemyId: 'swarm_saw', count: 22, spacing: 0.24, hpOverride: 26, speedOverride: 3.2, bountyOverride: 3 },
         ],
       },
       {
         waveNumber: 6,
         clearBonus: 30,
         groups: [
-          { enemyId: 'hover_drone', count: 12, spacing: 0.55, hpOverride: 75, speedOverride: 2.4, bountyOverride: 7 },
+          { enemyId: 'hover_drone', count: 14, spacing: 0.48, hpOverride: 64, speedOverride: 2.4, bountyOverride: 6 },
           { enemyId: 'shield_loader', count: 6, spacing: 1.1, hpOverride: 166, speedOverride: 1.42, bountyOverride: 12 },
         ],
       },
@@ -243,7 +243,7 @@ export const LEVELS: LevelSpec[] = [
         waveNumber: 7,
         clearBonus: 35,
         groups: [
-          { enemyId: 'swarm_saw', count: 25, spacing: 0.22, hpOverride: 37, speedOverride: 3.25, bountyOverride: 3 },
+          { enemyId: 'swarm_saw', count: 32, spacing: 0.19, hpOverride: 29, speedOverride: 3.25, bountyOverride: 3 },
           { enemyId: 'shield_loader', count: 8, spacing: 0.9, hpOverride: 162, speedOverride: 1.45, bountyOverride: 12 },
         ],
       },
@@ -302,14 +302,14 @@ export const LEVELS: LevelSpec[] = [
       {
         waveNumber: 1,
         clearBonus: 22,
-        groups: [{ enemyId: 'scout_bot', count: 16, spacing: 0.85, hpOverride: 64, speedOverride: 2.35, bountyOverride: 5 }],
+        groups: [{ enemyId: 'scout_bot', count: 20, spacing: 0.7, hpOverride: 51, speedOverride: 2.35, bountyOverride: 5 }],
       },
       {
         waveNumber: 2,
         clearBonus: 25,
         groups: [
-          { enemyId: 'swarm_saw', count: 21, spacing: 0.3, hpOverride: 32, speedOverride: 3.2, bountyOverride: 3 },
-          { enemyId: 'scout_bot', count: 9, spacing: 0.8, hpOverride: 58, speedOverride: 2.4, bountyOverride: 5 },
+          { enemyId: 'swarm_saw', count: 27, spacing: 0.24, hpOverride: 25, speedOverride: 3.2, bountyOverride: 3 },
+          { enemyId: 'scout_bot', count: 11, spacing: 0.68, hpOverride: 47, speedOverride: 2.4, bountyOverride: 5 },
         ],
       },
       {
@@ -323,8 +323,8 @@ export const LEVELS: LevelSpec[] = [
         waveNumber: 4,
         clearBonus: 30,
         groups: [
-          { enemyId: 'hover_drone', count: 15, spacing: 0.6, hpOverride: 77, speedOverride: 2.35, bountyOverride: 6 },
-          { enemyId: 'swarm_saw', count: 15, spacing: 0.3, hpOverride: 32, speedOverride: 3.2, bountyOverride: 3 },
+          { enemyId: 'hover_drone', count: 18, spacing: 0.5, hpOverride: 64, speedOverride: 2.35, bountyOverride: 6 },
+          { enemyId: 'swarm_saw', count: 20, spacing: 0.24, hpOverride: 24, speedOverride: 3.2, bountyOverride: 3 },
         ],
       },
       {
@@ -332,14 +332,14 @@ export const LEVELS: LevelSpec[] = [
         clearBonus: 32,
         groups: [
           { enemyId: 'shield_loader', count: 6, spacing: 1.25, hpOverride: 181, speedOverride: 1.4, bountyOverride: 12 },
-          { enemyId: 'hover_drone', count: 10, spacing: 0.65, hpOverride: 83, speedOverride: 2.4, bountyOverride: 7 },
+          { enemyId: 'hover_drone', count: 12, spacing: 0.56, hpOverride: 69, speedOverride: 2.4, bountyOverride: 7 },
         ],
       },
       {
         waveNumber: 6,
         clearBonus: 37,
         groups: [
-          { enemyId: 'swarm_saw', count: 27, spacing: 0.24, hpOverride: 37, speedOverride: 3.25, bountyOverride: 3 },
+          { enemyId: 'swarm_saw', count: 34, spacing: 0.2, hpOverride: 29, speedOverride: 3.25, bountyOverride: 3 },
           { enemyId: 'shield_loader', count: 7, spacing: 1.05, hpOverride: 178, speedOverride: 1.45, bountyOverride: 12 },
         ],
       },
@@ -347,7 +347,7 @@ export const LEVELS: LevelSpec[] = [
         waveNumber: 7,
         clearBonus: 40,
         groups: [
-          { enemyId: 'hover_drone', count: 15, spacing: 0.5, hpOverride: 85, speedOverride: 2.42, bountyOverride: 7 },
+          { enemyId: 'hover_drone', count: 18, spacing: 0.44, hpOverride: 71, speedOverride: 2.42, bountyOverride: 6 },
           { enemyId: 'shield_loader', count: 8, spacing: 0.9, hpOverride: 169, speedOverride: 1.45, bountyOverride: 12 },
         ],
       },
@@ -355,7 +355,7 @@ export const LEVELS: LevelSpec[] = [
         waveNumber: 8,
         clearBonus: 47,
         groups: [
-          { enemyId: 'swarm_saw', count: 29, spacing: 0.2, hpOverride: 42, speedOverride: 3.3, bountyOverride: 3 },
+          { enemyId: 'swarm_saw', count: 36, spacing: 0.17, hpOverride: 34, speedOverride: 3.3, bountyOverride: 3 },
           { enemyId: 'shield_loader', count: 10, spacing: 0.85, hpOverride: 186, speedOverride: 1.45, bountyOverride: 12 },
         ],
       },
@@ -936,8 +936,8 @@ export const LEVELS: LevelSpec[] = [
       { id: 'barrel_2', x: 1.9, z: -2.4 },
     ],
     waves: [
-      { waveNumber: 1, clearBonus: 42, groups: [{ enemyId: 'scout_bot', count: 16, spacing: 0.62, hpOverride: 69, bountyOverride: 6 }, { enemyId: 'turbo_hopper', count: 16, spacing: 0.56, hpOverride: 97, bountyOverride: 8 }] },
-      { waveNumber: 2, clearBonus: 47, groups: [{ enemyId: 'chomp_brute', count: 8, spacing: 1.05, hpOverride: 224, bountyOverride: 16 }, { enemyId: 'swarm_saw', count: 27, spacing: 0.2, hpOverride: 46, bountyOverride: 4 }] },
+      { waveNumber: 1, clearBonus: 42, groups: [{ enemyId: 'scout_bot', count: 22, spacing: 0.48, hpOverride: 50, bountyOverride: 5 }, { enemyId: 'turbo_hopper', count: 20, spacing: 0.46, hpOverride: 78, bountyOverride: 7 }] },
+      { waveNumber: 2, clearBonus: 47, groups: [{ enemyId: 'chomp_brute', count: 8, spacing: 1.05, hpOverride: 224, bountyOverride: 16 }, { enemyId: 'swarm_saw', count: 35, spacing: 0.16, hpOverride: 35, bountyOverride: 3 }] },
       { waveNumber: 3, clearBonus: 53, groups: [{ enemyId: 'hover_drone', count: 19, spacing: 0.44, hpOverride: 120, bountyOverride: 9 }, { enemyId: 'repair_drone', count: 7, spacing: 0.65, hpOverride: 172, bountyOverride: 10 }] },
       { waveNumber: 4, clearBonus: 61, groups: [{ enemyId: 'crystal_golem', count: 5, spacing: 1.35, hpOverride: 385, bountyOverride: 22 }, { enemyId: 'shield_loader', count: 9, spacing: 0.88, hpOverride: 230, bountyOverride: 14 }] },
       { waveNumber: 5, clearBonus: 68, groups: [{ enemyId: 'turbo_hopper', count: 29, spacing: 0.32, hpOverride: 106, bountyOverride: 8 }, { enemyId: 'repair_drone', count: 10, spacing: 0.58, hpOverride: 150, bountyOverride: 10 }] },
@@ -950,6 +950,249 @@ export const LEVELS: LevelSpec[] = [
       { waveNumber: 12, clearBonus: 263, announceEnemy: 'cryo_colossus', groups: [{ enemyId: 'crystal_golem', count: 10, spacing: 1.05, hpOverride: 594, bountyOverride: 22 }, { enemyId: 'repair_drone', count: 17, spacing: 0.52, hpOverride: 148, bountyOverride: 10 }, { enemyId: 'cryo_colossus', count: 1, spacing: 1.5, hpOverride: 3400, bountyOverride: 140 }] },
     ],
   },
+  // --- CHAPTER V: KOR DÖKÜMHANESİ ---
+  {
+    id: 13,
+    biome: 'foundry',
+    nameKey: 'level.13.name',
+    unlocked: false,
+    mapPin: { xPct: 71, yPct: 17.5 },
+    startGold: 540,
+    baseHp: 150,
+    killZoneMeters: 18.5,
+    path: [
+      { x: -2.9, z: 9.8 },
+      { x: -2.9, z: 6.2 },
+      { x: 2.9, z: 4.8 },
+      { x: 2.9, z: -1.4 },
+      { x: -2.8, z: -2.8 },
+      { x: -2.8, z: -6.3 },
+      { x: 0.0, z: -7.8 },
+      { x: 0.0, z: -9.0 },
+    ],
+    slots: [
+      { id: 'slot_1', x: -0.4, z: 3.1 },
+      { id: 'slot_2', x: 0.8, z: 1.2 },
+      { id: 'slot_3', x: -1.4, z: 0.8 },
+      { id: 'slot_4', x: 0.6, z: -4.5 },
+      { id: 'slot_5', x: 2.7, z: -4.4 },
+      { id: 'slot_6', x: 2.4, z: 6.7 },
+      { id: 'slot_7', x: -3.4, z: -0.2, lockedByStump: true, stumpClearCost: 55 },
+      { id: 'slot_8', x: 2.6, z: -6.5, lockedByStump: true, stumpClearCost: 55 },
+    ],
+    lanterns: [
+      { x: -4.1, z: 7.4 },
+      { x: 4.1, z: 3.0 },
+      { x: -4.1, z: -4.0 },
+      { x: 3.2, z: -7.2 },
+    ],
+    heroStart: { x: -2.8, z: -4.6 },
+    barrels: [
+      { id: 'barrel_1', x: 0.0, z: 5.5 },
+      { id: 'barrel_2', x: 0.0, z: -2.1 },
+    ],
+    waves: [
+      { waveNumber: 1, clearBonus: 55, groups: [{ enemyId: 'turbo_hopper', count: 24, spacing: 0.42, hpOverride: 95, bountyOverride: 7 }, { enemyId: 'scout_bot', count: 16, spacing: 0.5, hpOverride: 75, bountyOverride: 6 }] },
+      { waveNumber: 2, clearBonus: 62, announceEnemy: 'frost_warden', groups: [{ enemyId: 'frost_warden', count: 10, spacing: 1.0, hpOverride: 260, bountyOverride: 16 }, { enemyId: 'swarm_saw', count: 32, spacing: 0.2, hpOverride: 44, bountyOverride: 4 }] },
+      { waveNumber: 3, clearBonus: 70, groups: [{ enemyId: 'hover_drone', count: 22, spacing: 0.4, hpOverride: 115, bountyOverride: 8 }, { enemyId: 'frost_warden', count: 8, spacing: 1.05, hpOverride: 265, bountyOverride: 16 }] },
+      { waveNumber: 4, clearBonus: 80, announceEnemy: 'ember_bomber', groups: [{ enemyId: 'ember_bomber', count: 20, spacing: 0.48, hpOverride: 145, bountyOverride: 9 }, { enemyId: 'chomp_brute', count: 10, spacing: 0.85, hpOverride: 245, bountyOverride: 16 }] },
+      { waveNumber: 5, clearBonus: 92, groups: [{ enemyId: 'ember_bomber', count: 24, spacing: 0.4, hpOverride: 150, bountyOverride: 9 }, { enemyId: 'frost_warden', count: 10, spacing: 0.9, hpOverride: 260, bountyOverride: 16 }] },
+      { waveNumber: 6, clearBonus: 104, groups: [{ enemyId: 'crystal_golem', count: 8, spacing: 1.15, hpOverride: 470, bountyOverride: 22 }, { enemyId: 'ember_bomber', count: 22, spacing: 0.38, hpOverride: 155, bountyOverride: 9 }] },
+      { waveNumber: 7, clearBonus: 118, groups: [{ enemyId: 'frost_warden', count: 14, spacing: 0.78, hpOverride: 280, bountyOverride: 16 }, { enemyId: 'repair_drone', count: 14, spacing: 0.55, hpOverride: 165, bountyOverride: 10 }, { enemyId: 'ember_bomber', count: 16, spacing: 0.4, hpOverride: 140, bountyOverride: 9 }] },
+      { waveNumber: 8, clearBonus: 135, groups: [{ enemyId: 'ember_bomber', count: 32, spacing: 0.3, hpOverride: 160, bountyOverride: 9 }, { enemyId: 'crystal_golem', count: 9, spacing: 1.0, hpOverride: 495, bountyOverride: 22 }] },
+      { waveNumber: 9, clearBonus: 156, groups: [{ enemyId: 'frost_warden', count: 16, spacing: 0.7, hpOverride: 300, bountyOverride: 16 }, { enemyId: 'chomp_brute', count: 14, spacing: 0.7, hpOverride: 290, bountyOverride: 16 }, { enemyId: 'repair_drone', count: 14, spacing: 0.5, hpOverride: 160, bountyOverride: 10 }] },
+      { waveNumber: 10, clearBonus: 220, groups: [{ enemyId: 'ember_bomber', count: 26, spacing: 0.34, hpOverride: 165, bountyOverride: 9 }, { enemyId: 'frost_warden', count: 14, spacing: 0.75, hpOverride: 315, bountyOverride: 16 }, { enemyId: 'cryo_colossus', count: 1, spacing: 1.5, hpOverride: 4100, bountyOverride: 145 }] },
+    ],
+  },
+  {
+    id: 14,
+    biome: 'foundry',
+    nameKey: 'level.14.name',
+    unlocked: false,
+    mapPin: { xPct: 58, yPct: 13.5 },
+    startGold: 580,
+    baseHp: 150,
+    killZoneMeters: 18.5,
+    path: [
+      { x: -3.0, z: 9.8 },
+      { x: -3.0, z: 5.8 },
+      { x: -1.1, z: 3.6 },
+      { x: -3.1, z: 1.1 },
+      { x: -2.9, z: -3.3 },
+      { x: 0.0, z: -4.5 },
+      { x: 2.8, z: -5.9 },
+      { x: 2.4, z: -7.6 },
+      { x: 0.0, z: -8.4 },
+      { x: 0.0, z: -9.0 },
+    ],
+    secondaryPath: [
+      { x: 3.0, z: 9.8 },
+      { x: 3.0, z: 5.8 },
+      { x: 1.1, z: 3.6 },
+      { x: 3.1, z: 1.1 },
+      { x: 2.9, z: -3.3 },
+      { x: 0.0, z: -4.5 },
+      { x: -2.8, z: -5.9 },
+      { x: -2.4, z: -7.6 },
+      { x: 0.0, z: -8.4 },
+      { x: 0.0, z: -9.0 },
+    ],
+    slots: [
+      { id: 'slot_1', x: 0.0, z: 6.5 },
+      { id: 'slot_2', x: 0.0, z: 0.4, runeSlot: true },
+      { id: 'slot_3', x: 0.0, z: -2.4 },
+      { id: 'slot_4', x: -1.1, z: -1.0 },
+      { id: 'slot_5', x: 1.1, z: -1.0 },
+      { id: 'slot_6', x: -3.5, z: 3.6 },
+      { id: 'slot_7', x: 3.5, z: 3.6, lockedByStump: true, stumpClearCost: 55 },
+      { id: 'slot_8', x: 0.0, z: -6.55, lockedByStump: true, stumpClearCost: 55 },
+    ],
+    lanterns: [
+      { x: -4.2, z: 7.4 },
+      { x: 4.2, z: 7.4 },
+      { x: -4.2, z: -1.0 },
+      { x: 4.2, z: -1.0 },
+    ],
+    heroStart: { x: 0.0, z: -4.5 },
+    waves: [
+      { waveNumber: 1, clearBonus: 66, groups: [{ enemyId: 'ember_bomber', count: 22, spacing: 0.45, hpOverride: 135, bountyOverride: 9 }, { enemyId: 'swarm_saw', count: 30, spacing: 0.2, hpOverride: 42, bountyOverride: 4 }] },
+      { waveNumber: 2, clearBonus: 76, groups: [{ enemyId: 'frost_warden', count: 12, spacing: 0.9, hpOverride: 280, bountyOverride: 16 }, { enemyId: 'hover_drone', count: 16, spacing: 0.45, hpOverride: 95, bountyOverride: 8 }] },
+      { waveNumber: 3, clearBonus: 88, announceEnemy: 'tesla_strider', groups: [{ enemyId: 'tesla_strider', count: 10, spacing: 1.0, hpOverride: 245, bountyOverride: 14 }, { enemyId: 'ember_bomber', count: 22, spacing: 0.4, hpOverride: 145, bountyOverride: 9 }] },
+      { waveNumber: 4, clearBonus: 100, groups: [{ enemyId: 'tesla_strider', count: 12, spacing: 0.88, hpOverride: 255, bountyOverride: 14 }, { enemyId: 'crystal_golem', count: 7, spacing: 1.25, hpOverride: 490, bountyOverride: 22 }] },
+      { waveNumber: 5, clearBonus: 112, groups: [{ enemyId: 'frost_warden', count: 14, spacing: 0.78, hpOverride: 310, bountyOverride: 16 }, { enemyId: 'ember_bomber', count: 20, spacing: 0.38, hpOverride: 155, bountyOverride: 9 }] },
+      { waveNumber: 6, clearBonus: 128, groups: [{ enemyId: 'tesla_strider', count: 15, spacing: 0.75, hpOverride: 270, bountyOverride: 14 }, { enemyId: 'chomp_brute', count: 14, spacing: 0.7, hpOverride: 315, bountyOverride: 16 }] },
+      { waveNumber: 7, clearBonus: 145, groups: [{ enemyId: 'crystal_golem', count: 11, spacing: 0.98, hpOverride: 515, bountyOverride: 22 }, { enemyId: 'repair_drone', count: 14, spacing: 0.5, hpOverride: 175, bountyOverride: 10 }, { enemyId: 'ember_bomber', count: 12, spacing: 0.36, hpOverride: 155, bountyOverride: 9 }] },
+      { waveNumber: 8, clearBonus: 168, groups: [{ enemyId: 'tesla_strider', count: 16, spacing: 0.68, hpOverride: 290, bountyOverride: 14 }, { enemyId: 'frost_warden', count: 16, spacing: 0.72, hpOverride: 330, bountyOverride: 16 }, { enemyId: 'swarm_saw', count: 35, spacing: 0.16, hpOverride: 44, bountyOverride: 4 }] },
+      { waveNumber: 9, clearBonus: 192, groups: [{ enemyId: 'ember_bomber', count: 35, spacing: 0.28, hpOverride: 168, bountyOverride: 9 }, { enemyId: 'crystal_golem', count: 11, spacing: 0.9, hpOverride: 530, bountyOverride: 22 }, { enemyId: 'tesla_strider', count: 6, spacing: 0.9, hpOverride: 250, bountyOverride: 14 }] },
+      { waveNumber: 10, clearBonus: 215, groups: [{ enemyId: 'frost_warden', count: 18, spacing: 0.65, hpOverride: 340, bountyOverride: 16 }, { enemyId: 'tesla_strider', count: 18, spacing: 0.62, hpOverride: 310, bountyOverride: 14 }, { enemyId: 'hover_drone', count: 30, spacing: 0.28, hpOverride: 135, bountyOverride: 9 }] },
+      { waveNumber: 11, clearBonus: 310, groups: [{ enemyId: 'crystal_golem', count: 10, spacing: 0.95, hpOverride: 580, bountyOverride: 22 }, { enemyId: 'tesla_strider', count: 14, spacing: 0.7, hpOverride: 320, bountyOverride: 14 }, { enemyId: 'ember_bomber', count: 22, spacing: 0.3, hpOverride: 160, bountyOverride: 9 }, { enemyId: 'cryo_colossus', count: 1, spacing: 1.5, hpOverride: 4550, bountyOverride: 155 }] },
+    ],
+  },
+  {
+    id: 15,
+    biome: 'foundry',
+    nameKey: 'level.15.name',
+    unlocked: false,
+    mapPin: { xPct: 41, yPct: 11.0 },
+    startGold: 620,
+    baseHp: 150,
+    killZoneMeters: 19.0,
+    path: [
+      { x: 3.1, z: 9.8 },
+      { x: 3.1, z: 6.5 },
+      { x: -3.2, z: 6.5 },
+      { x: -3.2, z: -6.3 },
+      { x: 0.0, z: -6.3 },
+      { x: 0.0, z: 2.0 },
+      { x: 3.2, z: 2.0 },
+      { x: 3.2, z: -6.6 },
+      { x: 0.0, z: -7.9 },
+      { x: 0.0, z: -9.0 },
+    ],
+    slots: [
+      { id: 'slot_1', x: -1.6, z: 4.4 },
+      { id: 'slot_2', x: -1.6, z: 1.2, runeSlot: true },
+      { id: 'slot_3', x: -1.6, z: -1.6 },
+      { id: 'slot_4', x: 1.6, z: -0.4, runeSlot: true },
+      { id: 'slot_5', x: 1.6, z: -3.6 },
+      { id: 'slot_6', x: 1.55, z: 4.2 },
+      { id: 'slot_7', x: -1.6, z: -4.4, lockedByStump: true, stumpClearCost: 60 },
+      { id: 'slot_8', x: 3.4, z: 4.2, lockedByStump: true, stumpClearCost: 60 },
+    ],
+    lanterns: [
+      { x: 4.2, z: 7.4 },
+      { x: -4.3, z: 4.0 },
+      { x: 4.3, z: -1.0 },
+      { x: -4.2, z: -5.2 },
+    ],
+    heroStart: { x: 0.0, z: -2.8 },
+    barrels: [
+      { id: 'barrel_1', x: 0.0, z: 6.4 },
+      { id: 'barrel_2', x: 1.6, z: 2.0 },
+    ],
+    waves: [
+      { waveNumber: 1, clearBonus: 86, groups: [{ enemyId: 'ember_bomber', count: 24, spacing: 0.4, hpOverride: 140, bountyOverride: 9 }, { enemyId: 'turbo_hopper', count: 18, spacing: 0.44, hpOverride: 95, bountyOverride: 7 }] },
+      { waveNumber: 2, clearBonus: 98, groups: [{ enemyId: 'frost_warden', count: 12, spacing: 0.85, hpOverride: 310, bountyOverride: 16 }, { enemyId: 'tesla_strider', count: 8, spacing: 0.95, hpOverride: 265, bountyOverride: 14 }] },
+      { waveNumber: 3, clearBonus: 110, groups: [{ enemyId: 'swarm_saw', count: 44, spacing: 0.14, hpOverride: 52, bountyOverride: 4 }, { enemyId: 'chomp_brute', count: 14, spacing: 0.7, hpOverride: 310, bountyOverride: 16 }] },
+      { waveNumber: 4, clearBonus: 124, groups: [{ enemyId: 'crystal_golem', count: 10, spacing: 1.0, hpOverride: 520, bountyOverride: 22 }, { enemyId: 'tesla_strider', count: 10, spacing: 0.8, hpOverride: 265, bountyOverride: 14 }] },
+      { waveNumber: 5, clearBonus: 138, groups: [{ enemyId: 'ember_bomber', count: 34, spacing: 0.28, hpOverride: 165, bountyOverride: 9 }, { enemyId: 'frost_warden', count: 12, spacing: 0.78, hpOverride: 290, bountyOverride: 16 }] },
+      { waveNumber: 6, clearBonus: 158, groups: [{ enemyId: 'hover_drone', count: 32, spacing: 0.26, hpOverride: 140, bountyOverride: 9 }, { enemyId: 'repair_drone', count: 16, spacing: 0.48, hpOverride: 190, bountyOverride: 10 }, { enemyId: 'tesla_strider', count: 10, spacing: 0.72, hpOverride: 280, bountyOverride: 14 }] },
+      { waveNumber: 7, clearBonus: 178, groups: [{ enemyId: 'crystal_golem', count: 13, spacing: 0.88, hpOverride: 540, bountyOverride: 22 }, { enemyId: 'ember_bomber', count: 28, spacing: 0.28, hpOverride: 175, bountyOverride: 9 }] },
+      { waveNumber: 8, clearBonus: 204, groups: [{ enemyId: 'frost_warden', count: 18, spacing: 0.65, hpOverride: 350, bountyOverride: 16 }, { enemyId: 'tesla_strider', count: 18, spacing: 0.6, hpOverride: 320, bountyOverride: 14 }, { enemyId: 'swarm_saw', count: 30, spacing: 0.14, hpOverride: 60, bountyOverride: 4 }] },
+      { waveNumber: 9, clearBonus: 234, groups: [{ enemyId: 'chomp_brute', count: 18, spacing: 0.6, hpOverride: 350, bountyOverride: 16 }, { enemyId: 'crystal_golem', count: 12, spacing: 0.82, hpOverride: 575, bountyOverride: 22 }, { enemyId: 'ember_bomber', count: 15, spacing: 0.3, hpOverride: 180, bountyOverride: 9 }] },
+      { waveNumber: 10, clearBonus: 266, groups: [{ enemyId: 'ember_bomber', count: 40, spacing: 0.24, hpOverride: 195, bountyOverride: 9 }, { enemyId: 'tesla_strider', count: 22, spacing: 0.52, hpOverride: 345, bountyOverride: 14 }, { enemyId: 'repair_drone', count: 15, spacing: 0.48, hpOverride: 200, bountyOverride: 10 }] },
+      { waveNumber: 11, clearBonus: 305, groups: [{ enemyId: 'frost_warden', count: 20, spacing: 0.6, hpOverride: 380, bountyOverride: 16 }, { enemyId: 'crystal_golem', count: 14, spacing: 0.8, hpOverride: 590, bountyOverride: 22 }, { enemyId: 'mega_harvester', count: 1, spacing: 1.5, hpOverride: 5000, bountyOverride: 150 }] },
+      { waveNumber: 12, clearBonus: 380, groups: [{ enemyId: 'crystal_golem', count: 14, spacing: 0.82, hpOverride: 600, bountyOverride: 22 }, { enemyId: 'tesla_strider', count: 22, spacing: 0.52, hpOverride: 355, bountyOverride: 14 }, { enemyId: 'ember_bomber', count: 24, spacing: 0.28, hpOverride: 185, bountyOverride: 9 }, { enemyId: 'cryo_colossus', count: 1, spacing: 1.5, hpOverride: 3650, bountyOverride: 155 }] },
+    ],
+  },
+  {
+    id: 16,
+    biome: 'foundry',
+    nameKey: 'level.16.name',
+    unlocked: false,
+    isBossStage: true,
+    mapPin: { xPct: 52, yPct: 7.8 },
+    startGold: 680,
+    baseHp: 150,
+    killZoneMeters: 19.5,
+    path: [
+      { x: -3.1, z: 9.8 },
+      { x: -3.2, z: 6.2 },
+      { x: -3.2, z: 0.4 },
+      { x: -3.1, z: -3.5 },
+      { x: 0.0, z: -4.4 },
+      { x: 2.8, z: -5.8 },
+      { x: 2.6, z: -7.5 },
+      { x: 0.0, z: -8.4 },
+      { x: 0.0, z: -9.0 },
+    ],
+    secondaryPath: [
+      { x: 3.1, z: 9.8 },
+      { x: 3.2, z: 6.2 },
+      { x: 3.2, z: 0.4 },
+      { x: 3.1, z: -3.5 },
+      { x: 0.0, z: -4.4 },
+      { x: -2.8, z: -5.8 },
+      { x: -2.6, z: -7.5 },
+      { x: 0.0, z: -8.4 },
+      { x: 0.0, z: -9.0 },
+    ],
+    slots: [
+      { id: 'slot_1', x: 0.0, z: 6.5 },
+      { id: 'slot_2', x: 0.0, z: 3.6, runeSlot: true },
+      { id: 'slot_3', x: 0.0, z: 0.9, runeSlot: true },
+      { id: 'slot_4', x: 0.0, z: -1.8 },
+      { id: 'slot_5', x: -1.5, z: 4.8 },
+      { id: 'slot_6', x: 1.5, z: 4.8 },
+      { id: 'slot_7', x: -1.5, z: -0.5, lockedByStump: true, stumpClearCost: 60 },
+      { id: 'slot_8', x: 1.5, z: -0.5, lockedByStump: true, stumpClearCost: 60 },
+    ],
+    lanterns: [
+      { x: -4.3, z: 7.4 },
+      { x: 4.3, z: 7.4 },
+      { x: -4.3, z: -1.2 },
+      { x: 4.3, z: -1.2 },
+    ],
+    heroStart: { x: 0.0, z: -4.4 },
+    barrels: [
+      { id: 'barrel_1', x: -1.9, z: -2.4 },
+      { id: 'barrel_2', x: 1.9, z: -2.4 },
+    ],
+    waves: [
+      { waveNumber: 1, clearBonus: 100, groups: [{ enemyId: 'ember_bomber', count: 26, spacing: 0.38, hpOverride: 150, bountyOverride: 9 }, { enemyId: 'turbo_hopper', count: 20, spacing: 0.42, hpOverride: 105, bountyOverride: 8 }] },
+      { waveNumber: 2, clearBonus: 114, groups: [{ enemyId: 'frost_warden', count: 14, spacing: 0.8, hpOverride: 320, bountyOverride: 16 }, { enemyId: 'tesla_strider', count: 9, spacing: 0.88, hpOverride: 270, bountyOverride: 14 }] },
+      { waveNumber: 3, clearBonus: 128, groups: [{ enemyId: 'swarm_saw', count: 48, spacing: 0.14, hpOverride: 55, bountyOverride: 4 }, { enemyId: 'chomp_brute', count: 16, spacing: 0.65, hpOverride: 340, bountyOverride: 16 }] },
+      { waveNumber: 4, clearBonus: 144, groups: [{ enemyId: 'crystal_golem', count: 11, spacing: 0.95, hpOverride: 530, bountyOverride: 22 }, { enemyId: 'tesla_strider', count: 12, spacing: 0.78, hpOverride: 285, bountyOverride: 14 }] },
+      { waveNumber: 5, clearBonus: 162, groups: [{ enemyId: 'ember_bomber', count: 38, spacing: 0.25, hpOverride: 175, bountyOverride: 9 }, { enemyId: 'frost_warden', count: 14, spacing: 0.72, hpOverride: 300, bountyOverride: 16 }] },
+      { waveNumber: 6, clearBonus: 184, groups: [{ enemyId: 'hover_drone', count: 34, spacing: 0.24, hpOverride: 145, bountyOverride: 9 }, { enemyId: 'repair_drone', count: 16, spacing: 0.48, hpOverride: 200, bountyOverride: 10 }, { enemyId: 'tesla_strider', count: 15, spacing: 0.68, hpOverride: 295, bountyOverride: 14 }] },
+      { waveNumber: 7, clearBonus: 210, groups: [{ enemyId: 'crystal_golem', count: 14, spacing: 0.85, hpOverride: 560, bountyOverride: 22 }, { enemyId: 'ember_bomber', count: 36, spacing: 0.25, hpOverride: 185, bountyOverride: 9 }] },
+      { waveNumber: 8, clearBonus: 242, groups: [{ enemyId: 'frost_warden', count: 20, spacing: 0.6, hpOverride: 360, bountyOverride: 16 }, { enemyId: 'tesla_strider', count: 22, spacing: 0.54, hpOverride: 340, bountyOverride: 14 }, { enemyId: 'swarm_saw', count: 34, spacing: 0.14, hpOverride: 62, bountyOverride: 4 }] },
+      { waveNumber: 9, clearBonus: 280, groups: [{ enemyId: 'chomp_brute', count: 20, spacing: 0.56, hpOverride: 375, bountyOverride: 16 }, { enemyId: 'crystal_golem', count: 14, spacing: 0.8, hpOverride: 590, bountyOverride: 22 }, { enemyId: 'ember_bomber', count: 18, spacing: 0.26, hpOverride: 205, bountyOverride: 9 }] },
+      { waveNumber: 10, clearBonus: 318, groups: [{ enemyId: 'ember_bomber', count: 44, spacing: 0.22, hpOverride: 205, bountyOverride: 9 }, { enemyId: 'tesla_strider', count: 26, spacing: 0.48, hpOverride: 360, bountyOverride: 14 }, { enemyId: 'repair_drone', count: 18, spacing: 0.44, hpOverride: 210, bountyOverride: 10 }] },
+      { waveNumber: 11, clearBonus: 365, announceEnemy: 'cryo_colossus', groups: [{ enemyId: 'frost_warden', count: 22, spacing: 0.56, hpOverride: 400, bountyOverride: 16 }, { enemyId: 'crystal_golem', count: 15, spacing: 0.78, hpOverride: 600, bountyOverride: 22 }, { enemyId: 'cryo_colossus', count: 1, spacing: 1.5, hpOverride: 7500, bountyOverride: 160 }] },
+      { waveNumber: 12, clearBonus: 495, announceEnemy: 'magma_overlord', groups: [{ enemyId: 'crystal_golem', count: 14, spacing: 0.8, hpOverride: 620, bountyOverride: 22 }, { enemyId: 'tesla_strider', count: 26, spacing: 0.48, hpOverride: 370, bountyOverride: 14 }, { enemyId: 'ember_bomber', count: 28, spacing: 0.24, hpOverride: 215, bountyOverride: 9 }, { enemyId: 'magma_overlord', count: 1, spacing: 1.5, hpOverride: 5200, bountyOverride: 195 }] },
+    ],
+  },
 ];
 
 export function isLevelUnlocked(levelId: number, levelStars: Record<number, number>): boolean {
@@ -959,7 +1202,7 @@ export function isLevelUnlocked(levelId: number, levelStars: Record<number, numb
 
 export interface WorldMapPreviewNode {
   id: number;
-  biome: 'forest' | 'canyon' | 'cavern' | 'snow';
+  biome: 'forest' | 'canyon' | 'cavern' | 'snow' | 'foundry';
   nameKey: string;
   xPct: number;
   yPct: number;

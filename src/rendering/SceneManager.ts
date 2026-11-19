@@ -319,6 +319,12 @@ function buildMeadowFoliageTufts(curves: THREE.CatmullRomCurve3[], level: LevelS
       new THREE.Color('#8fa8c2'),
       new THREE.Color('#ffffff'),
     ],
+    foundry: [
+      new THREE.Color('#4a2d28'),
+      new THREE.Color('#6b392c'),
+      new THREE.Color('#ff7a2b'),
+      new THREE.Color('#312326'),
+    ],
   };
   const palette = biomeTufts[level.biome];
   const dummy = new THREE.Object3D();
@@ -517,6 +523,7 @@ function buildAmbientMotes(biome: LevelSpec['biome']): AmbientMotePool {
     canyon: { color: '#ff8a3d', size: 0.085, mode: 'fall' },
     cavern: { color: '#6df7ff', size: 0.06, mode: 'float' },
     snow: { color: '#ffffff', size: 0.07, mode: 'fall' },
+    foundry: { color: '#ff9638', size: 0.072, mode: 'float' },
   };
   const c = cfg[biome];
   const count = 55;
@@ -657,6 +664,7 @@ export class SceneManager {
   private flashCoreGeo = new THREE.IcosahedronGeometry(0.2, 0);
   private flashStarGeo = new THREE.OctahedronGeometry(0.3, 0);
   private lastSim: SimulationEngine | null = null;
+  private activeLevel: LevelSpec | null = null;
   private reducedMotion = false;
   /** Fired when a projectile from the Glacier owl lands (freeze burst). */
   onFreezeImpact?: () => void;
@@ -670,8 +678,12 @@ export class SceneManager {
   private heroRig: HeroRig | null = null;
   private heroVisualKey = '';
   private rangeRing: THREE.Mesh;
+  private targetingReticle: THREE.Mesh;
   private rallyMarker: THREE.Group;
   private rallyShowTimer = 0;
+  private magnetTimer = 0;
+  private magnetPos = new THREE.Vector3(0, 2.35, 0);
+  private skillEffects: Array<{ update: (dt: number) => boolean; dispose: () => void }> = [];
   private particles: ParticleItem[] = [];
   private coins: ParticleItem[] = [];
   private shockRings: ShockRing[] = [];
@@ -762,6 +774,20 @@ export class SceneManager {
     this.rangeRing.position.y = 0.07;
     this.rangeRing.visible = false;
 
+    this.targetingReticle = new THREE.Mesh(
+      new THREE.RingGeometry(0.9, 1.0, 48),
+      new THREE.MeshBasicMaterial({
+        color: '#ff9f43',
+        transparent: true,
+        opacity: 0.85,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      }),
+    );
+    this.targetingReticle.rotation.x = -Math.PI / 2;
+    this.targetingReticle.position.y = 0.085;
+    this.targetingReticle.visible = false;
+
     this.rallyMarker = new THREE.Group();
     const rallyRing = new THREE.Mesh(
       new THREE.RingGeometry(0.42, 0.54, 24),
@@ -782,7 +808,7 @@ export class SceneManager {
     this.rallyMarker.add(rallyRing, rallyPole, rallyFlag);
     this.rallyMarker.visible = false;
 
-    this.scene.add(this.levelGroup, this.dynamicGroup, this.rangeRing, this.rallyMarker);
+    this.scene.add(this.levelGroup, this.dynamicGroup, this.rangeRing, this.targetingReticle, this.rallyMarker);
     this.initPools();
   }
 
@@ -1142,6 +1168,7 @@ export class SceneManager {
     heroId: HeroId = 'boz_pence',
   ): void {
     this.clearLevel();
+    this.activeLevel = level;
 
     const biomeTheme: Record<
       LevelSpec['biome'],
@@ -1200,6 +1227,17 @@ export class SceneManager {
         border: '#9ab0c7',
         cliffTint: '#d6e4f2',
         canopyTint: '#d4f2f7',
+      },
+      foundry: {
+        bg: '#402624',
+        fog: '#57312b',
+        hemiSky: '#ffbe8f',
+        hemiGround: '#3d1c19',
+        sunColor: '#ffad69',
+        sunIntensity: 1.42,
+        border: '#8f5544',
+        cliffTint: '#b87660',
+        canopyTint: '#7a3b2a',
       },
     };
     const theme = biomeTheme[level.biome];
@@ -1338,7 +1376,7 @@ export class SceneManager {
             [-4.1, -2.9, 1.1, -0.3],
             [4.4, 1.1, 1.08, 1.2],
           ]
-        : level.biome === 'snow'
+        : level.biome === 'snow' || level.biome === 'foundry'
           ? [
               [-4.2, 5.2, 0.92, 0.2],
               [4.3, 3.8, 0.9, -0.7],
@@ -1352,15 +1390,16 @@ export class SceneManager {
       const crysMats = crystalCoords.map(([cx, cz, sc, rot]) => composeMat(cx, 0, cz, rot, sc, sc, sc));
       this.levelGroup.add(
         buildInstancedModelGroup('env_crystal', crysMats, (origMat, meshName) => {
-          if (level.biome !== 'snow' || !(origMat instanceof THREE.MeshStandardMaterial)) return origMat;
+          if ((level.biome !== 'snow' && level.biome !== 'foundry') || !(origMat instanceof THREE.MeshStandardMaterial)) return origMat;
           const cloned = origMat.clone();
+          const isFoundry = level.biome === 'foundry';
           if (meshName.toLowerCase().includes('glow')) {
             cloned.map = null;
             cloned.emissiveMap = null;
-            cloned.color.set('#bceeff');
-            cloned.emissive.set('#38bdf8');
+            cloned.color.set(isFoundry ? '#ffb559' : '#bceeff');
+            cloned.emissive.set(isFoundry ? '#ff5e18' : '#38bdf8');
           } else {
-            cloned.color.lerp(new THREE.Color('#8fe3ff'), 0.45);
+            cloned.color.lerp(new THREE.Color(isFoundry ? '#5c3128' : '#8fe3ff'), 0.45);
           }
           cloned.needsUpdate = true;
           return cloned;
@@ -1398,10 +1437,10 @@ export class SceneManager {
 
     for (const s of level.slots) {
       const hitArea = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.94, 0.94, 0.45, 12),
+        new THREE.CylinderGeometry(0.70, 0.74, 0.14, 16),
         new THREE.MeshBasicMaterial({ visible: false }),
       );
-      hitArea.position.set(s.x, 0.22, s.z);
+      hitArea.position.set(s.x, 0.07, s.z);
       hitArea.userData = { slotId: s.id };
       this.levelGroup.add(hitArea);
       hitArea.updateMatrixWorld(true);
@@ -1464,12 +1503,12 @@ export class SceneManager {
 
     // Woodland trees (LOD-wrapped with cloned per-biome shared material) & instanced fences (omitted in Crystal Cavern)
     if (level.biome !== 'cavern') {
-      const pineAll = level.biome === 'snow';
+      const pineAll = level.biome === 'snow' || level.biome === 'foundry';
       const baseTrees: Array<[number, number, number, 'oak' | 'pine']> =
-        level.biome === 'canyon'
+        level.biome === 'canyon' || level.biome === 'foundry'
           ? [
               [-4.7, 7.6, 0.9, 'pine'],
-              [4.7, 6.2, 0.85, 'oak'],
+              [4.7, 6.2, 0.85, level.biome === 'foundry' ? 'pine' : 'oak'],
               [-4.8, -3.6, 0.92, 'pine'],
               [4.6, -7.8, 0.95, 'pine'],
             ]
@@ -1563,6 +1602,11 @@ export class SceneManager {
   }
 
   private clearLevel(): void {
+    this.activeLevel = null;
+    for (const fx of this.skillEffects) fx.dispose();
+    this.skillEffects = [];
+    this.magnetTimer = 0;
+    this.targetingReticle.visible = false;
     this.levelGroup.clear();
     this.dynamicGroup.clear();
     this.slotMeshes.clear();
@@ -2324,6 +2368,9 @@ export class SceneManager {
         this.spawnParticles(ev.x, 0.6, ev.z, boss ? '#ff8b3d' : '#d9a443', boss ? 20 : 10, boss ? 1.6 : 1.2);
         this.spawnParticles(ev.x, 0.55, ev.z, '#8d99a6', boss ? 14 : 6, boss ? 1.4 : 1.05);
         this.spawnFlyingCoins(ev.x, ev.z, boss ? 8 : 3);
+        if (this.magnetTimer > 0) {
+          this.spawnGoldenAcornPull(ev.x, ev.z);
+        }
         if (boss) this.spawnScorch(ev.x, ev.z, 1.8);
         this.cameraCtrl.addTrauma(boss ? 0.85 : 0.22);
         if (boss) this.cameraCtrl.addZoomPunch(2.4);
@@ -2335,15 +2382,9 @@ export class SceneManager {
         this.cameraCtrl.addTrauma(0.68);
         this.cameraCtrl.addZoomPunch(1.9);
       } else if (ev.type === 'PINECONE_RAIN') {
-        this.spawnShockRing(ev.x, ev.z, '#ffffff', 2.0, 0.18);
-        this.spawnShockRing(ev.x, ev.z, '#ff9f43', 3.6, 0.45);
-        this.spawnShockRing(ev.x, ev.z, '#ffe17d', 2.4);
-        this.spawnScorch(ev.x, ev.z, 2.2);
-        this.spawnSparks(ev.x, 0.5, ev.z, 0, 0, 0, '#ffcf6b', 26, 10);
-        this.spawnParticles(ev.x, 0.7, ev.z, '#ff9f43', 18, 1.45);
-        this.spawnParticles(ev.x, 0.5, ev.z, '#6b4a2e', 8, 1.2);
-        this.cameraCtrl.addTrauma(0.56);
-        this.cameraCtrl.addZoomPunch(1.8);
+        this.spawnPineconeRainVfx(ev.x, ev.z);
+      } else if (ev.type === 'ACORN_MAGNET') {
+        this.spawnMagnetVfx(ev.x, ev.z, ev.duration);
       } else if (ev.type === 'BARREL_EXPLODED') {
         const bv = this.barrelMeshes.get(ev.barrelId);
         if (bv) {
@@ -2392,23 +2433,7 @@ export class SceneManager {
         }
       } else if (ev.type === 'HERO_ULTIMATE') {
         if (this.heroRig) this.heroRig.attackTimer = 0.42;
-        const col =
-          ev.variant === 'fox_storm'
-            ? '#44f0a6'
-            : ev.variant === 'boar_charge'
-              ? '#e8a848'
-              : ev.variant === 'viking'
-                ? '#ff7b3b'
-                : ev.variant === 'royal'
-                  ? '#ffd84f'
-                  : '#80f272';
-        this.spawnShockRing(ev.x, ev.z, '#ffffff', 1.8, 0.18);
-        this.spawnShockRing(ev.x, ev.z, col, 3.8, 0.45);
-        this.spawnSparks(ev.x, 0.55, ev.z, 0, 0, 0, col, 24, 9.5);
-        this.spawnParticles(ev.x, 0.55, ev.z, col, 16, 1.35);
-        if (ev.variant !== 'royal') this.spawnScorch(ev.x, ev.z, 1.6);
-        this.cameraCtrl.addTrauma(0.5);
-        this.cameraCtrl.addZoomPunch(1.5);
+        this.spawnHeroUltimateVfx(ev);
       } else if (ev.type === 'HERO_CLAW_SHOCK') {
         if (this.heroRig) this.heroRig.attackTimer = 0.26;
         const ringCol = ev.heroId === 'kizil_kuyruk' ? '#44f0a6' : ev.heroId === 'kaya_dis' ? '#e8a848' : '#95e06c';
@@ -2631,6 +2656,418 @@ export class SceneManager {
       }
     }
     this.dyingBodies = nextDying;
+
+    if (this.magnetTimer > 0) {
+      this.magnetTimer = Math.max(0, this.magnetTimer - dt);
+    }
+    if (this.skillEffects.length > 0) {
+      const aliveFx: Array<{ update: (d: number) => boolean; dispose: () => void }> = [];
+      for (const fx of this.skillEffects) {
+        if (fx.update(dt)) {
+          aliveFx.push(fx);
+        } else {
+          fx.dispose();
+        }
+      }
+      this.skillEffects = aliveFx;
+    }
+  }
+
+  private instantiateSkillMesh(modelName: ModelName, fallbackHex: string, fallbackSize: number): THREE.Object3D {
+    const inst = instantiateModel(modelName);
+    if (inst) return inst.scene;
+    const mesh = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(fallbackSize, 0),
+      new THREE.MeshStandardMaterial({ color: fallbackHex, emissive: fallbackHex, emissiveIntensity: 0.45, roughness: 0.35 }),
+    );
+    mesh.userData.ownResources = true;
+    return mesh;
+  }
+
+  private disposeSkillObject(root: THREE.Object3D): void {
+    this.dynamicGroup.remove(root);
+    const seenGeo = new Set<THREE.BufferGeometry>();
+    const seenMat = new Set<THREE.Material>();
+    root.traverse((obj) => {
+      const m = obj as THREE.Mesh;
+      if (!m.isMesh || !m.userData.ownResources) return;
+      if (m.geometry && !seenGeo.has(m.geometry)) {
+        seenGeo.add(m.geometry);
+        m.geometry.dispose();
+      }
+      const mats = Array.isArray(m.material) ? m.material : [m.material];
+      for (const mat of mats) {
+        if (mat && !seenMat.has(mat)) {
+          seenMat.add(mat);
+          mat.dispose();
+        }
+      }
+    });
+  }
+
+  private spawnFlashLight(x: number, y: number, z: number, colorHex: string, intensity: number, distance: number, duration: number): void {
+    if (this.batterySaver || this.reducedMotion) return;
+    const light = new THREE.PointLight(colorHex, intensity, distance);
+    light.position.set(x, y, z);
+    this.dynamicGroup.add(light);
+    let elapsed = 0;
+    this.skillEffects.push({
+      update: (dt) => {
+        elapsed += dt;
+        const k = Math.max(0, 1 - elapsed / duration);
+        light.intensity = intensity * k * k;
+        return elapsed < duration;
+      },
+      dispose: () => {
+        this.dynamicGroup.remove(light);
+      },
+    });
+  }
+
+  private spawnPineconeRainVfx(tx: number, tz: number): void {
+    this.spawnFlashLight(tx, 1.5, tz, '#ff8d2e', 5.5, 9.0, 0.55);
+    this.spawnShockRing(tx, tz, '#ffffff', 2.1, 0.22);
+    this.spawnShockRing(tx, tz, '#ff9f43', 3.6, 0.48);
+
+    const targets: Array<[number, number]> = [[tx, tz]];
+    const count = this.reducedMotion ? 3 : 6;
+    for (let i = 0; i < count; i++) {
+      const ang = (i * Math.PI * 2) / count + 0.35;
+      const rad = i % 2 === 0 ? 1.45 : 2.35;
+      targets.push([tx + Math.cos(ang) * rad, tz + Math.sin(ang) * rad]);
+    }
+
+    targets.forEach(([lx, lz], idx) => {
+      const meteor = this.instantiateSkillMesh('skill_pinecone_meteor', '#ff7a18', 0.26);
+      meteor.scale.setScalar(idx === 0 ? 1.45 : 1.1);
+      const sx = lx + 2.7 + (idx % 3) * 0.35;
+      const sy = 11.2 + idx * 0.55;
+      const sz = lz - 2.4;
+      meteor.position.set(sx, sy, sz);
+      meteor.visible = false;
+      this.dynamicGroup.add(meteor);
+
+      const delay = idx * 0.055;
+      const flightDur = this.reducedMotion ? 0.16 : 0.27;
+      const holdDur = 0.22;
+      let elapsed = 0;
+      let impacted = false;
+      let sparkAccum = 0;
+      const endVec = new THREE.Vector3(lx, 0.08, lz);
+
+      this.skillEffects.push({
+        update: (dt) => {
+          elapsed += dt;
+          if (elapsed < delay) return true;
+          const tFlight = elapsed - delay;
+          if (tFlight < flightDur) {
+            meteor.visible = true;
+            const p = tFlight / flightDur;
+            const e = p * p;
+            meteor.position.set(sx + (lx - sx) * e, sy + (0.12 - sy) * e, sz + (lz - sz) * e);
+            meteor.lookAt(endVec);
+            meteor.rotateZ(tFlight * 16);
+            sparkAccum += dt;
+            if (!this.reducedMotion && sparkAccum >= 0.032) {
+              sparkAccum = 0;
+              this.spawnSparks(meteor.position.x, meteor.position.y, meteor.position.z, 0.4, 0.8, -0.4, '#ffb647', 2, 4.5, 0.4);
+            }
+            return true;
+          }
+          if (!impacted) {
+            impacted = true;
+            meteor.position.set(lx, 0.08, lz);
+            this.spawnShockRing(lx, lz, '#ff9f43', idx === 0 ? 2.6 : 1.75, 0.32);
+            this.spawnScorch(lx, lz, idx === 0 ? 2.2 : 1.25);
+            this.spawnSparks(lx, 0.42, lz, 0, 0.8, 0, '#ffcf6b', idx === 0 ? 20 : 9, 9.5);
+            this.spawnParticles(lx, 0.55, lz, '#ff7722', idx === 0 ? 14 : 6, 1.3);
+            if (idx === 0) {
+              this.cameraCtrl.addTrauma(0.56);
+              this.cameraCtrl.addZoomPunch(1.8);
+            } else {
+              this.cameraCtrl.addTrauma(0.14);
+            }
+          }
+          const post = tFlight - flightDur;
+          const shrink = Math.max(0.01, 1 - post / holdDur);
+          meteor.scale.setScalar((idx === 0 ? 1.45 : 1.1) * shrink);
+          return post < holdDur;
+        },
+        dispose: () => this.disposeSkillObject(meteor),
+      });
+    });
+  }
+
+  private spawnMagnetVfx(hx: number, hz: number, duration: number): void {
+    this.magnetTimer = duration;
+    this.magnetPos.set(hx, 2.35, hz);
+    const magnet = this.instantiateSkillMesh('skill_acorn_magnet', '#4cf0ff', 0.35);
+    magnet.scale.setScalar(1.38);
+    magnet.position.copy(this.magnetPos);
+    this.dynamicGroup.add(magnet);
+    this.spawnFlashLight(hx, 2.2, hz, '#4cf0ff', 3.4, 7.5, 0.7);
+    this.spawnShockRing(hx, hz, '#4cf0ff', 3.2, 0.4);
+
+    // Pull an immediate ring of golden acorns toward the hovering magnet
+    const burstCount = this.reducedMotion ? 3 : 6;
+    for (let i = 0; i < burstCount; i++) {
+      const a = (i * Math.PI * 2) / burstCount;
+      const dist = 2.6 + (i % 2) * 1.1;
+      this.spawnGoldenAcornPull(hx + Math.cos(a) * dist, hz + Math.sin(a) * dist);
+    }
+
+    let elapsed = 0;
+    let pulseAccum = 0;
+    this.skillEffects.push({
+      update: (dt) => {
+        elapsed += dt;
+        const hero = this.lastSim?.hero;
+        if (hero && !hero.dead) {
+          this.magnetPos.x += (hero.x - this.magnetPos.x) * Math.min(1, dt * 8);
+          this.magnetPos.z += (hero.z - this.magnetPos.z) * Math.min(1, dt * 8);
+        }
+        const bob = Math.sin(elapsed * 4.2) * 0.14;
+        const fadeOut = elapsed > duration - 0.35 ? Math.max(0.01, (duration - elapsed) / 0.35) : 1;
+        const intro = elapsed < 0.22 ? elapsed / 0.22 : 1;
+        magnet.position.set(this.magnetPos.x, 2.35 + bob, this.magnetPos.z);
+        magnet.rotation.y += dt * 3.1;
+        magnet.scale.setScalar(1.38 * intro * fadeOut);
+
+        pulseAccum += dt;
+        if (pulseAccum >= 0.7) {
+          pulseAccum = 0;
+          this.spawnShockRing(this.magnetPos.x, this.magnetPos.z, '#52f2ff', 2.4, 0.36);
+          this.spawnSparks(this.magnetPos.x, 2.35, this.magnetPos.z, 0, 0.3, 0, '#ffd44f', 5, 4.5, 0.3);
+        }
+        return elapsed < duration;
+      },
+      dispose: () => this.disposeSkillObject(magnet),
+    });
+  }
+
+  private spawnGoldenAcornPull(sx: number, sz: number): void {
+    const acorn = this.instantiateSkillMesh('skill_golden_acorn', '#ffd24a', 0.16);
+    acorn.scale.setScalar(1.15);
+    acorn.position.set(sx, 0.2, sz);
+    this.dynamicGroup.add(acorn);
+    const dur = 0.48;
+    let elapsed = 0;
+    const startAngle = Math.atan2(sz - this.magnetPos.z, sx - this.magnetPos.x);
+    const startDist = Math.max(0.5, Math.hypot(sx - this.magnetPos.x, sz - this.magnetPos.z));
+
+    this.skillEffects.push({
+      update: (dt) => {
+        elapsed += dt;
+        const p = Math.min(1, elapsed / dur);
+        const radius = startDist * Math.pow(1 - p, 1.35);
+        const angle = startAngle + p * Math.PI * 2.2;
+        const tx = this.magnetPos.x + Math.cos(angle) * radius;
+        const tz = this.magnetPos.z + Math.sin(angle) * radius;
+        const ty = 0.2 + (2.35 - 0.2) * easeOutCubic(p) + Math.sin(p * Math.PI) * 0.55;
+        acorn.position.set(tx, ty, tz);
+        acorn.rotation.y += dt * 9;
+        acorn.rotation.x += dt * 5;
+        acorn.scale.setScalar(1.15 * (1 - 0.45 * p));
+        if (p >= 1) {
+          this.spawnSparks(this.magnetPos.x, 2.35, this.magnetPos.z, 0, 0.3, 0, '#ffe169', 6, 5.5, 0.35);
+          return false;
+        }
+        return true;
+      },
+      dispose: () => this.disposeSkillObject(acorn),
+    });
+  }
+
+  private spawnHeroUltimateVfx(ev: Extract<SimEvent, { type: 'HERO_ULTIMATE' }>): void {
+    const fxX = ev.fromX ?? ev.x;
+    const fxZ = ev.fromZ ?? ev.z;
+    const col =
+      ev.variant === 'fox_storm'
+        ? '#44f0a6'
+        : ev.variant === 'boar_charge'
+          ? '#e8a848'
+          : ev.variant === 'viking'
+            ? '#ff7b3b'
+            : ev.variant === 'royal'
+              ? '#ffd84f'
+              : '#80f272';
+
+    this.spawnFlashLight(ev.x, 1.6, ev.z, col, 4.8, 8.5, 0.65);
+    this.spawnShockRing(ev.x, ev.z, '#ffffff', 1.8, 0.18);
+    this.spawnShockRing(ev.x, ev.z, col, 3.8, 0.45);
+    this.cameraCtrl.addTrauma(0.5);
+    this.cameraCtrl.addZoomPunch(1.5);
+
+    if (ev.variant === 'fox_storm') {
+      const drops: Array<[number, number]> = [
+        [ev.x, ev.z],
+        [ev.x - 1.5, ev.z + 1.1],
+        [ev.x + 1.5, ev.z + 1.0],
+        [ev.x - 1.3, ev.z - 1.2],
+        [ev.x + 1.4, ev.z - 1.1],
+      ];
+      drops.forEach(([lx, lz], idx) => {
+        const flask = this.instantiateSkillMesh('skill_alchemy_flask', '#44f0a6', 0.22);
+        flask.scale.setScalar(1.1);
+        flask.position.set(fxX, 1.2, fxZ);
+        this.dynamicGroup.add(flask);
+        const dur = 0.28 + idx * 0.045;
+        let elapsed = 0;
+        let shattered = false;
+        this.skillEffects.push({
+          update: (dt) => {
+            elapsed += dt;
+            if (!shattered) {
+              const p = Math.min(1, elapsed / dur);
+              flask.position.set(
+                fxX + (lx - fxX) * p,
+                1.2 * (1 - p) + Math.sin(p * Math.PI) * (3.2 + idx * 0.25),
+                fxZ + (lz - fxZ) * p,
+              );
+              flask.rotation.x += dt * 11;
+              flask.rotation.z += dt * 8;
+              if (p >= 1) {
+                shattered = true;
+                flask.visible = false;
+                this.spawnShockRing(lx, lz, '#3ff598', 1.85, 0.35);
+                this.spawnSparks(lx, 0.45, lz, 0, 1.1, 0, '#78ffca', 12, 8.5);
+                this.spawnParticles(lx, 0.45, lz, '#2ef28d', 8, 1.3);
+              }
+              return true;
+            }
+            return elapsed < dur + 0.12;
+          },
+          dispose: () => this.disposeSkillObject(flask),
+        });
+      });
+
+      // Bubbling alchemy rune pool decal
+      const poolMesh = new THREE.Mesh(
+        new THREE.CircleGeometry(2.6, 28),
+        new THREE.MeshBasicMaterial({ color: '#2ef28d', transparent: true, opacity: 0.34, depthWrite: false }),
+      );
+      poolMesh.userData.ownResources = true;
+      poolMesh.rotation.x = -Math.PI / 2;
+      poolMesh.position.set(ev.x, 0.055, ev.z);
+      this.dynamicGroup.add(poolMesh);
+      let poolElapsed = 0;
+      let bubbleAccum = 0;
+      this.skillEffects.push({
+        update: (dt) => {
+          poolElapsed += dt;
+          bubbleAccum += dt;
+          const k = Math.max(0, 1 - poolElapsed / 2.4);
+          (poolMesh.material as THREE.MeshBasicMaterial).opacity = 0.34 * k;
+          poolMesh.scale.setScalar(0.85 + Math.sin(poolElapsed * 8) * 0.06);
+          if (!this.reducedMotion && bubbleAccum >= 0.14 && poolElapsed < 2.0) {
+            bubbleAccum = 0;
+            const ang = Math.random() * Math.PI * 2;
+            const r = Math.random() * 2.0;
+            this.spawnParticles(ev.x + Math.cos(ang) * r, 0.25, ev.z + Math.sin(ang) * r, '#6effbe', 2, 0.8);
+          }
+          return poolElapsed < 2.4;
+        },
+        dispose: () => this.disposeSkillObject(poolMesh),
+      });
+      return;
+    }
+
+    if (ev.variant === 'royal') {
+      const bx = ev.x + 0.55;
+      const bz = ev.z + 0.25;
+      const banner = this.instantiateSkillMesh('skill_royal_banner', '#ffd84f', 0.4);
+      banner.scale.setScalar(1.38);
+      banner.position.set(bx, 5.2, bz);
+      this.dynamicGroup.add(banner);
+      let elapsed = 0;
+      let planted = false;
+      let pulseAccum = 0;
+      const life = 6.2;
+      this.skillEffects.push({
+        update: (dt) => {
+          elapsed += dt;
+          if (elapsed < 0.15) {
+            const p = easeOutCubic(elapsed / 0.15);
+            banner.position.y = 5.2 * (1 - p);
+            return true;
+          }
+          if (!planted) {
+            planted = true;
+            banner.position.y = 0;
+            this.spawnShockRing(bx, bz, '#ffd84f', 2.6, 0.4);
+            this.spawnSparks(bx, 0.5, bz, 0, 1.0, 0, '#ffe875', 18, 8.0);
+          }
+          banner.rotation.z = Math.sin(elapsed * 3.8) * 0.035;
+          pulseAccum += dt;
+          if (pulseAccum >= 1.15) {
+            pulseAccum = 0;
+            this.spawnShockRing(bx, bz, '#ffe17d', 3.4, 0.55);
+          }
+          if (elapsed > life - 0.4) {
+            const k = Math.max(0.01, (life - elapsed) / 0.4);
+            banner.scale.setScalar(1.38 * k);
+          }
+          return elapsed < life;
+        },
+        dispose: () => this.disposeSkillObject(banner),
+      });
+      return;
+    }
+
+    // Seismic earth spikes for boar_charge, viking, and classic
+    if (ev.variant === 'boar_charge' || ev.variant === 'viking') {
+      const steps = 4;
+      for (let i = 0; i < steps; i++) {
+        const p = i / steps;
+        this.spawnParticles(fxX + (ev.x - fxX) * p, 0.4, fxZ + (ev.z - fxZ) * p, col, 4, 1.15);
+      }
+      if (ev.variant === 'viking') {
+        this.spawnSlashArc(ev.x, ev.z, 0.4, '#ffb56b', 2.2);
+        this.spawnSlashArc(ev.x, ev.z, -1.1, '#ffe27a', 2.0);
+      }
+    }
+
+    this.spawnScorch(ev.x, ev.z, 1.75);
+    this.spawnSparks(ev.x, 0.55, ev.z, 0, 0.9, 0, col, 24, 9.5);
+    this.spawnParticles(ev.x, 0.55, ev.z, col, 16, 1.35);
+
+    const spikeCount = ev.variant === 'boar_charge' ? 8 : ev.variant === 'viking' ? 6 : 5;
+    const radius = ev.variant === 'boar_charge' ? 2.15 : 1.75;
+    for (let i = 0; i < spikeCount; i++) {
+      const ang = (i * Math.PI * 2) / spikeCount + 0.2;
+      const sx = ev.x + Math.cos(ang) * radius;
+      const sz = ev.z + Math.sin(ang) * radius;
+      const spike = this.instantiateSkillMesh('skill_earth_spike', col, 0.35);
+      spike.position.set(sx, -0.04, sz);
+      spike.rotation.y = -ang + Math.PI / 2;
+      spike.rotation.x = 0.16;
+      spike.scale.set(0.95, 0.05, 0.95);
+      this.dynamicGroup.add(spike);
+
+      let elapsed = 0;
+      const riseDur = 0.11;
+      const holdDur = 0.62;
+      const sinkDur = 0.28;
+      this.skillEffects.push({
+        update: (dt) => {
+          elapsed += dt;
+          if (elapsed < riseDur) {
+            const p = easeOutCubic(elapsed / riseDur);
+            spike.scale.y = 0.05 + 1.15 * p;
+            return true;
+          }
+          if (elapsed < riseDur + holdDur) {
+            spike.scale.y = 1.2;
+            return true;
+          }
+          const sp = Math.min(1, (elapsed - riseDur - holdDur) / sinkDur);
+          spike.scale.y = Math.max(0.02, 1.2 * (1 - sp));
+          spike.position.y = -0.04 - 0.35 * sp;
+          return sp < 1;
+        },
+        dispose: () => this.disposeSkillObject(spike),
+      });
+    }
   }
 
   private monitorFps(dt: number): void {
@@ -2644,6 +3081,45 @@ export class SceneManager {
     } else {
       this.lowFpsCounter = Math.max(0, this.lowFpsCounter - 1);
     }
+  }
+
+  distanceToRoad(x: number, z: number): number {
+    if (!this.activeLevel) return Number.POSITIVE_INFINITY;
+    const distPolylines = (pts: readonly Vec2[]): number => {
+      let best = Number.POSITIVE_INFINITY;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const a = pts[i];
+        const b = pts[i + 1];
+        const vx = b.x - a.x;
+        const vz = b.z - a.z;
+        const len2 = vx * vx + vz * vz || 1;
+        const t = Math.max(0, Math.min(1, ((x - a.x) * vx + (z - a.z) * vz) / len2));
+        const d = Math.hypot(x - (a.x + t * vx), z - (a.z + t * vz));
+        if (d < best) best = d;
+      }
+      return best;
+    };
+    const mainD = distPolylines(this.activeLevel.path);
+    if (!this.activeLevel.secondaryPath) return mainD;
+    return Math.min(mainD, distPolylines(this.activeLevel.secondaryPath));
+  }
+
+  isNearRoad(x: number, z: number, threshold = 1.45): boolean {
+    return this.distanceToRoad(x, z) <= threshold;
+  }
+
+  updateTargetingReticle(mode: 'rain' | 'hero_leap' | null, x = 0, z = 0): void {
+    if (!mode) {
+      this.targetingReticle.visible = false;
+      return;
+    }
+    this.targetingReticle.visible = true;
+    this.targetingReticle.position.set(x, 0.085, z);
+    const radius = mode === 'rain' ? 3.0 : 3.4;
+    this.targetingReticle.scale.setScalar(radius);
+    const mat = this.targetingReticle.material as THREE.MeshBasicMaterial;
+    mat.color.set(mode === 'rain' ? '#ff9f43' : '#52e8ff');
+    mat.opacity = 0.72 + Math.sin(this.animTime * 8) * 0.18;
   }
 
   pickWorld(clientX: number, clientY: number): { slotId: string | null; barrelId: string | null; x: number; z: number } | null {
@@ -2667,16 +3143,26 @@ export class SceneManager {
       }
     }
 
+    const pt = new THREE.Vector3();
+    const hasGround = this.raycaster.ray.intersectPlane(this.groundPlane, pt) !== null;
+
     const hitAreas: THREE.Object3D[] = [];
     for (const v of this.slotMeshes.values()) hitAreas.push(v.hitArea);
     const slotHits = this.raycaster.intersectObjects(hitAreas, false);
     if (slotHits.length > 0) {
-      const slotId = (slotHits[0].object.userData as { slotId?: string }).slotId ?? null;
+      const hitObj = slotHits[0].object;
+      const slotId = (hitObj.userData as { slotId?: string }).slotId ?? null;
+      const gx = hasGround ? pt.x : slotHits[0].point.x;
+      const gz = hasGround ? pt.z : slotHits[0].point.z;
+      const slotDist = Math.hypot(gx - hitObj.position.x, gz - hitObj.position.z);
+      const roadDist = this.distanceToRoad(gx, gz);
+      if (roadDist < 0.74 && slotDist > 0.54) {
+        return { slotId: null, barrelId: null, x: gx, z: gz };
+      }
       return { slotId, barrelId: null, x: slotHits[0].point.x, z: slotHits[0].point.z };
     }
 
-    const pt = new THREE.Vector3();
-    if (this.raycaster.ray.intersectPlane(this.groundPlane, pt)) {
+    if (hasGround) {
       return { slotId: null, barrelId: null, x: pt.x, z: pt.z };
     }
     return null;

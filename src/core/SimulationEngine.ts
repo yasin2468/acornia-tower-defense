@@ -86,10 +86,19 @@ export type SimEvent =
     }
   | { type: 'BOSS_PHASE_TWO'; enemyId: number; bossId?: EnemyId; smokedSlotId?: string; x: number; z: number }
   | { type: 'PINECONE_RAIN'; x: number; z: number; hits: number }
+  | { type: 'ACORN_MAGNET'; x: number; z: number; duration: number }
   | { type: 'BARREL_EXPLODED'; barrelId: string; x: number; z: number; hits: number }
   | { type: 'HERO_ATTACK'; x: number; z: number; targetX: number; targetZ: number; ranged?: boolean }
   | { type: 'HERO_CLAW_SHOCK'; x: number; z: number; hits: number; heroId?: HeroId }
-  | { type: 'HERO_ULTIMATE'; variant: 'classic' | 'viking' | 'royal' | 'fox_storm' | 'boar_charge'; x: number; z: number; hits: number }
+  | {
+      type: 'HERO_ULTIMATE';
+      variant: 'classic' | 'viking' | 'royal' | 'fox_storm' | 'boar_charge';
+      x: number;
+      z: number;
+      fromX?: number;
+      fromZ?: number;
+      hits: number;
+    }
   | { type: 'HERO_RALLY'; x: number; z: number }
   | { type: 'HERO_LEVELED'; level: number; x: number; z: number }
   | { type: 'WAVE_STARTED'; waveNumber: number; announceEnemy?: EnemyId; earlyBonus: number }
@@ -194,6 +203,7 @@ export interface HeroState {
   alchemyAuraTimer: number;
   activeBuff: 'none' | 'berserk' | 'banner' | 'ironhide';
   outOfCombatTimer: number;
+  repositionTimer: number;
 }
 
 interface SpawnQueueEntry {
@@ -335,6 +345,7 @@ export class SimulationEngine {
       alchemyAuraTimer: 0,
       activeBuff: 'none',
       outOfCombatTimer: 0,
+      repositionTimer: 0,
     };
 
     this.computePathLengths();
@@ -528,8 +539,22 @@ export class SimulationEngine {
       }
       case 'MOVE_HERO': {
         if (!this.hero.dead) {
-          this.hero.targetX = Math.max(-4.6, Math.min(4.6, cmd.x));
-          this.hero.targetZ = Math.max(-8.2, Math.min(9.0, cmd.z));
+          let tx = Math.max(-4.6, Math.min(4.6, cmd.x));
+          let tz = Math.max(-8.2, Math.min(9.0, cmd.z));
+          for (const slot of this.slots.values()) {
+            const sdx = tx - slot.x;
+            const sdz = tz - slot.z;
+            const sd = Math.hypot(sdx, sdz);
+            if (sd < 0.88) {
+              const nx = sd > 0.04 ? sdx / sd : slot.x >= 0 ? -1 : 1;
+              const nz = sd > 0.04 ? sdz / sd : 0;
+              tx = slot.x + nx * 0.90;
+              tz = slot.z + nz * 0.90;
+            }
+          }
+          this.hero.targetX = Math.max(-4.6, Math.min(4.6, tx));
+          this.hero.targetZ = Math.max(-8.2, Math.min(9.0, tz));
+          this.hero.repositionTimer = 1.6;
           this.events.push({ type: 'HERO_RALLY', x: this.hero.targetX, z: this.hero.targetZ });
         }
         break;
@@ -537,6 +562,8 @@ export class SimulationEngine {
       case 'CAST_HERO_ULTIMATE': {
         const h = this.hero;
         if (h.dead || h.skillCooldown > 0) return;
+        const fromX = h.x;
+        const fromZ = h.z;
         const giantDmgMult = this.relics.includes('giant_hero') ? 1.35 : 1.0;
         const lvlMult = 1 + (h.level - 1) * 0.12;
         const cardMult = cardLevelMultiplier(this.cardLevels[this.heroId]);
@@ -572,7 +599,7 @@ export class SimulationEngine {
               });
             }
           }
-          this.events.push({ type: 'HERO_ULTIMATE', variant: 'fox_storm', x: tx, z: tz, hits });
+          this.events.push({ type: 'HERO_ULTIMATE', variant: 'fox_storm', x: tx, z: tz, fromX, fromZ, hits });
           break;
         }
 
@@ -591,6 +618,7 @@ export class SimulationEngine {
           h.z = tz;
           h.targetX = tx;
           h.targetZ = tz;
+          h.repositionTimer = 0;
           h.skillCooldown = 17;
           h.skillActiveTimer = 6.0;
           h.activeBuff = 'ironhide';
@@ -608,7 +636,7 @@ export class SimulationEngine {
               });
             }
           }
-          this.events.push({ type: 'HERO_ULTIMATE', variant: 'boar_charge', x: tx, z: tz, hits });
+          this.events.push({ type: 'HERO_ULTIMATE', variant: 'boar_charge', x: tx, z: tz, fromX, fromZ, hits });
           break;
         }
 
@@ -646,6 +674,7 @@ export class SimulationEngine {
           h.z = tz;
           h.targetX = tx;
           h.targetZ = tz;
+          h.repositionTimer = 0;
           h.skillCooldown = 16;
           h.skillActiveTimer = 6.0;
           h.activeBuff = 'berserk';
@@ -682,7 +711,7 @@ export class SimulationEngine {
           }
         }
 
-        this.events.push({ type: 'HERO_ULTIMATE', variant, x: h.x, z: h.z, hits });
+        this.events.push({ type: 'HERO_ULTIMATE', variant, x: h.x, z: h.z, fromX, fromZ, hits });
         break;
       }
       case 'CAST_PINECONE_RAIN': {
@@ -709,6 +738,12 @@ export class SimulationEngine {
         if (this.magnetCooldown > 0) return;
         this.magnetCooldown = Number((30 * this.talentMods.spellCooldownMult).toFixed(2));
         this.magnetActiveTimer = 8;
+        this.events.push({
+          type: 'ACORN_MAGNET',
+          x: this.hero.dead ? 0 : this.hero.x,
+          z: this.hero.dead ? 0 : this.hero.z,
+          duration: 8,
+        });
         break;
       }
       case 'CALL_WAVE_EARLY': {
@@ -924,7 +959,13 @@ export class SimulationEngine {
 
     let destX = h.targetX;
     let destZ = h.targetZ;
-    if (nearbyGround.length > 0 && !heroSpec.isRanged) {
+    if (h.repositionTimer > 0) {
+      h.repositionTimer = Math.max(0, h.repositionTimer - dt);
+      if (Math.hypot(h.targetX - h.x, h.targetZ - h.z) <= 0.22) {
+        h.repositionTimer = 0;
+      }
+    }
+    if (h.repositionTimer <= 0 && nearbyGround.length > 0 && !heroSpec.isRanged) {
       const lead = nearbyGround[0];
       destX = Math.hypot(lead.x - h.x, lead.z - h.z) > 0.78 ? lead.x : h.x;
       destZ = Math.hypot(lead.x - h.x, lead.z - h.z) > 0.78 ? lead.z : h.z;
@@ -935,7 +976,7 @@ export class SimulationEngine {
             !e.isFlying &&
             e.hp > 0 &&
             (Math.hypot(e.x - h.targetX, e.z - h.targetZ) <= HERO_LEASH_RANGE ||
-              Math.hypot(e.x - h.x, e.z - h.z) <= 2.4),
+              (h.repositionTimer <= 0 && Math.hypot(e.x - h.x, e.z - h.z) <= 2.4)),
         )
         .sort((a, b) => b.progress - a.progress)[0];
       if (chaseTarget) {
@@ -952,6 +993,20 @@ export class SimulationEngine {
       const step = Math.min(dist, moveSpd * dt);
       h.x += (dx / dist) * step;
       h.z += (dz / dist) * step;
+      // Soft circular deflection around tower slots so hero glides smoothly past pads
+      for (const slot of this.slots.values()) {
+        const sdx = h.x - slot.x;
+        const sdz = h.z - slot.z;
+        const sd = Math.hypot(sdx, sdz);
+        if (sd < 0.78) {
+          const nx = sd > 0.01 ? sdx / sd : slot.x >= 0 ? -1 : 1;
+          const nz = sd > 0.01 ? sdz / sd : 0;
+          h.x = slot.x + nx * 0.78;
+          h.z = slot.z + nz * 0.78;
+        }
+      }
+      h.x = Math.max(-4.6, Math.min(4.6, h.x));
+      h.z = Math.max(-8.2, Math.min(9.0, h.z));
       h.facingAngle = Math.atan2(dx, dz);
       h.moving = true;
     } else {

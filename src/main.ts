@@ -113,7 +113,7 @@ let lastStatePingMs = 0;
 
 function applyDevUnlock(): void {
   saveManager.update((d) => {
-    for (let id = 1; id <= 12; id++) {
+    for (let id = 1; id <= LEVELS.length; id++) {
       d.levelStars[id] = Math.max(d.levelStars[id] ?? 0, 3);
     }
     for (const h of ['boz_pence', 'kizil_kuyruk', 'kaya_dis'] as const) {
@@ -402,8 +402,11 @@ function processBattleEvents(events: SimEvent[]): void {
       battleView.addFloatingDamage(ev.x, ev.z, `+${ev.bounty}`, 'gold');
     } else if (ev.type === 'PINECONE_RAIN') {
       juice.triggerMicroHitStop(0.04, 0.08);
-      sound.playExplosion(true);
+      sound.playPineconeBarrage();
       haptics.impact('medium');
+    } else if (ev.type === 'ACORN_MAGNET') {
+      sound.playMagnetCast();
+      haptics.impact('light');
     } else if (ev.type === 'BARREL_EXPLODED') {
       juice.triggerMicroHitStop(0.04, 0.08);
       sound.playExplosion(true);
@@ -419,7 +422,7 @@ function processBattleEvents(events: SimEvent[]): void {
       }
     } else if (ev.type === 'HERO_ULTIMATE') {
       juice.triggerMicroHitStop(0.042, 0.08);
-      sound.playExplosion(true);
+      sound.playHeroUltimate(ev.variant);
       haptics.impact('medium');
     } else if (ev.type === 'HERO_LEVELED') {
       sound.playUpgrade();
@@ -505,6 +508,25 @@ function processBattleEvents(events: SimEvent[]): void {
   }
 }
 
+let dragHeroState: {
+  startX: number;
+  startY: number;
+  openedSlotId: string | null;
+  dragged: boolean;
+  lastMoveMs: number;
+} | null = null;
+
+function dispatchHeroMove(x: number, z: number): void {
+  if (!activeSim) return;
+  activeSim.dispatch({ type: 'MOVE_HERO', x, z });
+  if (battleView.tutorialPhase === 'move_hero') {
+    battleView.tutorialPhase = 'done';
+    saveManager.update((d) => {
+      d.tutorialDone = true;
+    });
+  }
+}
+
 canvas.addEventListener('pointerdown', (ev) => {
   if (mode !== 'battle' || !activeSim || battleView.paused || activeSim.status !== 'playing') return;
   const hit = sceneMgr.pickWorld(ev.clientX, ev.clientY);
@@ -513,12 +535,16 @@ canvas.addEventListener('pointerdown', (ev) => {
   if (battleView.targetingSkill === 'rain') {
     activeSim.dispatch({ type: 'CAST_PINECONE_RAIN', x: hit.x, z: hit.z });
     battleView.targetingSkill = null;
+    sceneMgr.updateTargetingReticle(null);
+    battleView.showBanner('', 0);
     return;
   }
 
   if (battleView.targetingSkill === 'hero_leap') {
     activeSim.dispatch({ type: 'CAST_HERO_ULTIMATE', x: hit.x, z: hit.z });
     battleView.targetingSkill = null;
+    sceneMgr.updateTargetingReticle(null);
+    battleView.showBanner('', 0);
     return;
   }
 
@@ -533,26 +559,70 @@ canvas.addEventListener('pointerdown', (ev) => {
       activeSim.dispatch({ type: 'CLEAR_SMOKE', slotId: slot.id });
       return;
     }
-    battleView.selectedSlotId = battleView.selectedSlotId === hit.slotId ? null : hit.slotId;
+    const nextSlotId = battleView.selectedSlotId === hit.slotId ? null : hit.slotId;
+    battleView.selectedSlotId = nextSlotId;
     battleView.previewTowerId = null;
+    dragHeroState = {
+      startX: ev.clientX,
+      startY: ev.clientY,
+      openedSlotId: nextSlotId,
+      dragged: false,
+      lastMoveMs: 0,
+    };
     battleView.render(uiRoot, activeSim, sceneMgr);
     return;
   }
 
-  if (battleView.selectedSlotId !== null) {
+  const hadSelectedSlot = battleView.selectedSlotId !== null;
+  if (hadSelectedSlot) {
     battleView.selectedSlotId = null;
     battleView.previewTowerId = null;
     battleView.render(uiRoot, activeSim, sceneMgr);
-    return;
+    if (!sceneMgr.isNearRoad(hit.x, hit.z, 1.65)) {
+      return;
+    }
   }
 
-  activeSim.dispatch({ type: 'MOVE_HERO', x: hit.x, z: hit.z });
-  if (battleView.tutorialPhase === 'move_hero') {
-    battleView.tutorialPhase = 'done';
-    saveManager.update((d) => {
-      d.tutorialDone = true;
-    });
+  dragHeroState = {
+    startX: ev.clientX,
+    startY: ev.clientY,
+    openedSlotId: null,
+    dragged: false,
+    lastMoveMs: performance.now(),
+  };
+  dispatchHeroMove(hit.x, hit.z);
+});
+
+canvas.addEventListener('pointermove', (ev) => {
+  if (mode !== 'battle' || !activeSim || battleView.paused || activeSim.status !== 'playing') return;
+  if (battleView.targetingSkill) {
+    const hover = sceneMgr.pickWorld(ev.clientX, ev.clientY);
+    if (hover) sceneMgr.updateTargetingReticle(battleView.targetingSkill, hover.x, hover.z);
+    return;
   }
+  if (!dragHeroState) return;
+  const distPx = Math.hypot(ev.clientX - dragHeroState.startX, ev.clientY - dragHeroState.startY);
+  if (!dragHeroState.dragged && distPx < 12) return;
+  dragHeroState.dragged = true;
+  if (dragHeroState.openedSlotId && battleView.selectedSlotId === dragHeroState.openedSlotId) {
+    battleView.selectedSlotId = null;
+    battleView.previewTowerId = null;
+    battleView.render(uiRoot, activeSim, sceneMgr);
+  }
+  const now = performance.now();
+  if (now - dragHeroState.lastMoveMs < 65) return;
+  dragHeroState.lastMoveMs = now;
+  const hit = sceneMgr.pickWorld(ev.clientX, ev.clientY);
+  if (hit && !hit.slotId) {
+    dispatchHeroMove(hit.x, hit.z);
+  }
+});
+
+window.addEventListener('pointerup', () => {
+  dragHeroState = null;
+});
+window.addEventListener('pointercancel', () => {
+  dragHeroState = null;
 });
 
 const resizeObserver = new ResizeObserver(() => {
@@ -613,6 +683,7 @@ function frame(nowMs: number): void {
       }
     }
     battleView.updateTimers(rawDt, activeSim);
+    if (!battleView.targetingSkill) sceneMgr.updateTargetingReticle(null);
     sceneMgr.sync(
       activeSim,
       battleView.selectedSlotId,

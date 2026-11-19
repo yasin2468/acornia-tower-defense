@@ -8,7 +8,11 @@ export type EnemyId =
   | 'chomp_brute'
   | 'repair_drone'
   | 'crystal_golem'
-  | 'cryo_colossus';
+  | 'cryo_colossus'
+  | 'frost_warden'
+  | 'ember_bomber'
+  | 'tesla_strider'
+  | 'magma_overlord';
 
 export interface EnemySpec {
   id: EnemyId;
@@ -24,7 +28,7 @@ export interface EnemySpec {
   radius: number;
   color: string;
   accentColor: string;
-  biomeTag?: 'forest' | 'canyon' | 'cavern' | 'snow';
+  biomeTag?: 'forest' | 'canyon' | 'cavern' | 'snow' | 'foundry';
   dashInterval?: number;
   dashDuration?: number;
   dashMult?: number;
@@ -202,6 +206,78 @@ export const ENEMIES: Record<EnemyId, EnemySpec> = {
     biomeTag: 'snow',
     regenPerSec: 8,
     phase2Summon: { enemyId: 'crystal_golem', count: 2, hp: 220, speed: 1.15 },
+  },
+  frost_warden: {
+    id: 'frost_warden',
+    nameKey: 'enemy.frost_warden.name',
+    descKey: 'enemy.frost_warden.desc',
+    isFlying: false,
+    isBoss: false,
+    baseHp: 210,
+    speed: 1.45,
+    armor: 0.48,
+    bounty: 16,
+    baseDamage: 22,
+    radius: 0.56,
+    color: '#2f5d8f',
+    accentColor: '#9ef0ff',
+    biomeTag: 'snow',
+    regenPerSec: 6,
+  },
+  ember_bomber: {
+    id: 'ember_bomber',
+    nameKey: 'enemy.ember_bomber.name',
+    descKey: 'enemy.ember_bomber.desc',
+    isFlying: false,
+    isBoss: false,
+    baseHp: 115,
+    speed: 2.35,
+    armor: 0.1,
+    bounty: 9,
+    baseDamage: 16,
+    radius: 0.44,
+    color: '#ff641c',
+    accentColor: '#ffe46b',
+    biomeTag: 'foundry',
+    dashInterval: 4.0,
+    dashDuration: 0.85,
+    dashMult: 1.85,
+  },
+  tesla_strider: {
+    id: 'tesla_strider',
+    nameKey: 'enemy.tesla_strider.name',
+    descKey: 'enemy.tesla_strider.desc',
+    isFlying: false,
+    isBoss: false,
+    baseHp: 175,
+    speed: 1.85,
+    armor: 0.3,
+    bounty: 14,
+    baseDamage: 20,
+    radius: 0.52,
+    color: '#b86b35',
+    accentColor: '#46f2ff',
+    biomeTag: 'foundry',
+    healAura: { radius: 3.0, hpPerSec: 12 },
+    regenPerSec: 4,
+  },
+  magma_overlord: {
+    id: 'magma_overlord',
+    nameKey: 'enemy.magma_overlord.name',
+    descKey: 'enemy.magma_overlord.desc',
+    isFlying: false,
+    isBoss: true,
+    baseHp: 3600,
+    speed: 0.68,
+    armor: 0.42,
+    bounty: 160,
+    baseDamage: 40,
+    radius: 0.98,
+    color: '#852216',
+    accentColor: '#ffae26',
+    biomeTag: 'foundry',
+    regenPerSec: 10,
+    phase2Summon: { enemyId: 'ember_bomber', count: 4, hp: 160, speed: 2.4 },
   },
 };
 

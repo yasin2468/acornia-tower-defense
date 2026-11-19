@@ -66,6 +66,16 @@ const MEADOW_PALETTES: Record<
     fleckLight: 'rgba(255, 255, 255, 0.35)',
     fleckDark: 'rgba(92, 118, 146, 0.20)',
   },
+  foundry: {
+    gradInner: '#54352f',
+    gradMid: '#3d2522',
+    gradOuter: '#261716',
+    patchA: 'rgba(255, 116, 44, 0.24)',
+    patchB: 'rgba(176, 86, 48, 0.22)',
+    patchC: 'rgba(28, 16, 18, 0.32)',
+    fleckLight: 'rgba(255, 168, 72, 0.28)',
+    fleckDark: 'rgba(24, 14, 16, 0.28)',
+  },
 };
 
 const ROAD_PALETTES: Record<Biome, { mortar: string; stones: string[] }> = {
@@ -73,6 +83,7 @@ const ROAD_PALETTES: Record<Biome, { mortar: string; stones: string[] }> = {
   canyon: { mortar: '#9b6d46', stones: ['#e4c49a', '#d7b284', '#edd0a8', '#cca372'] },
   cavern: { mortar: '#59637d', stones: ['#b5c1d6', '#a4b2c9', '#c4cfe2', '#97a6be'] },
   snow: { mortar: '#889bb2', stones: ['#e2ecf6', '#d6e3f0', '#eef5fc', '#cad9e8'] },
+  foundry: { mortar: '#57281e', stones: ['#9e7d73', '#8c6b61', '#ad8b7e', '#7c5d54'] },
 };
 
 /** Biome-themed valley ground texture so every region feels visually distinct. */

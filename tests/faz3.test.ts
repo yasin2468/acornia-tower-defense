@@ -199,9 +199,24 @@ describe('F3-2 — Kızıl Kuyruk ve Kaya Diş kahramanları', () => {
 });
 
 describe('F3-3 & F3-6 — Orman Günlüğü ve Akustik Biyom Müzikleri', () => {
-  it('Orman Günlüğü 17 birim listeler ve ilk keşif +10 Zümrüt ödülünü yalnızca 1 kez verir', () => {
+  it('Orman Günlüğü 21 birim listeler ve ilk keşif +10 Zümrüt ödülünü yalnızca 1 kez verir', () => {
     const catalog = getJournalCatalog();
-    assert.equal(catalog.length, 17, '4 kule + 3 kahraman + 10 robot = 17 kayıt');
+    assert.equal(catalog.length, 21, '4 kule + 3 kahraman + 14 robot = 21 kayıt');
+    for (const sModel of [
+      'skill_pinecone_meteor',
+      'skill_acorn_magnet',
+      'skill_golden_acorn',
+      'skill_royal_banner',
+      'skill_alchemy_flask',
+      'skill_earth_spike',
+      'enemy_frost_warden',
+      'enemy_ember_bomber',
+      'enemy_tesla_strider',
+      'enemy_magma_overlord',
+    ] as const) {
+      assert.ok(MODEL_NAMES.includes(sModel), `${sModel} MODEL_NAMES icinde olmali`);
+      assert.ok(fs.existsSync(path.resolve(`public/models/${sModel}.glb`)), `${sModel}.glb dosyasi mevcut olmali`);
+    }
 
     const sm = new SaveManager(NOW);
     const before = sm.get().emeraldGems;

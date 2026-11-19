@@ -30,6 +30,7 @@ aynı anda değiştirmez. Durumlar: `planlandi` → `devam` → `dogrulaniyor` �
 | GF-2 | Vuruş hissiyatı, katmanlı ses miksajı, kahraman kesiş izi, parabolik ölüm ve kale hasar geri bildirimi | Carbon | dogrulandi | `SimulationEngine`/`JuiceController`/`SceneManager`/`SoundEngine`/`CameraController`/`ModelFactory`/`BattleView`/`main.ts` + `tests/gamefeel.test.ts` (95/95 pass) + build + canlı ?promo=1 tarayıcı QA (0 hata) ✓ |
 | UI-1 | "Ulu Meşe Parşömeni" ana menü yenilemesi, Kenney Adventure UI (CC0) 9-slice çerçeveler ve 5'li alt navigasyon | Carbon | dogrulandi | `public/ui/kenney/*` (CC0) + `MetaView`/`styles.css`/`icons.ts`/`theme.ts`/`locales.ts`/`main.ts` + `tests/menu_ui.test.ts` (99/99 pass) + build + canlı tarayıcı QA (0 hata) ✓ |
 | UI-1B | Konsept 1'e birebir görsel sadakat yenilemesi (tam ekran boyama harita, 13 RGBA ikon/bot rozeti, kalkan düğümler & pirinç köşe çerçeveler) | Carbon | dogrulandi | `public/ui/oak/*` (world_map_oak + 13 RGBA PNG) + `MetaView`/`styles.css`/`icons.ts`/`locales.ts` + `tests/menu_ui.test.ts` (99/99 pass) + build + canlı tarayıcı QA (0 hata) ✓ |
+| P5 / GF-3 | Kahraman/slot takılma çözümü, 6 adet 3B yetenek modeli (`skill_*.glb`) & dinamik VFX/SFX, 14 düşman + 16 bölüm Kor Dökümhanesi genişlemesi | Carbon | dogrulandi | Blender 5.2 CLI + `AssetLoader`/`SimulationEngine`/`SceneManager`/`SoundEngine`/`levels`/`enemies`/`MetaView` + `99/99` test pass + `tsc/vite build` + canlı tarayıcı QA (0 hata) ✓ |
 
 ## Kuyruk (Carbon doldurur)
 

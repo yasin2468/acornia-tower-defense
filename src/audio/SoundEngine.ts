@@ -34,7 +34,7 @@ export class VoiceLimiter {
 }
 
 type Priority = 0 | 1 | 2;
-export type MusicTheme = 'none' | 'menu' | 'forest' | 'canyon' | 'cavern' | 'snow';
+export type MusicTheme = 'none' | 'menu' | 'forest' | 'canyon' | 'cavern' | 'snow' | 'foundry';
 
 interface BiomeProgression {
   tempoMs: number;
@@ -49,6 +49,7 @@ const BIOME_MUSIC: Record<Exclude<MusicTheme, 'none'>, BiomeProgression> = {
   canyon: { tempoMs: 360, notes: [220.0, 261.6, 329.6, 392.0, 440.0, 392.0, 329.6, 293.7], wave: 'triangle', gain: 0.017 },
   cavern: { tempoMs: 520, notes: [246.9, 311.1, 370.0, 493.9, 370.0, 311.1, 277.2, 370.0], wave: 'sine', gain: 0.018 },
   snow: { tempoMs: 490, notes: [329.6, 392.0, 493.9, 587.3, 659.3, 493.9, 392.0, 329.6], wave: 'sine', gain: 0.016 },
+  foundry: { tempoMs: 340, notes: [196.0, 233.1, 293.7, 349.2, 293.7, 261.6, 233.1, 293.7], wave: 'sawtooth', gain: 0.014 },
 };
 
 export class SoundEngine {
@@ -384,5 +385,67 @@ export class SoundEngine {
   playGust(): void {
     this.noiseBurst(1900, 'bandpass', 0.18, 0.09, 1.1, 0, 1);
     this.tone(520, 880, 0.14, 'sine', 0.04, 0, 1, 0.04);
+  }
+
+  /** Layered incoming whistle + staggered meteor impacts for Pinecone Rain. */
+  playPineconeBarrage(): void {
+    this.noiseBurst(2800, 'bandpass', 0.22, 0.09, 2.2, 0, 2);
+    this.tone(920, 290, 0.24, 'sine', 0.09, 0, 2, 0.05);
+    this.playExplosion(true);
+    for (let i = 1; i <= 3; i++) {
+      const d = i * 0.085;
+      this.tone(145 - i * 12, 38, 0.2, 'triangle', 0.12, d, 2);
+      this.noiseBurst(680, 'lowpass', 0.16, 0.09, 0.9, d, 1);
+    }
+  }
+
+  /** Magnetic induction hum + ascending golden chime arpeggio for Acorn Magnet. */
+  playMagnetCast(): void {
+    this.tone(240, 560, 0.26, 'triangle', 0.11, 0, 2, 0.03);
+    this.noiseBurst(3800, 'bandpass', 0.18, 0.06, 3.0, 0.02, 1);
+    const notes = [659, 784, 988, 1319];
+    notes.forEach((f, idx) => {
+      this.tone(f, f * 1.03, 0.11, 'sine', 0.075, 0.06 + idx * 0.06, 2, 0.02);
+    });
+    this.duckMusic(0.55, 0.2);
+  }
+
+  /** Characterful multi-layer SFX tailored to each Hero Ultimate variant. */
+  playHeroUltimate(variant: 'classic' | 'viking' | 'royal' | 'fox_storm' | 'boar_charge'): void {
+    if (variant === 'fox_storm') {
+      // Flask shatter glass crackle + emerald chemical fizz + alchemy bell
+      this.noiseBurst(4600, 'highpass', 0.16, 0.13, 1.4, 0, 2);
+      this.tone(1480, 620, 0.18, 'triangle', 0.1, 0.02, 2);
+      this.noiseBurst(2200, 'bandpass', 0.28, 0.1, 2.4, 0.08, 2);
+      this.tone(523, 880, 0.22, 'sine', 0.08, 0.1, 1);
+      this.duckMusic(0.35, 0.25);
+      return;
+    }
+    if (variant === 'royal') {
+      // Brass horn fanfare triad + heavy banner plant thud
+      this.transient(0.08, 0.22, 74, 2);
+      this.tone(392, 392, 0.14, 'triangle', 0.11, 0.02, 2, 0.02);
+      this.tone(523, 523, 0.15, 'triangle', 0.11, 0.1, 2, 0.02);
+      this.tone(659, 784, 0.26, 'triangle', 0.12, 0.18, 2, 0.02);
+      this.duckMusic(0.4, 0.25);
+      return;
+    }
+    if (variant === 'boar_charge') {
+      // Heavy seismic slam + rumbling stone fissure
+      this.transient(0.11, 0.3, 56, 2);
+      this.tone(110, 32, 0.36, 'sawtooth', 0.16, 0, 2);
+      this.noiseBurst(520, 'lowpass', 0.34, 0.18, 0.75, 0.03, 2);
+      this.duckMusic(0.25, 0.3);
+      return;
+    }
+    if (variant === 'viking') {
+      // Leap thunder slam + metallic axe ring
+      this.playExplosion(true);
+      this.tone(880, 440, 0.18, 'sine', 0.09, 0.04, 2);
+      return;
+    }
+    // classic bear roar + seismic earth thump
+    this.playExplosion(true);
+    this.tone(240, 120, 0.28, 'sawtooth', 0.11, 0.02, 2);
   }
 }

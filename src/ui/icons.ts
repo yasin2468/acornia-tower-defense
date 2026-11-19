@@ -58,9 +58,18 @@ export const OAK_UI_URLS = {
 };
 
 export function getEnemyBadgeUrl(enemyId: EnemyId, isBoss?: boolean): string {
-  if (isBoss || enemyId === 'mega_harvester' || enemyId === 'cryo_colossus') return OAK_UI_URLS.botBoss;
-  if (enemyId === 'shield_loader' || enemyId === 'crystal_golem') return OAK_UI_URLS.botShield;
-  if (enemyId === 'swarm_saw' || enemyId === 'chomp_brute' || enemyId === 'turbo_hopper') {
+  if (isBoss || enemyId === 'mega_harvester' || enemyId === 'cryo_colossus' || enemyId === 'magma_overlord') {
+    return OAK_UI_URLS.botBoss;
+  }
+  if (enemyId === 'shield_loader' || enemyId === 'crystal_golem' || enemyId === 'frost_warden') {
+    return OAK_UI_URLS.botShield;
+  }
+  if (
+    enemyId === 'swarm_saw' ||
+    enemyId === 'chomp_brute' ||
+    enemyId === 'turbo_hopper' ||
+    enemyId === 'ember_bomber'
+  ) {
     return OAK_UI_URLS.botSaw;
   }
   return OAK_UI_URLS.botScout;

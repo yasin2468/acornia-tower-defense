@@ -413,18 +413,22 @@ export class MetaView {
     });
 
     const OAK_MAP_TRAIL: ReadonlyArray<{ xPct: number; yPct: number }> = [
-      { xPct: 54, yPct: 61.5 },
-      { xPct: 31, yPct: 58.5 },
-      { xPct: 20, yPct: 51.5 },
-      { xPct: 27, yPct: 44.5 },
-      { xPct: 43, yPct: 39.5 },
-      { xPct: 63, yPct: 38 },
-      { xPct: 72, yPct: 33.5 },
-      { xPct: 61, yPct: 29.5 },
-      { xPct: 38, yPct: 25 },
-      { xPct: 52, yPct: 21 },
-      { xPct: 43, yPct: 16.5 },
-      { xPct: 51, yPct: 13 },
+      { xPct: 54, yPct: 65.5 },
+      { xPct: 33, yPct: 62.5 },
+      { xPct: 20, yPct: 58.0 },
+      { xPct: 26, yPct: 53.0 },
+      { xPct: 44, yPct: 49.5 },
+      { xPct: 65, yPct: 46.8 },
+      { xPct: 74, yPct: 42.2 },
+      { xPct: 59, yPct: 38.8 },
+      { xPct: 36, yPct: 36.2 },
+      { xPct: 23, yPct: 32.0 },
+      { xPct: 38, yPct: 28.2 },
+      { xPct: 59, yPct: 25.5 },
+      { xPct: 72, yPct: 22.0 },
+      { xPct: 56, yPct: 18.8 },
+      { xPct: 38, yPct: 16.5 },
+      { xPct: 51, yPct: 13.5 },
     ];
 
     const displayNodes = WORLD_MAP_NODES.map((n, idx) => ({

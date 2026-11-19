@@ -496,8 +496,8 @@ export function updateEnemyAnimation(
   }
 
   if (rig.spinPart && fxDt > 0) {
-    if (rig.enemyId === 'hover_drone' || rig.enemyId === 'repair_drone') {
-      rig.spinPart.rotation.y += fxDt * 26;
+    if (rig.enemyId === 'hover_drone' || rig.enemyId === 'repair_drone' || rig.enemyId === 'tesla_strider') {
+      rig.spinPart.rotation.y += fxDt * (rig.enemyId === 'tesla_strider' ? 14 : 26);
     } else if (rig.enemyId === 'swarm_saw' || rig.enemyId === 'chomp_brute') {
       rig.spinPart.rotation.x += fxDt * 18;
     } else {

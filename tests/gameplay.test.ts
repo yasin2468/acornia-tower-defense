@@ -112,8 +112,8 @@ function minDistToPath(px: number, pz: number, path: Array<{ x: number; z: numbe
   return minD;
 }
 
-describe('Paket 2 — 12 bölüm yol/yuva geometrisi ve çatallı ikincil yollar', () => {
-  it('12 bölümün tümünde yuvalar görüş alanında, yoldan >= 1.55m ve birbirinden >= 1.70m uzak, kahraman yol üzerinde', () => {
+describe('Paket 2 — 16 bölüm yol/yuva geometrisi ve çatallı ikincil yollar', () => {
+  it('16 bölümün tümünde yuvalar görüş alanında, yoldan >= 1.55m ve birbirinden >= 1.70m uzak, kahraman yol üzerinde', () => {
     for (const lvl of LEVELS) {
       for (const s of lvl.slots) {
         assert.ok(Math.abs(s.x) <= 3.5, `${lvl.id} ${s.id} x sınır dışı (${s.x})`);

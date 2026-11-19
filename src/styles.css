@@ -1051,13 +1051,15 @@ body,
 
 .drawer-head {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  gap: 6px 8px;
 }
 
 .drawer-stage-meta {
-  min-width: 0;
+  flex: 1 1 148px;
+  min-width: 148px;
 }
 
 .drawer-stage-title {
@@ -1078,10 +1080,10 @@ body,
 
 .drawer-threats {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 3px;
-  flex-shrink: 0;
+  flex: 1 1 auto;
 }
 
 .threat-medallion {
@@ -1329,6 +1331,7 @@ body,
 .stage-biome-pill.biome-canyon { background: rgba(235, 132, 54, 0.26); color: #ffd099; }
 .stage-biome-pill.biome-cavern { background: rgba(110, 102, 232, 0.28); color: #c4c7ff; }
 .stage-biome-pill.biome-snow { background: rgba(114, 198, 245, 0.26); color: #cff1ff; }
+.stage-biome-pill.biome-foundry { background: rgba(255, 112, 48, 0.28); color: #ffd4b8; }
 
 .stage-boss-pill {
   font-size: 10px;

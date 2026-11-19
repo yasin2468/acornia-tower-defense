@@ -17,8 +17,8 @@ const ORIG_LEVEL_TOTAL_HP = [
 ];
 
 describe('Dengе ve kabul kriterleri (DEGISIKLIK-2026-11-18)', () => {
-  it('D1: 12 seviyede dalga HP katları 1.09-1.21 bandında, monoton artan, toplam ±%10 korunmuş', () => {
-    assert.equal(LEVELS.length, 12);
+  it('D1: 16 seviyede dalga HP katları 1.09-1.21 bandında, monoton artan, ilk 12 seviyede toplam ±%10 korunmuş', () => {
+    assert.equal(LEVELS.length, 16);
     for (const lvl of LEVELS) {
       const totals = lvl.waves.map(waveHpTotal);
       assert.ok(totals.length >= 7, `L${lvl.id} dalga sayisi`);
@@ -30,9 +30,13 @@ describe('Dengе ve kabul kriterleri (DEGISIKLIK-2026-11-18)', () => {
           `L${lvl.id} W${i + 1}/W${i} kati ${ratio.toFixed(3)} bandin disinda (1.09-1.21)`,
         );
       }
-      if (lvl.id !== 4) {
+      if (lvl.id <= 12 && lvl.id !== 4) {
         const drift = Math.abs(levelHpTotal(lvl) / ORIG_LEVEL_TOTAL_HP[lvl.id - 1] - 1);
         assert.ok(drift <= 0.1, `L${lvl.id} toplam HP sapmasi %${(drift * 100).toFixed(1)} > 10`);
+      }
+      if (lvl.id >= 13) {
+        const clrRatio = levelClearBonus(lvl) / levelHpTotal(lvl);
+        assert.ok(clrRatio >= 0.014, `L${lvl.id} clearBonus/HP = ${clrRatio.toFixed(4)} < 0.014`);
       }
     }
   });

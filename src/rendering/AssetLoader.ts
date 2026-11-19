@@ -50,6 +50,16 @@ export const MODEL_NAMES = [
   'enemy_repair_drone',
   'enemy_crystal_golem',
   'enemy_cryo_colossus',
+  'enemy_frost_warden',
+  'enemy_ember_bomber',
+  'enemy_tesla_strider',
+  'enemy_magma_overlord',
+  'skill_pinecone_meteor',
+  'skill_acorn_magnet',
+  'skill_golden_acorn',
+  'skill_royal_banner',
+  'skill_alchemy_flask',
+  'skill_earth_spike',
 ] as const;
 
 export type ModelName = (typeof MODEL_NAMES)[number];
@@ -211,10 +221,17 @@ export function getLevelModelDependencies(
     'enemy_shield_loader',
     'enemy_chomp_brute',
     'enemy_swarm_saw',
+    // Active skills & hero ultimates 3D props always ready in battle
+    'skill_pinecone_meteor',
+    'skill_acorn_magnet',
+    'skill_golden_acorn',
+    'skill_royal_banner',
+    'skill_alchemy_flask',
+    'skill_earth_spike',
   ]);
 
   if (level.slots.some((s) => s.lockedByStump)) deps.add('env_stump');
-  if (level.biome === 'cavern' || level.biome === 'snow') deps.add('env_crystal');
+  if (level.biome === 'cavern' || level.biome === 'snow' || level.biome === 'foundry') deps.add('env_crystal');
   if (level.biome !== 'cavern') {
     deps.add('env_tree_oak');
     deps.add('env_tree_pine');
