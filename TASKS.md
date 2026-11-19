@@ -27,6 +27,7 @@ aynı anda değiştirmez. Durumlar: `planlandi` → `devam` → `dogrulaniyor` �
 | F3-3 | Orman Günlüğü (`360°` 3D vitrin + Zümrüt ödülü) & Akustik Biyom Müzikleri (`F3-6`) | Carbon | dogrulandi | `SceneManager.renderJournalShowcase` + `SoundEngine` biyom müziği + `tests/faz3.test.ts` (86/86 pass) + build ✓ |
 | F3-4 | Kayıp Orman Seferi (5 aşamalı Roguelike oyun sonu + 6 Orman Tılsımı) | Carbon | dogrulandi | `roguelike.ts` + `SimulationEngine` 6 tılsım/kısıt + `MetaView`/`BattleView` sefer akışı + `tests/faz3.test.ts` (89/89 pass) + build ✓ |
 | F3-5 | 14 Günlük PvP Kupa Ligi, Harita Pin/Emoji, 30 Kademeli Sezonluk Orman Bileti & Haptics/SDK kancaları | Carbon | dogrulandi | `season.ts` + `wsRelay`/`NetworkService` `SOCIAL_PING` + `CommercialServices` `HapticsService`/SDK köprüsü + `tests/faz3.test.ts` & `multiplayer.test.ts` (93/93 pass) + build ✓ |
+| GF-2 | Vuruş hissiyatı, katmanlı ses miksajı, kahraman kesiş izi, parabolik ölüm ve kale hasar geri bildirimi | Carbon | dogrulandi | `SimulationEngine`/`JuiceController`/`SceneManager`/`SoundEngine`/`CameraController`/`ModelFactory`/`BattleView`/`main.ts` + `tests/gamefeel.test.ts` (95/95 pass) + build + canlı ?promo=1 tarayıcı QA (0 hata) ✓ |
 
 ## Kuyruk (Carbon doldurur)
 

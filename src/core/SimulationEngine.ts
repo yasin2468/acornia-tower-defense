@@ -46,8 +46,44 @@ export type SimEvent =
   | { type: 'STUMP_CLEARED'; slotId: string }
   | { type: 'SMOKE_CLEARED'; slotId: string }
   | { type: 'TOWER_FIRED'; slotId: string; towerId: TowerId; fromX: number; fromZ: number; toX: number; toZ: number; targetIds: number[]; isChain?: boolean; isLine?: boolean; isAoe?: boolean }
-  | { type: 'ENEMY_HIT'; enemyId: number; x: number; z: number; damage: number; isCrit: boolean; isBoss: boolean; armorBroken: boolean }
-  | { type: 'ENEMY_KILLED'; enemyId: number; x: number; z: number; isBoss: boolean; bounty: number }
+  | {
+      type: 'PROJECTILE_IMPACT';
+      towerId: TowerId;
+      branchId?: EvolutionBranchId;
+      x: number;
+      z: number;
+      dirX: number;
+      dirZ: number;
+      aoeRadius: number;
+      isCrit: boolean;
+      isFreeze: boolean;
+      splash?: boolean;
+    }
+  | {
+      type: 'ENEMY_HIT';
+      enemyId: number;
+      x: number;
+      z: number;
+      damage: number;
+      isCrit: boolean;
+      isBoss: boolean;
+      armorBroken: boolean;
+      dirX?: number;
+      dirZ?: number;
+      heavy?: boolean;
+      resisted?: boolean;
+    }
+  | {
+      type: 'ENEMY_KILLED';
+      enemyId: number;
+      x: number;
+      z: number;
+      isBoss: boolean;
+      bounty: number;
+      dirX?: number;
+      dirZ?: number;
+      heavy?: boolean;
+    }
   | { type: 'BOSS_PHASE_TWO'; enemyId: number; bossId?: EnemyId; smokedSlotId?: string; x: number; z: number }
   | { type: 'PINECONE_RAIN'; x: number; z: number; hits: number }
   | { type: 'BARREL_EXPLODED'; barrelId: string; x: number; z: number; hits: number }
@@ -437,7 +473,11 @@ export class SimulationEngine {
           for (const e of [...this.enemies]) {
             if (e.hp > 0 && Math.hypot(e.x - slot.x, e.z - slot.z) <= 4.0) {
               hits += 1;
-              this.damageEnemy(e, 80, 0.25, false);
+              this.damageEnemy(e, 80, 0.25, false, false, false, {
+                dirX: e.x - slot.x,
+                dirZ: e.z - slot.z,
+                heavy: true,
+              });
             }
           }
           this.events.push({ type: 'HERO_CLAW_SHOCK', x: slot.x, z: slot.z, hits });
@@ -476,7 +516,11 @@ export class SimulationEngine {
           if (Math.hypot(e.x - barrel.x, e.z - barrel.z) <= 3.2) {
             hits += 1;
             e.stunTimer = Math.max(e.stunTimer, 1.1);
-            this.damageEnemy(e, 115, 0.35, false);
+            this.damageEnemy(e, 115, 0.35, false, false, false, {
+              dirX: e.x - barrel.x,
+              dirZ: e.z - barrel.z,
+              heavy: true,
+            });
           }
         }
         this.events.push({ type: 'BARREL_EXPLODED', barrelId: barrel.id, x: barrel.x, z: barrel.z, hits });
@@ -521,7 +565,11 @@ export class SimulationEngine {
               e.armor = Math.max(0, e.armor * 0.7);
               e.slowPct = Math.max(e.slowPct, 0.35);
               e.slowTimer = Math.max(e.slowTimer, 2.2);
-              this.damageEnemy(e, dmg, 0.25, false, false, hadArmor);
+              this.damageEnemy(e, dmg, 0.25, false, false, hadArmor, {
+                dirX: e.x - tx,
+                dirZ: e.z - tz,
+                heavy: true,
+              });
             }
           }
           this.events.push({ type: 'HERO_ULTIMATE', variant: 'fox_storm', x: tx, z: tz, hits });
@@ -553,7 +601,11 @@ export class SimulationEngine {
               hits += 1;
               e.stunTimer = Math.max(e.stunTimer, 1.6);
               this.pushEnemyBack(e, 1.1);
-              this.damageEnemy(e, dmg, 0.4, true);
+              this.damageEnemy(e, dmg, 0.4, true, false, false, {
+                dirX: e.x - tx,
+                dirZ: e.z - tz,
+                heavy: true,
+              });
             }
           }
           this.events.push({ type: 'HERO_ULTIMATE', variant: 'boar_charge', x: tx, z: tz, hits });
@@ -572,7 +624,11 @@ export class SimulationEngine {
               hits += 1;
               e.armor = Math.max(0, e.armor * 0.75);
               e.stunTimer = Math.max(e.stunTimer, 1.8);
-              this.damageEnemy(e, dmg, 0.25, false, false, e.armor > 0);
+              this.damageEnemy(e, dmg, 0.25, false, false, e.armor > 0, {
+                dirX: e.x - h.x,
+                dirZ: e.z - h.z,
+                heavy: true,
+              });
             }
           }
         } else if (variant === 'viking') {
@@ -599,7 +655,11 @@ export class SimulationEngine {
             if (Math.hypot(e.x - tx, e.z - tz) <= 3.2) {
               hits += 1;
               e.stunTimer = Math.max(e.stunTimer, 1.0);
-              this.damageEnemy(e, dmg, 0.25, true);
+              this.damageEnemy(e, dmg, 0.25, true, false, false, {
+                dirX: e.x - tx,
+                dirZ: e.z - tz,
+                heavy: true,
+              });
             }
           }
         } else {
@@ -613,7 +673,11 @@ export class SimulationEngine {
             if (Math.hypot(e.x - h.x, e.z - h.z) <= 3.5) {
               hits += 1;
               e.stunTimer = Math.max(e.stunTimer, 1.2);
-              this.damageEnemy(e, dmg, 0.2, false);
+              this.damageEnemy(e, dmg, 0.2, false, false, false, {
+                dirX: e.x - h.x,
+                dirZ: e.z - h.z,
+                heavy: true,
+              });
             }
           }
         }
@@ -631,7 +695,11 @@ export class SimulationEngine {
           const dist = Math.hypot(e.x - cmd.x, e.z - cmd.z);
           if (dist <= 3.0) {
             hits += 1;
-            this.damageEnemy(e, rainDmg, 0.25, false);
+            this.damageEnemy(e, rainDmg, 0.25, false, false, false, {
+              dirX: e.x - cmd.x,
+              dirZ: e.z - cmd.z,
+              heavy: true,
+            });
           }
         }
         this.events.push({ type: 'PINECONE_RAIN', x: cmd.x, z: cmd.z, hits });
@@ -917,7 +985,11 @@ export class SimulationEngine {
           if (e.uid === rangedTarget.uid || dSplash <= 1.4) {
             e.slowPct = Math.max(e.slowPct, 0.2);
             e.slowTimer = Math.max(e.slowTimer, 1.2);
-            this.damageEnemy(e, e.uid === rangedTarget.uid ? dmg : Math.round(dmg * 0.5), 0.2, false);
+            this.damageEnemy(e, e.uid === rangedTarget.uid ? dmg : Math.round(dmg * 0.5), 0.2, false, false, false, {
+              dirX: rangedTarget.x - h.x,
+              dirZ: rangedTarget.z - h.z,
+              heavy: e.uid === rangedTarget.uid,
+            });
           }
         }
         this.grantHeroXp(12);
@@ -951,7 +1023,11 @@ export class SimulationEngine {
                 e.stunTimer = Math.max(e.stunTimer, 0.7);
                 this.pushEnemyBack(e, 0.9);
               }
-              this.damageEnemy(e, shockDmg, 0.2, false);
+              this.damageEnemy(e, shockDmg, 0.2, false, false, false, {
+                dirX: e.x - h.x,
+                dirZ: e.z - h.z,
+                heavy: true,
+              });
             }
           }
           this.events.push({ type: 'HERO_CLAW_SHOCK', x: h.x, z: h.z, hits, heroId: this.heroId });
@@ -965,7 +1041,11 @@ export class SimulationEngine {
             heroSpec.damage * lvlMult * cardMult * cls.damageMult * this.talentMods.heroDamageMult * giantDmgMult,
           );
           h.facingAngle = Math.atan2(target.x - h.x, target.z - h.z);
-          this.damageEnemy(target, dmg, 0.15, false);
+          this.damageEnemy(target, dmg, 0.15, false, false, false, {
+            dirX: target.x - h.x,
+            dirZ: target.z - h.z,
+            heavy: true,
+          });
           this.grantHeroXp(12);
           this.events.push({ type: 'HERO_ATTACK', x: h.x, z: h.z, targetX: target.x, targetZ: target.z });
         }
@@ -1217,10 +1297,18 @@ export class SimulationEngine {
         const hitIds: number[] = [];
         let cur: EnemyInstance | null = target;
         const visited = new Set<number>();
+        let prevX = tower.x;
+        let prevZ = tower.z;
         for (let c = 0; c < stats.chainCount && cur; c++) {
           visited.add(cur.uid);
           hitIds.push(cur.uid);
-          this.applyTowerHitEffects(cur, dmg, stats, isCrit, isFourthShot);
+          this.applyTowerHitEffects(cur, dmg, stats, isCrit, isFourthShot, {
+            dirX: cur.x - prevX,
+            dirZ: cur.z - prevZ,
+            heavy: false,
+          });
+          prevX = cur.x;
+          prevZ = cur.z;
           const next = this.enemies
             .filter((e) => !visited.has(e.uid) && e.hp > 0 && Math.hypot(e.x - cur!.x, e.z - cur!.z) <= 3.6)
             .sort((a, b) => Math.hypot(a.x - cur!.x, a.z - cur!.z) - Math.hypot(b.x - cur!.x, b.z - cur!.z))[0];
@@ -1253,7 +1341,11 @@ export class SimulationEngine {
           const perp = Math.abs((e.x - tower.x) * -uz + (e.z - tower.z) * ux);
           if (perp <= e.radius + 0.65) {
             hitIds.push(e.uid);
-            this.applyTowerHitEffects(e, dmg, stats, isCrit, isFourthShot);
+            this.applyTowerHitEffects(e, dmg, stats, isCrit, isFourthShot, {
+              dirX: ux,
+              dirZ: uz,
+              heavy: true,
+            });
           }
         }
         this.events.push({
@@ -1313,16 +1405,46 @@ export class SimulationEngine {
       const move = p.speed * dt;
 
       if (dist <= move + 0.15) {
+        const ux = dist > 1e-4 ? dx / dist : 0;
+        const uz = dist > 1e-4 ? dz / dist : 1;
+        const impactX = p.targetX;
+        const impactZ = p.targetZ;
+        const isFreeze = Boolean(p.isFourthShot && p.stats.freezeDuration);
+        const isSplash = Boolean(
+          this.relics.includes('explosive_acorns') && !p.stats.aoeRadius && (p.towerId === 'squirrel' || p.towerId === 'hedgehog'),
+        );
+        const heavyHit = Boolean(p.stats.aoeRadius || p.towerId === 'hedgehog' || p.isCrit);
+        this.events.push({
+          type: 'PROJECTILE_IMPACT',
+          towerId: p.towerId,
+          branchId: p.branchId,
+          x: impactX,
+          z: impactZ,
+          dirX: ux,
+          dirZ: uz,
+          aoeRadius: p.stats.aoeRadius ?? 0,
+          isCrit: p.isCrit,
+          isFreeze,
+          splash: isSplash,
+        });
+
         if (p.stats.aoeRadius) {
           for (const e of this.enemies) {
-            if (!e.isFlying && e.hp > 0 && Math.hypot(e.x - p.targetX, e.z - p.targetZ) <= p.stats.aoeRadius) {
-              this.applyTowerHitEffects(e, p.damage, p.stats, p.isCrit, p.isFourthShot);
+            if (!e.isFlying && e.hp > 0 && Math.hypot(e.x - impactX, e.z - impactZ) <= p.stats.aoeRadius) {
+              const rx = e.x - impactX;
+              const rz = e.z - impactZ;
+              const rlen = Math.hypot(rx, rz);
+              this.applyTowerHitEffects(e, p.damage, p.stats, p.isCrit, p.isFourthShot, {
+                dirX: rlen > 0.05 ? rx : ux,
+                dirZ: rlen > 0.05 ? rz : uz,
+                heavy: true,
+              });
             }
           }
           if (p.stats.resinDuration && p.stats.resinDps) {
             this.resinPools.push({
-              x: p.targetX,
-              z: p.targetZ,
+              x: impactX,
+              z: impactZ,
               radius: p.stats.aoeRadius * 0.9,
               dps: p.stats.resinDps,
               slowPct: p.stats.resinSlowPct ?? 0.2,
@@ -1330,12 +1452,20 @@ export class SimulationEngine {
             });
           }
         } else if (target) {
-          this.applyTowerHitEffects(target, p.damage, p.stats, p.isCrit, p.isFourthShot);
-          if (this.relics.includes('explosive_acorns') && (p.towerId === 'squirrel' || p.towerId === 'hedgehog')) {
+          this.applyTowerHitEffects(target, p.damage, p.stats, p.isCrit, p.isFourthShot, {
+            dirX: ux,
+            dirZ: uz,
+            heavy: heavyHit,
+          });
+          if (isSplash) {
             const splashDmg = Math.max(1, Math.round(p.damage * 0.35));
             for (const e of [...this.enemies]) {
               if (e.uid !== target.uid && e.hp > 0 && Math.hypot(e.x - target.x, e.z - target.z) <= 1.6) {
-                this.damageEnemy(e, splashDmg, p.stats.armorPiercePct ?? 0, false);
+                this.damageEnemy(e, splashDmg, p.stats.armorPiercePct ?? 0, false, false, false, {
+                  dirX: e.x - target.x,
+                  dirZ: e.z - target.z,
+                  heavy: false,
+                });
               }
             }
           }
@@ -1372,6 +1502,7 @@ export class SimulationEngine {
     stats: TowerTierStats,
     isCrit: boolean,
     isFourthShot: boolean,
+    hitMeta?: { dirX?: number; dirZ?: number; heavy?: boolean },
   ): void {
     let dmg = rawDamage;
     if (enemy.isBoss && stats.bossBonusPct) {
@@ -1406,7 +1537,7 @@ export class SimulationEngine {
       pierce = Math.min(0.95, pierce + 0.15);
     }
 
-    this.damageEnemy(enemy, dmg, pierce, isCrit, false, armorBroken);
+    this.damageEnemy(enemy, dmg, pierce, isCrit, false, armorBroken, hitMeta);
   }
 
   private damageEnemy(
@@ -1416,11 +1547,13 @@ export class SimulationEngine {
     isCrit: boolean,
     suppressEvents = false,
     armorBroken = false,
+    hitMeta?: { dirX?: number; dirZ?: number; heavy?: boolean },
   ): void {
     if (enemy.hp <= 0) return;
 
     const effectiveArmor = enemy.armor * (1 - armorPiercePct);
     const finalDamage = Math.max(1, rawDamage * (1 - effectiveArmor));
+    const resisted = effectiveArmor >= 0.28 && armorPiercePct < 0.45 && !isCrit && !armorBroken;
     enemy.hp -= finalDamage;
     enemy.hitFlashTimer = 0.04; // 40 ms crisp flash
 
@@ -1434,6 +1567,10 @@ export class SimulationEngine {
         isCrit,
         isBoss: enemy.isBoss,
         armorBroken,
+        dirX: hitMeta?.dirX,
+        dirZ: hitMeta?.dirZ,
+        heavy: hitMeta?.heavy,
+        resisted,
       });
     }
 
@@ -1502,6 +1639,9 @@ export class SimulationEngine {
         z: enemy.z,
         isBoss: enemy.isBoss,
         bounty: earned,
+        dirX: hitMeta?.dirX,
+        dirZ: hitMeta?.dirZ,
+        heavy: hitMeta?.heavy,
       });
     }
   }

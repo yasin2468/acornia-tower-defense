@@ -44,11 +44,11 @@ interface BiomeProgression {
 }
 
 const BIOME_MUSIC: Record<Exclude<MusicTheme, 'none'>, BiomeProgression> = {
-  menu: { tempoMs: 460, notes: [261.6, 329.6, 392.0, 493.9, 392.0, 329.6, 293.7, 392.0], wave: 'triangle', gain: 0.042 },
-  forest: { tempoMs: 420, notes: [293.7, 349.2, 440.0, 523.3, 440.0, 392.0, 349.2, 440.0], wave: 'triangle', gain: 0.04 },
-  canyon: { tempoMs: 360, notes: [220.0, 261.6, 329.6, 392.0, 440.0, 392.0, 329.6, 293.7], wave: 'triangle', gain: 0.042 },
-  cavern: { tempoMs: 520, notes: [246.9, 311.1, 370.0, 493.9, 370.0, 311.1, 277.2, 370.0], wave: 'sine', gain: 0.045 },
-  snow: { tempoMs: 490, notes: [329.6, 392.0, 493.9, 587.3, 659.3, 493.9, 392.0, 329.6], wave: 'sine', gain: 0.04 },
+  menu: { tempoMs: 460, notes: [261.6, 329.6, 392.0, 493.9, 392.0, 329.6, 293.7, 392.0], wave: 'triangle', gain: 0.017 },
+  forest: { tempoMs: 420, notes: [293.7, 349.2, 440.0, 523.3, 440.0, 392.0, 349.2, 440.0], wave: 'triangle', gain: 0.016 },
+  canyon: { tempoMs: 360, notes: [220.0, 261.6, 329.6, 392.0, 440.0, 392.0, 329.6, 293.7], wave: 'triangle', gain: 0.017 },
+  cavern: { tempoMs: 520, notes: [246.9, 311.1, 370.0, 493.9, 370.0, 311.1, 277.2, 370.0], wave: 'sine', gain: 0.018 },
+  snow: { tempoMs: 490, notes: [329.6, 392.0, 493.9, 587.3, 659.3, 493.9, 392.0, 329.6], wave: 'sine', gain: 0.016 },
 };
 
 export class SoundEngine {
@@ -110,7 +110,6 @@ export class SoundEngine {
     const ctx = this.ctx;
     if (!ctx || ctx.state !== 'running' || !this.musicBus) return;
     const now = ctx.currentTime;
-    this.musicBus.gain.setTargetAtTime(1.0, now, 0.08);
     const freq = spec.notes[this.musicStep % spec.notes.length];
     this.musicStep += 1;
     const osc = ctx.createOscillator();
@@ -124,6 +123,15 @@ export class SoundEngine {
     g.connect(this.musicBus);
     osc.start(now);
     osc.stop(now + 0.36);
+  }
+
+  private duckMusic(level = 0.35, releaseSec = 0.22): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.musicBus || !this.enabled || !this.musicEnabled) return;
+    const now = ctx.currentTime;
+    this.musicBus.gain.cancelScheduledValues(now);
+    this.musicBus.gain.setTargetAtTime(Math.max(0.05, level), now, 0.015);
+    this.musicBus.gain.setTargetAtTime(1.0, now + 0.05, releaseSec);
   }
 
   private ensureContext(): AudioContext | null {
@@ -259,47 +267,61 @@ export class SoundEngine {
 
   playShoot(kind: 'arrow' | 'mortar' | 'emp' | 'heavy'): void {
     if (kind === 'arrow') {
-      if (!this.throttle('shoot_arrow', 0.035)) return;
-      this.tone(620, 290, 0.055, 'triangle', 0.045, 0, 0);
-      this.noiseBurst(2400, 'highpass', 0.035, 0.025, 1.0, 0, 0);
+      if (!this.throttle('shoot_arrow', 0.04)) return;
+      this.tone(720, 310, 0.065, 'triangle', 0.085, 0, 0);
+      this.noiseBurst(3200, 'highpass', 0.04, 0.048, 1.1, 0, 0);
     } else if (kind === 'mortar') {
       if (!this.throttle('shoot_mortar', 0.06)) return;
-      this.transient(0.04, 0.12, 82, 1);
-      this.tone(165, 52, 0.19, 'triangle', 0.11);
-      this.noiseBurst(420, 'lowpass', 0.14, 0.06, 0.9);
+      this.transient(0.07, 0.2, 68, 1);
+      this.tone(110, 38, 0.24, 'sine', 0.2, 0, 1);
+      this.noiseBurst(460, 'lowpass', 0.16, 0.1, 0.9);
+      this.duckMusic(0.55, 0.18);
     } else if (kind === 'emp') {
       if (!this.throttle('shoot_emp', 0.04)) return;
-      this.noiseBurst(3800, 'bandpass', 0.05, 0.035, 2.5, 0, 0);
-      this.tone(760, 410, 0.09, 'sine', 0.045, 0, 0);
-      this.tone(1140, 620, 0.08, 'triangle', 0.03, 0.015, 0);
+      this.noiseBurst(4200, 'bandpass', 0.06, 0.058, 2.8, 0, 0);
+      this.tone(860, 440, 0.095, 'sine', 0.085, 0, 0);
+      this.tone(1320, 680, 0.08, 'triangle', 0.055, 0.012, 0);
     } else {
-      if (!this.throttle('shoot_heavy', 0.04)) return;
-      this.transient(0.05, 0.07, 120, 1);
-      this.tone(340, 115, 0.12, 'sawtooth', 0.05);
-      this.noiseBurst(1600, 'bandpass', 0.05, 0.035, 1.8);
+      if (!this.throttle('shoot_heavy', 0.045)) return;
+      this.transient(0.085, 0.14, 108, 1);
+      this.tone(360, 105, 0.14, 'sawtooth', 0.12);
+      this.tone(145, 55, 0.15, 'sine', 0.15, 0, 1);
+      this.noiseBurst(1900, 'bandpass', 0.065, 0.075, 1.8);
     }
   }
 
-  playHit(isCrit: boolean, isArmorBreak = false, heavy = false): void {
+  playHit(isCrit: boolean, isArmorBreak = false, heavy = false, resisted = false): void {
     const important = isCrit || isArmorBreak || heavy;
-    if (!this.throttle(important ? 'hit_crit' : 'hit', important ? 0.03 : 0.05)) return;
-    const pr: Priority = important ? 2 : 0;
-    // Layered impact: transient click + filtered noise body + pitched knock (+ crit ping)
-    this.transient(important ? 0.07 : 0.04, important ? 0.09 : 0.035, important ? 105 : 140, pr);
-    this.noiseBurst(isCrit ? 1900 : 1250, 'bandpass', 0.045, isCrit ? 0.07 : 0.038, 1.6, 0, pr);
-    this.tone(isCrit ? 480 : 280, isCrit ? 190 : 110, 0.06, 'triangle', isCrit ? 0.08 : 0.045, 0, pr);
+    if (!this.throttle(important ? 'hit_crit' : resisted ? 'hit_resist' : 'hit', important ? 0.03 : 0.045)) return;
+    if (resisted && !important) {
+      // Metallic armor deflection: bright short ping without heavy thud
+      this.transient(0.055, 0.025, 180, 0);
+      this.tone(2200, 1480, 0.075, 'sine', 0.085, 0, 0, 0.06);
+      this.noiseBurst(4200, 'bandpass', 0.035, 0.05, 3.2, 0, 0);
+      return;
+    }
+    const pr: Priority = important ? 2 : 1;
+    // Layered impact: crisp transient click + low body thud + metallic crunch (+ crit chime)
+    this.transient(important ? 0.1 : 0.065, important ? 0.2 : 0.11, important ? 88 : 135, pr);
+    this.tone(important ? 145 : 165, important ? 48 : 68, important ? 0.12 : 0.075, 'sine', important ? 0.2 : 0.11, 0, pr);
+    this.noiseBurst(isCrit ? 2200 : 1400, 'bandpass', important ? 0.07 : 0.05, important ? 0.15 : 0.085, 1.5, 0, pr);
+    this.tone(isCrit ? 520 : 290, isCrit ? 190 : 105, 0.075, important ? 'square' : 'triangle', important ? 0.1 : 0.065, 0, pr);
     if (isCrit || isArmorBreak) {
-      this.tone(1040, 1480, 0.08, 'sine', 0.055, 0.01, pr, 0.05);
+      this.tone(1120, 1680, 0.11, 'sine', 0.11, 0.01, pr, 0.04);
+      this.duckMusic(0.35, 0.22);
+    } else if (heavy) {
+      this.duckMusic(0.55, 0.16);
     }
   }
 
   playExplosion(heavy = false): void {
     if (!this.throttle(heavy ? 'boom_heavy' : 'boom', heavy ? 0.05 : 0.07)) return;
-    this.transient(heavy ? 0.09 : 0.07, heavy ? 0.2 : 0.15, heavy ? 70 : 82, 2);
-    this.tone(heavy ? 135 : 160, 34, heavy ? 0.3 : 0.22, 'triangle', heavy ? 0.15 : 0.11, 0, 2);
-    this.noiseBurst(heavy ? 540 : 680, 'lowpass', heavy ? 0.28 : 0.18, heavy ? 0.12 : 0.08, 0.8, 0, 2);
+    this.transient(heavy ? 0.12 : 0.09, heavy ? 0.28 : 0.2, heavy ? 62 : 76, 2);
+    this.tone(heavy ? 128 : 155, 32, heavy ? 0.34 : 0.24, 'triangle', heavy ? 0.22 : 0.15, 0, 2);
+    this.noiseBurst(heavy ? 540 : 680, 'lowpass', heavy ? 0.3 : 0.2, heavy ? 0.17 : 0.12, 0.8, 0, 2);
     // Debris crackle tail
-    this.noiseBurst(2600, 'bandpass', 0.09, heavy ? 0.04 : 0.03, 3.0, 0.05, 1);
+    this.noiseBurst(2600, 'bandpass', 0.11, heavy ? 0.065 : 0.045, 3.0, 0.05, 1);
+    this.duckMusic(heavy ? 0.25 : 0.42, 0.28);
   }
 
   playZap(): void {
@@ -334,7 +356,33 @@ export class SoundEngine {
 
   playEmote(): void {
     if (!this.throttle('emote', 0.15)) return;
-    this.tone(587, 784, 0.09, 'triangle', 0.055, 0, 1, 0.04);
-    this.tone(784, 988, 0.11, 'sine', 0.055, 0.07, 1, 0.04);
+    this.tone(587, 784, 0.09, 'triangle', 0.06, 0, 1, 0.04);
+    this.tone(784, 988, 0.11, 'sine', 0.06, 0.07, 1, 0.04);
+  }
+
+  playHeroSlash(heavy = false): void {
+    if (!this.throttle('hero_slash', 0.08)) return;
+    this.noiseBurst(heavy ? 2400 : 3200, 'bandpass', 0.09, heavy ? 0.12 : 0.085, 1.3, 0, 2);
+    this.tone(160, 58, 0.11, 'sine', heavy ? 0.18 : 0.13, 0.01, 2);
+    this.transient(0.08, 0.1, 110, 2);
+  }
+
+  playBaseHit(): void {
+    if (!this.throttle('base_hit', 0.12)) return;
+    this.transient(0.11, 0.24, 58, 2);
+    this.tone(95, 32, 0.32, 'sine', 0.24, 0, 2, 0.03);
+    this.tone(220, 145, 0.22, 'sawtooth', 0.11, 0.03, 2, 0.02);
+    this.duckMusic(0.2, 0.4);
+  }
+
+  playWoodBreak(): void {
+    this.transient(0.08, 0.14, 130, 2);
+    this.tone(240, 88, 0.14, 'triangle', 0.14, 0, 2);
+    this.noiseBurst(1600, 'bandpass', 0.12, 0.12, 2.0, 0.02, 2);
+  }
+
+  playGust(): void {
+    this.noiseBurst(1900, 'bandpass', 0.18, 0.09, 1.1, 0, 1);
+    this.tone(520, 880, 0.14, 'sine', 0.04, 0, 1, 0.04);
   }
 }

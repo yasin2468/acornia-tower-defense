@@ -92,13 +92,13 @@ export class CameraController {
   }
 
   /** Snap the camera a few cm along a world XZ direction (away from a blast), decays in ~0.2 s. */
-  addDirectionalKick(dirX: number, dirZ: number, amount = 0.12): void {
+  addDirectionalKick(dirX: number, dirZ: number, amount = 0.14): void {
     if (this.reducedMotion || this.shakeStrength <= 0) return;
     const len = Math.hypot(dirX, dirZ);
     if (len < 1e-6) return;
-    const a = Math.min(0.22, Math.max(0, amount)) * this.shakeStrength;
-    this.kickX = Math.max(-0.3, Math.min(0.3, this.kickX + (dirX / len) * a));
-    this.kickZ = Math.max(-0.3, Math.min(0.3, this.kickZ + (dirZ / len) * a));
+    const a = Math.min(0.34, Math.max(0, amount)) * this.shakeStrength;
+    this.kickX = Math.max(-0.42, Math.min(0.42, this.kickX + (dirX / len) * a));
+    this.kickZ = Math.max(-0.42, Math.min(0.42, this.kickZ + (dirZ / len) * a));
   }
 
   update(realDt: number): void {
@@ -140,13 +140,13 @@ export class CameraController {
     const shake = shakeAmount(this.trauma, this.shakeStrength, this.reducedMotion);
     this.shakeTime += dt * 30;
 
-    // Translational: summed sines at unrelated rates (smooth, never a per-frame random buzz).
-    const ox = 0.46 * shake * (0.6 * Math.sin(this.shakeTime * 1.7) + 0.4 * Math.sin(this.shakeTime * 2.3));
-    const oy = 0.3 * shake * (0.6 * Math.sin(this.shakeTime * 1.9 + 1.1) + 0.4 * Math.sin(this.shakeTime * 2.9));
-    const oz = 0.22 * shake * (0.6 * Math.sin(this.shakeTime * 1.3 + 2.3) + 0.4 * Math.sin(this.shakeTime * 3.1));
+    // Translational: summed sines at unrelated rates (calibrated for ~22.4m mobile camera distance).
+    const ox = 0.78 * shake * (0.6 * Math.sin(this.shakeTime * 1.7) + 0.4 * Math.sin(this.shakeTime * 2.3));
+    const oy = 0.46 * shake * (0.6 * Math.sin(this.shakeTime * 1.9 + 1.1) + 0.4 * Math.sin(this.shakeTime * 2.9));
+    const oz = 0.36 * shake * (0.6 * Math.sin(this.shakeTime * 1.3 + 2.3) + 0.4 * Math.sin(this.shakeTime * 3.1));
     // Rotational: roll + small pitch/yaw nudge of the look target. Cut under Reduced Motion.
-    const roll = this.reducedMotion ? 0 : 0.03 * shake * Math.sin(this.shakeTime * 1.1);
-    const pitch = this.reducedMotion ? 0 : 0.2 * shake * Math.sin(this.shakeTime * 2.1 + 0.7);
+    const roll = this.reducedMotion ? 0 : 0.045 * shake * Math.sin(this.shakeTime * 1.1);
+    const pitch = this.reducedMotion ? 0 : 0.24 * shake * Math.sin(this.shakeTime * 2.1 + 0.7);
 
     this.camera.position.set(
       this.basePosition.x + ox + this.kickX,

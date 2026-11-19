@@ -21,6 +21,8 @@ import type { NetworkService, SocialEmoteId } from '../services/NetworkService.t
 import type { SaveManager } from '../services/SaveManager.ts';
 import { ICONS, PORTRAIT_URLS, UI_ICON_URLS } from './icons.ts';
 
+export type FloatingDamageKind = 'normal' | 'heavy' | 'resisted' | 'crit' | 'gold' | 'base';
+
 export interface FloatingDamage {
   id: number;
   x: number;
@@ -29,7 +31,9 @@ export interface FloatingDamage {
   life: number;
   maxLife: number;
   driftX: number;
-  kind: 'normal' | 'crit' | 'gold';
+  kind: FloatingDamageKind;
+  enemyId?: number;
+  accumDamage?: number;
 }
 
 interface BarEl {
@@ -41,6 +45,8 @@ interface BarEl {
 interface FloatEl {
   root: HTMLElement;
   key: number;
+  text: string;
+  kind: FloatingDamageKind;
 }
 
 export interface BattleViewCallbacks {
@@ -111,6 +117,10 @@ export class BattleView {
   private floatPool: FloatEl[] = [];
   private floatSeq = 0;
   private lastTutorialHtml = '';
+  private baseHitTimer = 0;
+  private reducedMotion = false;
+  private damageVignetteEl: HTMLElement | null = null;
+  private castleHpRowEl: HTMLElement | null = null;
 
   constructor(
     saveManager: SaveManager,
@@ -140,6 +150,7 @@ export class BattleView {
     this.paused = false;
     this.bannerText = '';
     this.bannerTimer = 0;
+    this.baseHitTimer = 0;
     this.floatingDamages = [];
     this.ghostHp.clear();
     this.barPool = [];
@@ -147,10 +158,23 @@ export class BattleView {
     this.lastTutorialHtml = '';
     this.tutorialPhase = levelId === 1 && !this.saveManager.get().tutorialDone ? 'intro' : 'done';
     this.mountedRoot = null;
+    this.damageVignetteEl = null;
+    this.castleHpRowEl = null;
     this.lastContextKey = '';
     this.lastModalKey = '';
     this.lastWavePreviewKey = '';
     this.lastMultiKey = '';
+  }
+
+  setReducedMotion(enabled: boolean): void {
+    this.reducedMotion = enabled;
+  }
+
+  triggerBaseHitFlash(damage: number): void {
+    this.baseHitTimer = 0.38;
+    if (damage > 0) {
+      this.addFloatingDamage(0, -9.0, `-${damage}`, 'base');
+    }
   }
 
   showBanner(text: string, seconds = 3.2): void {
@@ -158,16 +182,51 @@ export class BattleView {
     this.bannerTimer = seconds;
   }
 
-  addFloatingDamage(x: number, z: number, text: string, kind: 'normal' | 'crit' | 'gold' = 'normal'): void {
-    const life = kind === 'crit' ? 0.92 : kind === 'gold' ? 0.9 : 0.68;
-    const driftX = ((this.floatingDamages.length % 5) - 2) * 7 + (Math.random() - 0.5) * 6;
+  addFloatingDamage(
+    x: number,
+    z: number,
+    text: string,
+    kind: FloatingDamageKind = 'normal',
+    enemyId?: number,
+    numericDamage?: number,
+  ): void {
+    if (enemyId !== undefined && numericDamage !== undefined && (kind === 'normal' || kind === 'heavy')) {
+      for (let i = this.floatingDamages.length - 1; i >= 0; i--) {
+        const cur = this.floatingDamages[i];
+        const age = cur.maxLife - cur.life;
+        if (cur.enemyId === enemyId && (cur.kind === 'normal' || cur.kind === 'heavy') && age <= 0.2) {
+          const sum = (cur.accumDamage ?? 0) + numericDamage;
+          cur.accumDamage = sum;
+          cur.text = `${sum}`;
+          if (sum >= 35) cur.kind = 'heavy';
+          cur.life = cur.maxLife;
+          cur.x = x;
+          cur.z = z;
+          return;
+        }
+      }
+    }
+    const life = kind === 'crit' || kind === 'base' ? 0.95 : kind === 'heavy' ? 0.82 : kind === 'gold' ? 0.9 : 0.68;
+    const driftX = ((this.floatingDamages.length % 5) - 2) * 8 + (Math.random() - 0.5) * 6;
     this.floatSeq += 1;
-    this.floatingDamages.push({ id: this.floatSeq, x, z, text, life, maxLife: life, driftX, kind });
-    if (this.floatingDamages.length > 24) this.floatingDamages.shift();
+    this.floatingDamages.push({
+      id: this.floatSeq,
+      x,
+      z,
+      text,
+      life,
+      maxLife: life,
+      driftX,
+      kind,
+      enemyId,
+      accumDamage: numericDamage,
+    });
+    if (this.floatingDamages.length > 48) this.floatingDamages.shift();
   }
 
   updateTimers(dt: number, sim: SimulationEngine): void {
     if (this.bannerTimer > 0) this.bannerTimer = Math.max(0, this.bannerTimer - dt);
+    if (this.baseHitTimer > 0) this.baseHitTimer = Math.max(0, this.baseHitTimer - dt);
     for (const f of this.floatingDamages) f.life -= dt;
     this.floatingDamages = this.floatingDamages.filter((f) => f.life > 0);
 
@@ -186,6 +245,7 @@ export class BattleView {
   mount(container: HTMLElement, sim: SimulationEngine): void {
     const loc = this.saveManager.get().settings.locale;
     container.innerHTML = `
+      <div class="damage-vignette" id="bw-damage-vignette"></div>
       <div class="world-overlay" id="bw-world-overlay">
         <div id="bw-bars-layer"><div id="bw-fx-pool"></div><div id="bw-tutorial-layer"></div></div>
         <div id="bw-context-layer"></div>
@@ -249,6 +309,8 @@ export class BattleView {
     `;
 
     this.mountedRoot = container;
+    this.damageVignetteEl = container.querySelector('#bw-damage-vignette');
+    this.castleHpRowEl = container.querySelector('.castle-hp-row');
     this.fxPoolEl = container.querySelector('#bw-fx-pool');
     this.tutorialLayerEl = container.querySelector('#bw-tutorial-layer');
     this.barPool = [];
@@ -599,7 +661,7 @@ export class BattleView {
       const root = document.createElement('div');
       root.className = 'float-dmg';
       this.fxPoolEl.appendChild(root);
-      this.floatPool.push({ root, key: -1 });
+      this.floatPool.push({ root, key: -1, text: '', kind: 'normal' });
     }
     return this.floatPool[i];
   }
@@ -610,6 +672,14 @@ export class BattleView {
    */
   renderOverlay(sim: SimulationEngine, sceneMgr: SceneManager): void {
     if (!this.fxPoolEl || !this.mountedRoot) return;
+    if (this.damageVignetteEl) {
+      const ratio = this.baseHitTimer > 0 ? Math.min(1, this.baseHitTimer / 0.38) : 0;
+      const maxOp = this.reducedMotion ? 0.28 : 0.85;
+      this.damageVignetteEl.style.opacity = `${(ratio * maxOp).toFixed(3)}`;
+    }
+    if (this.castleHpRowEl) {
+      this.castleHpRowEl.classList.toggle('hit-shake', this.baseHitTimer > 0.1 && !this.reducedMotion);
+    }
     let barCount = 0;
     for (const e of sim.enemies) {
       if (e.hp <= 0) continue;
@@ -623,12 +693,13 @@ export class BattleView {
       if (!bar) break;
       barCount += 1;
       const hitAge = g ? g.hitAge : Number.POSITIVE_INFINITY;
-      const w = e.isBoss ? 64 : 38;
-      // Tiny vertical "bump" on fresh damage so chunk hits read even on small bars
-      const bump = hitAge < 0.12 ? (1 - hitAge / 0.12) * 2.5 : 0;
+      const w = e.isBoss ? 68 : 42;
+      const bump = hitAge < 0.12 ? (1 - hitAge / 0.12) * 3.0 : 0;
+      const jx = !this.reducedMotion && hitAge < 0.1 ? Math.sin(hitAge * 95) * 2.4 * (1 - hitAge / 0.1) : 0;
+      const barScale = !this.reducedMotion && hitAge < 0.1 ? ' scale(1.12, 1.28)' : '';
       bar.root.style.display = 'block';
       bar.root.style.width = `${w}px`;
-      bar.root.style.transform = `translate3d(${(proj.x - w / 2).toFixed(1)}px, ${(proj.y - 6 - bump).toFixed(1)}px, 0)`;
+      bar.root.style.transform = `translate3d(${(proj.x - w / 2 + jx).toFixed(1)}px, ${(proj.y - 6 - bump).toFixed(1)}px, 0)${barScale}`;
       bar.fill.style.transform = `scaleX(${hp.toFixed(4)})`;
       bar.ghost.style.transform = `scaleX(${ghost.toFixed(4)})`;
       const tier = hp < 0.3 ? 'low' : hp < 0.6 ? 'mid' : 'high';
@@ -641,20 +712,24 @@ export class BattleView {
 
     let floatCount = 0;
     for (const f of this.floatingDamages) {
-      const proj = sceneMgr.projectToScreen(f.x, 1.55, f.z);
+      const projY = f.kind === 'base' ? 2.1 : 1.72;
+      const proj = sceneMgr.projectToScreen(f.x, projY, f.z);
       if (!proj.visible) continue;
       const el = this.acquireFloat(floatCount);
       if (!el) break;
       floatCount += 1;
       const age = f.maxLife - f.life;
       const p = Math.max(0, Math.min(1, age / f.maxLife));
-      const rise = f.kind === 'gold' ? 44 : f.kind === 'crit' ? 40 : 32;
+      const rise = f.kind === 'gold' ? 44 : f.kind === 'crit' || f.kind === 'base' ? 46 : f.kind === 'heavy' ? 38 : 30;
       const dy = easeOutCubic(p) * rise;
       const dx = f.driftX * (0.4 + p * 0.9);
-      const sc = popScale(age, 1.35, f.kind === 'crit' ? 0.2 : 0.16);
-      if (el.key !== f.id) {
+      const peak = f.kind === 'crit' ? 1.75 : f.kind === 'base' ? 1.7 : f.kind === 'heavy' ? 1.5 : 1.35;
+      const sc = popScale(age, peak, f.kind === 'crit' ? 0.22 : 0.16);
+      if (el.key !== f.id || el.text !== f.text || el.kind !== f.kind) {
         el.key = f.id;
-        el.root.className = f.kind === 'crit' ? 'float-dmg crit' : f.kind === 'gold' ? 'float-dmg gold' : 'float-dmg';
+        el.text = f.text;
+        el.kind = f.kind;
+        el.root.className = f.kind === 'normal' ? 'float-dmg' : `float-dmg ${f.kind}`;
         if (f.kind === 'gold') {
           el.root.innerHTML = `<img class="float-coin" src="${UI_ICON_URLS.acornCoins}" alt="" />${f.text}`;
         } else {

@@ -6,7 +6,7 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import { resolveHeroVisualVariant, type HeroClassId, type HeroId } from '../data/enemies.ts';
+import { ENEMIES, resolveHeroVisualVariant, type HeroClassId, type HeroId } from '../data/enemies.ts';
 import type { LevelSpec, Vec2 } from '../data/levels.ts';
 import { TOWERS, type HatId, type TowerId } from '../data/towers.ts';
 import type {
@@ -37,14 +37,14 @@ import {
   type TowerRig,
 } from './ModelFactory.ts';
 import {
-  computeKnockback,
+  computePathAwareStagger,
   easeOutCubic,
   evalHitJolt,
-  evalSquashPop,
   hitFlashStrength,
   HIT_FLASH_DURATION,
   HIT_FLASH_EMISSIVE,
   HIT_JOLT_DURATION,
+  type StaggerTier,
 } from '../core/JuiceController.ts';
 
 const WHITE = new THREE.Color(1, 1, 1);
@@ -64,11 +64,17 @@ interface EnemyFeel {
   bases: MaterialBase[];
   flashElapsed: number;
   flashDur: number;
+  flashTint: THREE.Color;
+  flashEmissivePeak: number;
+  flashDarken: number;
+  lastFullFlashAt: number;
   joltElapsed: number;
   kx: number;
   kz: number;
   tilt: number;
   axis: THREE.Vector3;
+  lastHitDirX: number;
+  lastHitDirZ: number;
   visual: 'rest' | 'slow' | 'frozen' | 'flash';
 }
 
@@ -110,17 +116,6 @@ interface TrailItem {
   fade: number;
 }
 
-interface ProjectileImpact {
-  targetUid: number;
-  x: number;
-  z: number;
-  dirX: number;
-  dirZ: number;
-  aoeRadius: number;
-  towerId: TowerId;
-  branchId?: string;
-}
-
 interface ParticleItem {
   mesh: THREE.Mesh;
   vx: number;
@@ -137,6 +132,7 @@ interface ShockRing {
   life: number;
   maxLife: number;
   maxScale: number;
+  disposeGeo?: boolean;
 }
 
 interface EnergyBeam {
@@ -155,6 +151,9 @@ interface DyingBody {
   group: THREE.Group;
   life: number;
   maxLife: number;
+  vx: number;
+  vy: number;
+  vz: number;
   spinX: number;
   spinZ: number;
   bases: MaterialBase[];
@@ -168,6 +167,7 @@ interface MortarVisual {
   targetZ: number;
   totalDist: number;
   smokeAccum: number;
+  ring?: THREE.Mesh;
 }
 
 export interface ScreenProjection {
@@ -637,6 +637,9 @@ export class SceneManager {
       mesh: THREE.Object3D;
       mortar?: MortarVisual;
       trail: TrailItem | null;
+      startX: number;
+      startZ: number;
+      totalDist: number;
       targetUid: number;
       towerId: TowerId;
       branchId?: string;
@@ -809,8 +812,8 @@ export class SceneManager {
       this.coins.push({ mesh, vx: 0, vy: 0, vz: 0, life: 0, maxLife: 0.55, active: false, isCoin: true });
     }
 
-    // Velocity-stretched additive impact sparks
-    const sparkGeo = new THREE.BoxGeometry(0.045, 0.045, 1);
+    // Velocity-stretched additive impact sparks (thicker streaks read cleanly at mobile 22.4m cam)
+    const sparkGeo = new THREE.BoxGeometry(0.075, 0.075, 1);
     for (let i = 0; i < 160; i++) {
       const mat = new THREE.MeshBasicMaterial({
         color: '#ffe9a8',
@@ -915,9 +918,9 @@ export class SceneManager {
       s.vy = vy * spd;
       s.vz = vz * spd;
       s.active = true;
-      s.maxLife = 0.16 + Math.random() * 0.16;
+      s.maxLife = 0.18 + Math.random() * 0.16;
       s.life = s.maxLife;
-      s.stretch = 0.045 + Math.random() * 0.03;
+      s.stretch = 0.065 + Math.random() * 0.04;
       (s.mesh.material as THREE.MeshBasicMaterial).color.set(colorHex);
       (s.mesh.material as THREE.MeshBasicMaterial).opacity = 1;
       s.mesh.position.set(x, y, z);
@@ -1001,6 +1004,45 @@ export class SceneManager {
   spawnSocialPing(x: number, z: number, colorHex = '#5ef28e'): void {
     this.spawnShockRing(x, z, '#ffffff', 1.4, 0.22);
     this.spawnShockRing(x, z, colorHex, 2.8, 0.55);
+  }
+
+  /** Crisp crescent slash arc in XZ aligned along facingAngle (0 = +Z, PI/2 = +X). */
+  spawnSlashArc(x: number, z: number, facingAngle: number, colorHex = '#ffe27a', radius = 1.35): void {
+    const geo = new THREE.RingGeometry(radius * 0.58, radius, 20, 1, -Math.PI * 0.45, Math.PI * 0.9);
+    const mesh = new THREE.Mesh(
+      geo,
+      new THREE.MeshBasicMaterial({
+        color: colorHex,
+        transparent: true,
+        opacity: 0.96,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        toneMapped: false,
+      }),
+    );
+    mesh.rotation.order = 'YXZ';
+    mesh.rotation.y = facingAngle - Math.PI * 0.5;
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(x, 0.62, z);
+    mesh.scale.setScalar(0.55);
+    mesh.renderOrder = 3;
+    this.dynamicGroup.add(mesh);
+    this.shockRings.push({ mesh, life: 0.16, maxLife: 0.16, maxScale: 1.4, disposeGeo: true });
+  }
+
+  /** Concentrated contact flash at exact hit coordinate (core + star burst + directional sparks). */
+  spawnImpactBurst(
+    x: number,
+    y: number,
+    z: number,
+    colorHex: string,
+    scale = 1,
+    dirX = 0,
+    dirZ = 0,
+  ): void {
+    this.spawnMuzzleFlash(x, y, z, colorHex, dirX, dirZ, scale >= 1.15);
+    this.spawnSparks(x, y, z, dirX, 0.22, dirZ, colorHex, Math.round(7 * scale), 8.5 * scale, 0.72);
   }
 
   /** Bright layered muzzle burst: additive white-hot core + coloured star, plus forward sparks. */
@@ -1604,7 +1646,7 @@ export class SceneManager {
       rigRef.turretHead.rotation.y = slot.tower.angle;
       updateTowerAnimation(rigRef, this.animTime, realDt);
 
-      // Defender recoil kick: brief push opposite the shot + squash pop layered on the rig's own scale
+      // Defender recoil kick: shift whole rig slightly opposite shot & tilt turret head (stone pedestal never squashes)
       const punch = this.towerPunch.get(slot.id);
       if (punch) {
         punch.elapsed += realDt;
@@ -1612,12 +1654,12 @@ export class SceneManager {
         if (punch.elapsed >= dur) {
           this.towerPunch.delete(slot.id);
           rigRef.root.position.set(slot.x, 0, slot.z);
+          rigRef.turretHead.rotation.x = 0;
         } else {
           const j = evalHitJolt(punch.elapsed, dur);
-          const back = 0.1 * j.push * (this.reducedMotion ? 0.5 : 1);
+          const back = 0.085 * j.push * (this.reducedMotion ? 0.5 : 1);
           rigRef.root.position.set(slot.x - punch.dirX * back, 0, slot.z - punch.dirZ * back);
-          const sq = evalSquashPop(dur - punch.elapsed, dur, 1.1, 0.88);
-          rigRef.root.scale.set(rigRef.root.scale.x * sq.sx, rigRef.root.scale.y * sq.sy, rigRef.root.scale.z * sq.sz);
+          rigRef.turretHead.rotation.x = -0.18 * j.push * (this.reducedMotion ? 0.5 : 1);
         }
       }
     }
@@ -1722,7 +1764,7 @@ export class SceneManager {
         rig.body.rotation.y = Math.atan2(nextWp.x - e.x, nextWp.z - e.z);
       }
       const walkDt = e.engagedByHero || e.stunTimer > 0 ? 0 : simDt;
-      updateEnemyAnimation(rig, this.animTime, walkDt, realDt, e.uid);
+      updateEnemyAnimation(rig, this.animTime, walkDt, realDt, e.uid, e.engagedByHero);
 
       // Directional knockback + backward pitch snap/wobble applied on the root (render-only)
       feel.joltElapsed += realDt;
@@ -1734,15 +1776,14 @@ export class SceneManager {
         rig.root.quaternion.identity();
       }
 
-      // Stark pure-white hit flash on the per-instance cloned materials, exact restore afterwards
+      // Contrast-punched hit flash (suppresses map albedo + drives ACES-visible emissive tint, WCAG 2.3.1 rate-limited)
       feel.flashElapsed += realDt;
       const fs = hitFlashStrength(feel.flashElapsed, feel.flashDur);
       if (fs > 0) {
-        const k = this.reducedMotion ? 0.55 : 1;
         for (const b of feel.bases) {
-          b.mat.color.copy(b.color).lerp(WHITE, 0.78 * fs * k);
-          b.mat.emissive.copy(WHITE);
-          b.mat.emissiveIntensity = HIT_FLASH_EMISSIVE * fs * k;
+          b.mat.color.copy(b.color).multiplyScalar(1 - feel.flashDarken * fs);
+          b.mat.emissive.copy(feel.flashTint);
+          b.mat.emissiveIntensity = feel.flashEmissivePeak * fs;
         }
         feel.visual = 'flash';
       } else if (e.stunTimer > 0 || e.slowTimer > 0) {
@@ -1763,19 +1804,27 @@ export class SceneManager {
       }
     }
 
-    // Detach killed enemy body briefly for a 0.30s tumbling death pop!
+    // Detach killed enemy body for a parabolic 0.42s knockback tumble death pop!
     for (const [uid, rig] of this.enemyRigs.entries()) {
       if (!aliveIds.has(uid)) {
         const feel = this.enemyFeel.get(uid);
+        const hdx = feel?.lastHitDirX ?? 0;
+        const hdz = feel?.lastHitDirZ ?? 1;
+        const hlen = Math.hypot(hdx, hdz) || 1;
+        const vx = (hdx / hlen) * 3.4;
+        const vz = (hdz / hlen) * 3.4;
         rig.root.remove(rig.body);
-        rig.body.position.set(rig.root.position.x, 0.25, rig.root.position.z);
+        rig.body.position.set(rig.root.position.x, 0.35, rig.root.position.z);
         this.dynamicGroup.add(rig.body);
         this.dyingBodies.push({
           group: rig.body,
-          life: 0.3,
-          maxLife: 0.3,
-          spinX: (uid % 2 === 0 ? 1 : -1) * 8.5,
-          spinZ: (uid % 3 === 0 ? 1 : -1) * 7.0,
+          life: 0.42,
+          maxLife: 0.42,
+          vx,
+          vy: ENEMIES[rig.enemyId].isBoss ? 2.4 : 4.2,
+          vz,
+          spinX: (uid % 2 === 0 ? 1 : -1) * 10.5,
+          spinZ: (uid % 3 === 0 ? 1 : -1) * 8.5,
           bases: feel?.bases ?? [],
           elapsed: 0,
         });
@@ -1785,7 +1834,7 @@ export class SceneManager {
       }
     }
 
-    // Sync projectiles + smoke/glint trails
+    // Sync projectiles + characteristic silhouettes & wake trails
     const projIds = new Set<number>();
     for (const p of sim.projectiles) {
       projIds.add(p.uid);
@@ -1793,35 +1842,90 @@ export class SceneManager {
       if (!entry) {
         const isMortar = Boolean(p.stats.aoeRadius);
         let mesh: THREE.Object3D;
+        let mortarRing: THREE.Mesh | undefined;
         if (isMortar) {
           const shellGroup = new THREE.Group();
-          const ironBall = new THREE.Mesh(
-            new THREE.SphereGeometry(0.24, 12, 10),
-            new THREE.MeshStandardMaterial({ color: '#45505e', roughness: 0.4, metalness: 0.6 }),
+          const pinecone = new THREE.Mesh(
+            new THREE.DodecahedronGeometry(0.28, 0),
+            new THREE.MeshStandardMaterial({ color: '#6b3e24', roughness: 0.55, metalness: 0.18 }),
           );
           const coreGlow = new THREE.Mesh(
-            new THREE.SphereGeometry(0.14, 8, 8),
-            new THREE.MeshBasicMaterial({ color: '#ff8e3c' }),
+            new THREE.SphereGeometry(0.18, 10, 8),
+            new THREE.MeshBasicMaterial({ color: '#ff8e3c', toneMapped: false }),
           );
           coreGlow.position.y = 0.14;
-          shellGroup.add(ironBall, coreGlow);
+          shellGroup.add(pinecone, coreGlow);
           mesh = shellGroup;
-        } else {
-          const isHedgehog = p.towerId === 'hedgehog';
-          const color = p.towerId === 'owl' ? '#63e2ff' : isHedgehog ? '#ffc857' : '#ffe169';
+
+          const r = Math.max(1.2, p.stats.aoeRadius ?? 2.2);
+          mortarRing = new THREE.Mesh(
+            new THREE.RingGeometry(r * 0.88, r * 0.98, 24),
+            new THREE.MeshBasicMaterial({
+              color: '#ff9642',
+              transparent: true,
+              opacity: 0.42,
+              side: THREE.DoubleSide,
+              depthWrite: false,
+            }),
+          );
+          mortarRing.rotation.x = -Math.PI / 2;
+          mortarRing.position.set(p.targetX, 0.068, p.targetZ);
+          this.dynamicGroup.add(mortarRing);
+        } else if (p.towerId === 'owl') {
+          const orbGroup = new THREE.Group();
+          const orb = new THREE.Mesh(
+            new THREE.OctahedronGeometry(0.16, 0),
+            new THREE.MeshBasicMaterial({
+              color: p.branchId === 'owl_glacier' ? '#c8f8ff' : '#6be8ff',
+              toneMapped: false,
+            }),
+          );
+          const halo = new THREE.Mesh(
+            new THREE.TorusGeometry(0.19, 0.025, 6, 14),
+            new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false }),
+          );
+          orbGroup.add(orb, halo);
+          mesh = orbGroup;
+        } else if (p.towerId === 'hedgehog') {
           const boltGroup = new THREE.Group();
           const shaft = new THREE.Mesh(
-            new THREE.CylinderGeometry(isHedgehog ? 0.048 : 0.038, isHedgehog ? 0.065 : 0.05, isHedgehog ? 0.62 : 0.48, 7),
+            new THREE.CylinderGeometry(0.055, 0.08, 0.82, 7),
             new THREE.MeshStandardMaterial({
-              color,
-              emissive: new THREE.Color(color),
-              emissiveIntensity: 1.25,
-              roughness: 0.3,
+              color: '#ffbe4d',
+              emissive: new THREE.Color('#ffa22b'),
+              emissiveIntensity: 1.5,
+              roughness: 0.28,
             }),
           );
           shaft.rotation.x = Math.PI / 2;
-          boltGroup.add(shaft);
+          const tip = new THREE.Mesh(
+            new THREE.ConeGeometry(0.085, 0.22, 7),
+            new THREE.MeshBasicMaterial({ color: '#fff3ba', toneMapped: false }),
+          );
+          tip.rotation.x = Math.PI / 2;
+          tip.position.z = 0.46;
+          boltGroup.add(shaft, tip);
           mesh = boltGroup;
+        } else {
+          const nutGroup = new THREE.Group();
+          const nut = new THREE.Mesh(
+            new THREE.SphereGeometry(0.125, 10, 8),
+            new THREE.MeshStandardMaterial({
+              color: '#ffe066',
+              emissive: new THREE.Color('#ffaa22'),
+              emissiveIntensity: 1.4,
+              roughness: 0.3,
+            }),
+          );
+          nut.scale.set(1, 0.92, 1.32);
+          const cap = new THREE.Mesh(
+            new THREE.SphereGeometry(0.135, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.45),
+            new THREE.MeshStandardMaterial({ color: '#8f552e', roughness: 0.65 }),
+          );
+          cap.rotation.x = -Math.PI * 0.5;
+          cap.position.z = -0.02;
+          nutGroup.add(nut, cap);
+          mesh = nutGroup;
         }
 
         this.dynamicGroup.add(mesh);
@@ -1834,10 +1938,10 @@ export class SceneManager {
             : p.towerId === 'hedgehog'
               ? '#ffb238'
               : '#ffd84a';
-        const trail = this.acquireTrail(trailColor, isMortar ? 0.2 : p.towerId === 'hedgehog' ? 0.13 : 0.1);
+        const trail = this.acquireTrail(trailColor, isMortar ? 0.22 : p.towerId === 'hedgehog' ? 0.16 : 0.12);
         const ddx = p.targetX - p.x;
         const ddz = p.targetZ - p.z;
-        const dlen = Math.hypot(ddx, ddz) || 1;
+        const totalDist = Math.max(0.5, Math.hypot(ddx, ddz));
         entry = {
           mesh,
           mortar: isMortar
@@ -1846,22 +1950,25 @@ export class SceneManager {
                 startZ: p.z,
                 targetX: p.targetX,
                 targetZ: p.targetZ,
-                totalDist: Math.max(0.5, Math.hypot(p.targetX - p.x, p.targetZ - p.z)),
+                totalDist,
                 smokeAccum: 0,
+                ring: mortarRing,
               }
             : undefined,
           trail,
+          startX: p.x,
+          startZ: p.z,
+          totalDist,
           targetUid: p.targetUid,
           towerId: p.towerId,
           branchId: p.branchId,
-          dirX: ddx / dlen,
-          dirZ: ddz / dlen,
+          dirX: ddx / totalDist,
+          dirZ: ddz / totalDist,
           aoeRadius: p.stats.aoeRadius ?? 0,
         };
         this.projectileMeshes.set(p.uid, entry);
       }
 
-      // Velocity direction (render-only) for directional knockback & impact sparks
       const vdx = p.targetX - p.x;
       const vdz = p.targetZ - p.z;
       const vlen = Math.hypot(vdx, vdz);
@@ -1870,10 +1977,9 @@ export class SceneManager {
         entry.dirZ = vdz / vlen;
       }
 
+      const u = Math.max(0, Math.min(1, 1 - vlen / entry.totalDist));
       if (entry.mortar) {
-        const rem = Math.hypot(entry.mortar.targetX - p.x, entry.mortar.targetZ - p.z);
-        const u = Math.max(0, Math.min(1, 1 - rem / entry.mortar.totalDist));
-        const arcY = 1.0 + Math.sin(u * Math.PI) * 2.5;
+        const arcY = 1.2 + Math.sin(u * Math.PI) * 2.55;
         entry.mesh.position.set(p.x, arcY, p.z);
         entry.mesh.rotation.x += realDt * 12;
         entry.mortar.smokeAccum += realDt;
@@ -1882,8 +1988,14 @@ export class SceneManager {
           this.spawnParticles(p.x, arcY, p.z, '#ffb86c', 1, 0.35);
         }
       } else {
-        entry.mesh.position.set(p.x, 1.05, p.z);
-        entry.mesh.lookAt(p.targetX, 0.72, p.targetZ);
+        const heightY = 1.36 + (0.78 - 1.36) * u;
+        entry.mesh.position.set(p.x, heightY, p.z);
+        if (p.towerId === 'owl') {
+          entry.mesh.rotation.y += realDt * 14;
+          entry.mesh.rotation.x += realDt * 9;
+        } else {
+          entry.mesh.lookAt(p.targetX, 0.72, p.targetZ);
+        }
       }
       if (entry.trail) {
         pushTrailPoint(entry.trail, entry.mesh.position.x, entry.mesh.position.y, entry.mesh.position.z);
@@ -1892,37 +2004,21 @@ export class SceneManager {
     }
     for (const [uid, entry] of this.projectileMeshes.entries()) {
       if (!projIds.has(uid)) {
-        if (entry.mortar) {
-          const ix = entry.mortar.targetX;
-          const iz = entry.mortar.targetZ;
-          const r = Math.max(1.2, entry.aoeRadius);
-          this.spawnShockRing(ix, iz, '#ffffff', r * 0.75, 0.16);
-          this.spawnShockRing(ix, iz, '#ff9436', r * 1.25, 0.42);
-          this.spawnShockRing(ix, iz, '#ffe17d', r * 0.95, 0.3);
-          this.spawnScorch(ix, iz, r * 0.7);
-          this.spawnSparks(ix, 0.35, iz, 0, 0, 0, '#ffcf6b', 18, 9.5);
-          this.spawnSparks(ix, 0.3, iz, 0, 0, 0, '#ff7a2a', 8, 6);
-          this.spawnParticles(ix, 0.4, iz, '#ff9436', 10, 1.3);
-          this.spawnParticles(ix, 0.3, iz, '#4a3c33', 6, 1.0);
-          this.spawnMuzzleFlash(ix, 0.45, iz, '#ffb347', 0, 0, true);
-          this.cameraCtrl.addTrauma(0.32);
-          this.cameraCtrl.addZoomPunch(1.0);
-          this.cameraCtrl.addDirectionalKick(entry.dirX, entry.dirZ, 0.1);
-          this.onMortarExplode?.();
-        } else {
-          const ix = entry.mesh.position.x;
-          const iz = entry.mesh.position.z;
-          const sparkHex = entry.towerId === 'owl' ? '#9eefff' : entry.towerId === 'hedgehog' ? '#ffd27a' : '#fff1b8';
-          this.spawnSparks(ix, 0.95, iz, entry.dirX, 0.15, entry.dirZ, sparkHex, entry.towerId === 'hedgehog' ? 7 : 5, 7.5, 0.55);
-          if (entry.branchId === 'owl_glacier') {
-            this.spawnShockRing(ix, iz, '#c9f6ff', 1.5, 0.34);
-            this.spawnSparks(ix, 0.9, iz, 0, 0, 0, '#dffaff', 8, 4.5);
-            this.onFreezeImpact?.();
-          }
+        if (entry.mortar?.ring) {
+          this.dynamicGroup.remove(entry.mortar.ring);
+          entry.mortar.ring.geometry.dispose();
+          (entry.mortar.ring.material as THREE.Material).dispose();
         }
         if (entry.trail) {
           entry.trail.fading = true;
         }
+        entry.mesh.traverse((obj) => {
+          if (!(obj as THREE.Mesh).isMesh) return;
+          const m = obj as THREE.Mesh;
+          m.geometry?.dispose();
+          const mats = Array.isArray(m.material) ? m.material : [m.material];
+          for (const mat of mats) mat?.dispose();
+        });
         this.dynamicGroup.remove(entry.mesh);
         this.projectileMeshes.delete(uid);
       }
@@ -1971,11 +2067,17 @@ export class SceneManager {
         bases,
         flashElapsed: 1,
         flashDur: HIT_FLASH_DURATION,
+        flashTint: WHITE.clone(),
+        flashEmissivePeak: HIT_FLASH_EMISSIVE,
+        flashDarken: 0.88,
+        lastFullFlashAt: -10,
         joltElapsed: 1,
         kx: 0,
         kz: 0,
         tilt: 0,
         axis: new THREE.Vector3(1, 0, 0),
+        lastHitDirX: 0,
+        lastHitDirZ: 1,
         visual: 'rest',
       };
       this.enemyFeel.set(uid, feel);
@@ -1983,31 +2085,8 @@ export class SceneManager {
     return feel;
   }
 
-  /** Collect projectiles that vanished this step (they are still in projectileMeshes until sync). */
-  private collectImpacts(sim: SimulationEngine | null): ProjectileImpact[] {
-    if (!sim) return [];
-    const live = new Set<number>();
-    for (const p of sim.projectiles) live.add(p.uid);
-    const out: ProjectileImpact[] = [];
-    for (const [uid, entry] of this.projectileMeshes.entries()) {
-      if (live.has(uid)) continue;
-      out.push({
-        targetUid: entry.targetUid,
-        x: entry.mortar ? entry.mortar.targetX : entry.mesh.position.x,
-        z: entry.mortar ? entry.mortar.targetZ : entry.mesh.position.z,
-        dirX: entry.dirX,
-        dirZ: entry.dirZ,
-        aoeRadius: entry.aoeRadius,
-        towerId: entry.towerId,
-        branchId: entry.branchId,
-      });
-    }
-    return out;
-  }
-
   handleSimEvents(events: SimEvent[], sim?: SimulationEngine): void {
     const simRef = sim ?? this.lastSim;
-    const impacts = this.collectImpacts(simRef);
 
     // Instant chain/line hits emit ENEMY_HIT before TOWER_FIRED: pre-scan beam directions.
     const beamDirs = new Map<number, { dx: number; dz: number; heavy: boolean }>();
@@ -2047,6 +2126,26 @@ export class SceneManager {
           this.spawnSparks(rigRef.root.position.x, 0.9, rigRef.root.position.z, 0, 0, 0, '#c6ff9e', 12, 6);
         }
         this.cameraCtrl.addTrauma(0.2);
+      } else if (ev.type === 'STUMP_CLEARED') {
+        const st = simRef?.slots.get(ev.slotId);
+        if (st) {
+          this.spawnShockRing(st.x, st.z, '#ffd966', 1.9, 0.34);
+          this.spawnParticles(st.x, 0.35, st.z, '#7a4f2d', 12, 1.1);
+          this.spawnSparks(st.x, 0.4, st.z, 0, 0, 0, '#ffe49e', 10, 6);
+          this.cameraCtrl.addTrauma(0.22);
+        }
+      } else if (ev.type === 'SMOKE_CLEARED') {
+        const st = simRef?.slots.get(ev.slotId);
+        if (st) {
+          this.spawnShockRing(st.x, st.z, '#9ef3ff', 2.0, 0.35);
+          this.spawnSparks(st.x, 0.85, st.z, 0, 0, 0, '#e3fbff', 10, 5.5);
+        }
+      } else if (ev.type === 'TOWER_SOLD') {
+        const st = simRef?.slots.get(ev.slotId);
+        if (st) {
+          this.spawnFlyingCoins(st.x, st.z, 4);
+          this.spawnShockRing(st.x, st.z, '#ffd966', 1.4, 0.28);
+        }
       } else if (ev.type === 'TOWER_FIRED') {
         const dirX = ev.toX - ev.fromX;
         const dirZ = ev.toZ - ev.fromZ;
@@ -2075,71 +2174,115 @@ export class SceneManager {
               const hitPt = new THREE.Vector3(pos.x, 0.75, pos.z);
               pts.push(hitPt);
               prev = hitPt;
-              // Chain-lightning strike: zap sparks + crisp ring at each link
-              this.spawnSparks(pos.x, 0.8, pos.z, 0, 0, 0, '#9ff3ff', 6, 6);
-              this.spawnShockRing(pos.x, pos.z, '#7fe9ff', 0.9, 0.2);
+              this.spawnSparks(pos.x, 0.8, pos.z, 0, 0, 0, '#9ff3ff', 8, 7);
+              this.spawnShockRing(pos.x, pos.z, '#7fe9ff', 1.0, 0.22);
             }
             if (pts.length === 1) pts.push(new THREE.Vector3(ev.toX, 0.65, ev.toZ));
-            this.spawnEnergyBeam(pts, '#5ce1ff', 0.075, 0.18);
-            this.spawnEnergyBeam(pts, '#ffffff', 0.028, 0.12);
+            this.spawnEnergyBeam(pts, '#5ce1ff', 0.085, 0.2);
+            this.spawnEnergyBeam(pts, '#ffffff', 0.032, 0.13);
             this.onChainZap?.();
           } else {
             pts.push(new THREE.Vector3(ev.toX, 0.65, ev.toZ));
-            // Railgun line: thick amber beam + white-hot core, sparks along hit enemies
-            this.spawnEnergyBeam(pts, '#ffb43c', 0.09, 0.2);
-            this.spawnEnergyBeam(pts, '#ffffff', 0.035, 0.13);
+            this.spawnEnergyBeam(pts, '#ffb43c', 0.1, 0.22);
+            this.spawnEnergyBeam(pts, '#ffffff', 0.04, 0.14);
             for (const id of ev.targetIds) {
               const pos = enemyPos(id);
-              if (pos) this.spawnSparks(pos.x, 0.85, pos.z, ux, 0.1, uz, '#ffd27a', 6, 8, 0.45);
+              if (pos) this.spawnImpactBurst(pos.x, 0.85, pos.z, '#ffd27a', 1.15, ux, uz);
             }
-            this.cameraCtrl.addTrauma(0.14);
-            this.cameraCtrl.addDirectionalKick(ux, uz, 0.06);
+            this.cameraCtrl.addTrauma(0.2);
+            this.cameraCtrl.addDirectionalKick(ux, uz, 0.1);
             this.onRailgunFire?.();
+          }
+        }
+      } else if (ev.type === 'PROJECTILE_IMPACT') {
+        if (ev.aoeRadius > 0) {
+          const r = Math.max(1.2, ev.aoeRadius);
+          this.spawnShockRing(ev.x, ev.z, '#ffffff', r * 0.82, 0.18);
+          this.spawnShockRing(ev.x, ev.z, '#ff9436', r * 1.35, 0.44);
+          this.spawnShockRing(ev.x, ev.z, '#ffe17d', r * 1.0, 0.32);
+          this.spawnScorch(ev.x, ev.z, r * 0.72);
+          this.spawnSparks(ev.x, 0.35, ev.z, 0, 0, 0, '#ffcf6b', 22, 10.5);
+          this.spawnSparks(ev.x, 0.3, ev.z, 0, 0, 0, '#ff7a2a', 10, 7);
+          this.spawnParticles(ev.x, 0.4, ev.z, '#ff9436', 12, 1.35);
+          this.spawnParticles(ev.x, 0.3, ev.z, '#4a3c33', 7, 1.05);
+          this.spawnImpactBurst(ev.x, 0.45, ev.z, '#ffb347', 1.35, 0, 0);
+          this.cameraCtrl.addTrauma(0.36);
+          this.cameraCtrl.addZoomPunch(1.15);
+          this.cameraCtrl.addDirectionalKick(ev.dirX, ev.dirZ, 0.14);
+          this.onMortarExplode?.();
+        } else {
+          const sparkHex = ev.towerId === 'owl' ? '#9eefff' : ev.towerId === 'hedgehog' ? '#ffd27a' : '#fff1b8';
+          const burstScale = ev.isCrit ? 1.25 : ev.towerId === 'hedgehog' ? 1.15 : 0.85;
+          this.spawnImpactBurst(ev.x, 0.85, ev.z, sparkHex, burstScale, ev.dirX, ev.dirZ);
+          if (ev.isFreeze || ev.branchId === 'owl_glacier') {
+            this.spawnShockRing(ev.x, ev.z, '#c9f6ff', 1.65, 0.36);
+            this.spawnSparks(ev.x, 0.9, ev.z, 0, 0, 0, '#dffaff', 10, 5.5);
+            this.onFreezeImpact?.();
+          }
+          if (ev.splash) {
+            this.spawnShockRing(ev.x, ev.z, '#ffa63d', 1.65, 0.28);
+            this.spawnSparks(ev.x, 0.75, ev.z, 0, 0, 0, '#ffae42', 8, 6.5);
           }
         }
       } else if (ev.type === 'ENEMY_HIT') {
         const rig = this.enemyRigs.get(ev.enemyId);
-        // Resolve the impulse direction: projectile velocity > radial from AOE > beam > backward fallback
-        let dx = 0;
-        let dz = 0;
-        let heavySource = false;
-        let glacier = false;
-        const direct = impacts.find((i) => i.targetUid === ev.enemyId && i.aoeRadius <= 0);
-        const aoe = direct ? undefined : impacts.find((i) => i.aoeRadius > 0 && Math.hypot(ev.x - i.x, ev.z - i.z) <= i.aoeRadius + 0.6);
         const beam = beamDirs.get(ev.enemyId);
-        if (direct) {
-          dx = direct.dirX;
-          dz = direct.dirZ;
-          heavySource = direct.towerId === 'hedgehog';
-          glacier = direct.branchId === 'owl_glacier';
-        } else if (aoe) {
-          dx = ev.x - aoe.x;
-          dz = ev.z - aoe.z;
-          if (Math.hypot(dx, dz) < 0.05) {
-            dx = aoe.dirX;
-            dz = aoe.dirZ;
-          }
-          heavySource = true;
-        } else if (beam) {
-          dx = beam.dx;
-          dz = beam.dz;
-          heavySource = beam.heavy;
-        } else if (rig) {
+        let dx = ev.dirX ?? beam?.dx ?? 0;
+        let dz = ev.dirZ ?? beam?.dz ?? 0;
+        if (dx === 0 && dz === 0 && rig) {
           dx = -Math.sin(rig.body.rotation.y);
           dz = -Math.cos(rig.body.rotation.y);
         }
-        const heavy = ev.isCrit || ev.armorBroken || heavySource;
+        const heavy = ev.isCrit || ev.armorBroken || Boolean(ev.heavy) || Boolean(beam?.heavy);
 
         if (rig) {
           const feel = this.getEnemyFeel(ev.enemyId, rig);
+          const simEnemy = simRef?.enemies.find((en) => en.uid === ev.enemyId);
+          let fwdX = Math.sin(rig.body.rotation.y);
+          let fwdZ = Math.cos(rig.body.rotation.y);
+          if (simEnemy && simRef) {
+            const activePath = simEnemy.lane === 1 && simRef.level.secondaryPath ? simRef.level.secondaryPath : simRef.level.path;
+            const wp = activePath[simEnemy.wpIndex];
+            if (wp) {
+              const wx = wp.x - simEnemy.x;
+              const wz = wp.z - simEnemy.z;
+              if (Math.hypot(wx, wz) > 1e-4) {
+                fwdX = wx;
+                fwdZ = wz;
+              }
+            }
+          }
+
           feel.flashElapsed = 0;
-          feel.flashDur = heavy ? HIT_FLASH_DURATION * 1.1 : HIT_FLASH_DURATION;
-          // Squash-stretch pop from ModelFactory; its own knock is replaced by our directional root jolt.
+          feel.flashDur = heavy ? HIT_FLASH_DURATION * 1.15 : HIT_FLASH_DURATION;
+          const allowBrightFlash = !this.reducedMotion && this.animTime - feel.lastFullFlashAt >= 0.26;
+          if (ev.resisted && !ev.isCrit && !ev.armorBroken) {
+            feel.flashTint.set('#a8bfd9');
+            feel.flashEmissivePeak = 1.6;
+            feel.flashDarken = 0.28;
+          } else if (allowBrightFlash) {
+            feel.lastFullFlashAt = this.animTime;
+            feel.flashTint.set(ev.armorBroken ? '#6ef3ff' : ev.isCrit ? '#ffe34d' : '#fff7e2');
+            feel.flashEmissivePeak = HIT_FLASH_EMISSIVE;
+            feel.flashDarken = 0.88;
+          } else {
+            feel.flashTint.set('#ffad42');
+            feel.flashEmissivePeak = 1.25;
+            feel.flashDarken = 0.22;
+          }
+
+          feel.lastHitDirX = dx;
+          feel.lastHitDirZ = dz;
           rig.hitJoltTimer = 0.16;
           rig.flashTimer = 0;
           rig.knockX = 0;
           rig.knockZ = 0;
-          const kb = computeKnockback(dx, dz, heavy, { isBoss: ev.isBoss, reducedMotion: this.reducedMotion });
+
+          const tier: StaggerTier = ev.isCrit || ev.armorBroken ? 'crit' : heavy ? 'heavy' : 'light';
+          const kb = computePathAwareStagger(dx, dz, fwdX, fwdZ, tier, {
+            isBoss: ev.isBoss,
+            reducedMotion: this.reducedMotion,
+          });
           const stillStrong = feel.joltElapsed < HIT_JOLT_DURATION * 0.35 && Math.hypot(feel.kx, feel.kz) > kb.distance;
           if (!stillStrong && kb.distance > 0) {
             feel.kx = kb.dx;
@@ -2150,31 +2293,47 @@ export class SceneManager {
           }
         }
 
-        const sparkHex = ev.isCrit ? '#ffe85c' : ev.armorBroken ? '#68ebff' : glacier ? '#dffaff' : '#ffd08a';
-        this.spawnSparks(ev.x, 0.8, ev.z, dx, 0.2, dz, sparkHex, heavy ? 9 : 4, heavy ? 9 : 6.5, heavy ? 0.6 : 0.45);
-        if (heavy) {
-          this.spawnParticles(ev.x, 0.68, ev.z, sparkHex, 5, 1.0);
-        }
-        if (ev.isCrit || ev.armorBroken) {
-          this.spawnShockRing(ev.x, ev.z, '#ffffff', 0.8, 0.14, 0.7);
-          this.spawnShockRing(ev.x, ev.z, sparkHex, 1.35);
-          this.cameraCtrl.addTrauma(0.2);
-          this.cameraCtrl.addZoomPunch(1.1);
+        if (ev.resisted) {
+          this.spawnSparks(ev.x, 0.9, ev.z, -dx, 0.4, -dz, '#b8d0eb', 4, 7, 0.8);
         } else {
-          this.cameraCtrl.addTrauma(heavy ? 0.08 : 0.04);
+          const sparkHex = ev.isCrit ? '#ffe85c' : ev.armorBroken ? '#68ebff' : '#ffd08a';
+          this.spawnSparks(ev.x, 0.85, ev.z, dx, 0.25, dz, sparkHex, heavy ? 10 : 5, heavy ? 9.5 : 7, heavy ? 0.65 : 0.48);
+          if (heavy) {
+            this.spawnParticles(ev.x, 0.68, ev.z, sparkHex, 6, 1.05);
+          }
+          if (ev.isCrit || ev.armorBroken) {
+            this.spawnShockRing(ev.x, ev.z, '#ffffff', 0.95, 0.15, 0.72);
+            this.spawnShockRing(ev.x, ev.z, sparkHex, 1.55);
+            this.cameraCtrl.addTrauma(0.24);
+            this.cameraCtrl.addZoomPunch(1.3);
+          } else {
+            this.cameraCtrl.addTrauma(0.085);
+          }
         }
       } else if (ev.type === 'ENEMY_KILLED') {
+        const rig = this.enemyRigs.get(ev.enemyId);
+        if (rig && (ev.dirX || ev.dirZ)) {
+          const feel = this.getEnemyFeel(ev.enemyId, rig);
+          feel.lastHitDirX = ev.dirX ?? feel.lastHitDirX;
+          feel.lastHitDirZ = ev.dirZ ?? feel.lastHitDirZ;
+        }
         const boss = ev.isBoss;
-        this.spawnShockRing(ev.x, ev.z, '#ffffff', boss ? 2.0 : 0.9, 0.16);
-        this.spawnShockRing(ev.x, ev.z, boss ? '#ff7a38' : '#ffd266', boss ? 3.4 : 1.5);
-        this.spawnSparks(ev.x, 0.6, ev.z, 0, 0, 0, boss ? '#ffb347' : '#ffe39a', boss ? 30 : 10, boss ? 10 : 7);
-        // Rewarding debris pop: brass + scrap-metal chunks
-        this.spawnParticles(ev.x, 0.55, ev.z, boss ? '#ff8b3d' : '#d9a443', boss ? 18 : 6, boss ? 1.5 : 1.1);
-        this.spawnParticles(ev.x, 0.5, ev.z, '#8d99a6', boss ? 12 : 5, boss ? 1.3 : 1.0);
+        this.spawnShockRing(ev.x, ev.z, '#ffffff', boss ? 2.2 : 1.05, 0.16);
+        this.spawnShockRing(ev.x, ev.z, boss ? '#ff7a38' : '#ffd266', boss ? 3.8 : 1.75);
+        this.spawnSparks(ev.x, 0.65, ev.z, 0, 0, 0, boss ? '#ffb347' : '#ffe39a', boss ? 34 : 16, boss ? 11 : 8);
+        this.spawnParticles(ev.x, 0.6, ev.z, boss ? '#ff8b3d' : '#d9a443', boss ? 20 : 10, boss ? 1.6 : 1.2);
+        this.spawnParticles(ev.x, 0.55, ev.z, '#8d99a6', boss ? 14 : 6, boss ? 1.4 : 1.05);
         this.spawnFlyingCoins(ev.x, ev.z, boss ? 8 : 3);
-        if (boss) this.spawnScorch(ev.x, ev.z, 1.6);
-        this.cameraCtrl.addTrauma(boss ? 0.8 : 0.14);
-        if (boss) this.cameraCtrl.addZoomPunch(2.2);
+        if (boss) this.spawnScorch(ev.x, ev.z, 1.8);
+        this.cameraCtrl.addTrauma(boss ? 0.85 : 0.22);
+        if (boss) this.cameraCtrl.addZoomPunch(2.4);
+      } else if (ev.type === 'BASE_HIT') {
+        this.spawnShockRing(0, -9.0, '#ffffff', 2.0, 0.18, 0.25);
+        this.spawnShockRing(0, -9.0, '#ff3b2f', 3.4, 0.45, 0.2);
+        this.spawnParticles(0, 0.65, -8.8, '#ff4d3b', 14, 1.35);
+        this.spawnSparks(0, 0.7, -8.8, 0, 0.4, 1, '#ffaa66', 16, 8.5, 0.9);
+        this.cameraCtrl.addTrauma(0.68);
+        this.cameraCtrl.addZoomPunch(1.9);
       } else if (ev.type === 'PINECONE_RAIN') {
         this.spawnShockRing(ev.x, ev.z, '#ffffff', 2.0, 0.18);
         this.spawnShockRing(ev.x, ev.z, '#ff9f43', 3.6, 0.45);
@@ -2204,23 +2363,32 @@ export class SceneManager {
         this.rallyShowTimer = 2.2;
         this.spawnShockRing(ev.x, ev.z, '#ffda6b', 0.85, 0.25);
       } else if (ev.type === 'HERO_ATTACK') {
-        if (this.heroRig) {
-          this.heroRig.attackTimer = 0.36;
-          this.heroRig.body.rotation.y = Math.atan2(ev.targetX - ev.x, ev.targetZ - ev.z);
-        }
         const hx = ev.targetX - ev.x;
         const hz = ev.targetZ - ev.z;
+        const hLen = Math.hypot(hx, hz) || 1;
+        const lux = hx / hLen;
+        const luz = hz / hLen;
+        const faceAngle = Math.atan2(hx, hz);
+        if (this.heroRig) {
+          this.heroRig.attackTimer = 0.45;
+          this.heroRig.lungeTimer = ev.ranged ? 0 : 0.22;
+          this.heroRig.lungeDirX = lux;
+          this.heroRig.lungeDirZ = luz;
+          this.heroRig.body.rotation.y = faceAngle;
+        }
         if (ev.ranged) {
           this.spawnEnergyBeam(
             [new THREE.Vector3(ev.x, 1.0, ev.z), new THREE.Vector3(ev.targetX, 0.7, ev.targetZ)],
             '#4ef2b0',
-            0.065,
-            0.16,
+            0.075,
+            0.18,
           );
-          this.spawnShockRing(ev.targetX, ev.targetZ, '#4ef2b0', 1.35, 0.25);
-          this.spawnSparks(ev.targetX, 0.7, ev.targetZ, 0, 0, 0, '#78ffca', 9, 6.5);
+          this.spawnShockRing(ev.targetX, ev.targetZ, '#4ef2b0', 1.45, 0.25);
+          this.spawnImpactBurst(ev.targetX, 0.7, ev.targetZ, '#78ffca', 1.05, lux, luz);
         } else {
-          this.spawnSparks(ev.targetX, 0.65, ev.targetZ, hx, 0.25, hz, '#ffe27a', 5, 6.5, 0.5);
+          this.spawnSlashArc(ev.x + lux * 0.45, ev.z + luz * 0.45, faceAngle, '#ffe27a', 1.35);
+          this.spawnImpactBurst(ev.targetX, 0.72, ev.targetZ, '#ffe27a', 1.1, lux, luz);
+          this.cameraCtrl.addTrauma(0.22);
         }
       } else if (ev.type === 'HERO_ULTIMATE') {
         if (this.heroRig) this.heroRig.attackTimer = 0.42;
@@ -2377,10 +2545,11 @@ export class SceneManager {
       r.life -= dt;
       if (r.life <= 0) {
         this.dynamicGroup.remove(r.mesh);
+        if (r.disposeGeo) r.mesh.geometry.dispose();
         (r.mesh.material as THREE.Material).dispose();
       } else {
         const k = 1 - r.life / r.maxLife;
-        r.mesh.scale.setScalar(0.2 + easeOutCubic(k) * r.maxScale);
+        r.mesh.scale.setScalar((r.disposeGeo ? 0.55 : 0.2) + easeOutCubic(k) * r.maxScale);
         (r.mesh.material as THREE.MeshBasicMaterial).opacity = Math.pow(1 - k, 1.4) * 0.95;
         nextRings.push(r);
       }
@@ -2442,18 +2611,21 @@ export class SceneManager {
           }
         });
       } else {
-        // Death pop: one stark white flash frame pair, then tumble + shrink
-        const fs = hitFlashStrength(db.elapsed, HIT_FLASH_DURATION * 1.2);
+        // Parabolic launch + bright flash + tumble spin before scrap burst dissolve
+        const fs = hitFlashStrength(db.elapsed, HIT_FLASH_DURATION * 1.4);
         for (const b of db.bases) {
-          b.mat.color.copy(b.color).lerp(WHITE, 0.85 * fs);
+          b.mat.color.copy(b.color).multiplyScalar(1 - 0.85 * fs);
           b.mat.emissive.copy(fs > 0 ? WHITE : b.emissive);
           b.mat.emissiveIntensity = fs > 0 ? HIT_FLASH_EMISSIVE * fs : b.emissiveIntensity;
         }
         const k = db.life / db.maxLife;
+        db.vy -= 18 * dt;
+        db.group.position.x += db.vx * dt;
+        db.group.position.z += db.vz * dt;
+        db.group.position.y = Math.max(0.16, db.group.position.y + db.vy * dt);
         db.group.rotation.x += db.spinX * dt;
         db.group.rotation.z += db.spinZ * dt;
-        db.group.position.y += (k - 0.3) * dt * 3.0;
-        const pop = db.elapsed < 0.06 ? 1 + 0.25 * (db.elapsed / 0.06) : 1.25 * k;
+        const pop = db.elapsed < 0.08 ? 1 + 0.3 * (db.elapsed / 0.08) : 1.3 * Math.min(1, k * 1.35);
         db.group.scale.setScalar(Math.max(0.05, pop));
         nextDying.push(db);
       }

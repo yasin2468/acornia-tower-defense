@@ -217,6 +217,7 @@ function syncAudioAndCameraSettings(): void {
   const reduced = Boolean(reducedMotionQuery?.matches) || s.shakeStrength <= 0;
   juice.setReducedMotion(reduced);
   sceneMgr.setReducedMotion(reduced);
+  battleView.setReducedMotion(reduced);
   haptics.setReducedMotion(reduced);
 }
 
@@ -348,29 +349,50 @@ function processBattleEvents(events: SimEvent[]): void {
       haptics.impact('light');
     } else if (ev.type === 'TOWER_UPGRADED') {
       sound.playUpgrade();
+    } else if (ev.type === 'STUMP_CLEARED') {
+      sound.playWoodBreak();
+      haptics.impact('light');
+    } else if (ev.type === 'SMOKE_CLEARED') {
+      sound.playGust();
+    } else if (ev.type === 'TOWER_SOLD') {
+      sound.playCoin();
+    } else if (ev.type === 'BASE_HIT') {
+      sound.playBaseHit();
+      haptics.impact('heavy');
+      juice.triggerHitStop(0.075, 0.06);
+      battleView.triggerBaseHitFlash(ev.damage);
     } else if (ev.type === 'TOWER_FIRED') {
       const kind = ev.towerId === 'beaver' ? 'mortar' : ev.towerId === 'owl' ? 'emp' : ev.towerId === 'hedgehog' ? 'heavy' : 'arrow';
       sound.playShoot(kind);
     } else if (ev.type === 'ENEMY_HIT') {
-      sound.playHit(ev.isCrit, ev.armorBroken);
+      sound.playHit(ev.isCrit, ev.armorBroken, Boolean(ev.heavy), Boolean(ev.resisted));
       const isCritHit = ev.isCrit || ev.armorBroken;
       if (isCritHit) {
-        // Selective micro freeze only (18-45 ms window); the cooldown stops crit spam stacking.
-        juice.triggerMicroHitStop(0.02, 0.12);
+        juice.triggerHitStop(0.052, 0.06);
+        haptics.impact('medium');
+      } else if (ev.heavy && !ev.resisted) {
+        juice.triggerMicroHitStop(0.028, 0.1);
       }
-      battleView.addFloatingDamage(
-        ev.x,
-        ev.z,
-        isCritHit ? `${ev.damage}!` : `${ev.damage}`,
-        isCritHit ? 'crit' : 'normal',
-      );
+      const dmgKind = isCritHit
+        ? 'crit'
+        : ev.resisted
+          ? 'resisted'
+          : ev.heavy || ev.damage >= 35
+            ? 'heavy'
+            : 'normal';
+      const dmgText =
+        dmgKind === 'crit' ? `${ev.damage}!` : dmgKind === 'resisted' ? `🛡${ev.damage}` : `${ev.damage}`;
+      battleView.addFloatingDamage(ev.x, ev.z, dmgText, dmgKind, ev.enemyId, ev.damage);
     } else if (ev.type === 'ENEMY_KILLED') {
       pendingSeasonKills += 1;
       sound.playScrapBreak();
       sound.playCoin();
       if (ev.isBoss) {
-        juice.triggerMicroHitStop(0.045, 0.05);
+        juice.triggerHitStop(0.095, 0.05);
+        haptics.impact('heavy');
         sound.playExplosion(true);
+      } else if (ev.heavy || ev.bounty >= 10) {
+        juice.triggerMicroHitStop(0.026, 0.12);
       }
       battleView.addFloatingDamage(ev.x, ev.z, `+${ev.bounty}`, 'gold');
     } else if (ev.type === 'PINECONE_RAIN') {
@@ -382,9 +404,14 @@ function processBattleEvents(events: SimEvent[]): void {
       sound.playExplosion(true);
     } else if (ev.type === 'HERO_CLAW_SHOCK') {
       juice.triggerMicroHitStop(0.035, 0.1);
-      sound.playHit(false, false, true);
+      sound.playHeroSlash(true);
     } else if (ev.type === 'HERO_ATTACK') {
-      sound.playHit(false, false, true);
+      if (!ev.ranged) {
+        sound.playHeroSlash(true);
+        juice.triggerMicroHitStop(0.024, 0.12);
+      } else {
+        sound.playHit(false, false, false);
+      }
     } else if (ev.type === 'HERO_ULTIMATE') {
       juice.triggerMicroHitStop(0.042, 0.08);
       sound.playExplosion(true);

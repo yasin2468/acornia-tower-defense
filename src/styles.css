@@ -1449,19 +1449,19 @@ body,
   position: absolute;
   left: 0;
   top: 0;
-  width: 38px;
-  height: 6px;
+  width: 42px;
+  height: 7px;
   border-radius: 999px;
-  background: rgba(10, 16, 24, 0.92);
-  border: 1.5px solid rgba(255, 255, 255, 0.42);
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.55);
+  background: rgba(10, 16, 24, 0.94);
+  border: 1.5px solid rgba(255, 255, 255, 0.45);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
   overflow: hidden;
   will-change: transform;
 }
 
 .enemy-hp-bar.boss {
-  height: 8px;
-  border-color: rgba(255, 200, 120, 0.7);
+  height: 10px;
+  border-color: rgba(255, 200, 120, 0.8);
 }
 
 /* Delayed "ghost damage" chunk: white right after the hit, then amber while it drains */
@@ -1509,25 +1509,64 @@ body,
   align-items: center;
   gap: 2px;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 900;
-  color: #ffffff;
-  text-shadow: 0 2px 0 #141c24, 0 0 4px rgba(0, 0, 0, 0.9);
+  color: #fffaf0;
+  text-shadow: 0 2px 0 #141c24, 0 0 5px rgba(0, 0, 0, 0.92);
   pointer-events: none;
   transform-origin: 50% 50%;
   will-change: transform, opacity;
 }
 
+.float-dmg.heavy {
+  font-size: 16.5px;
+  color: #ffb84d;
+  text-shadow: 0 2px 0 #4d2204, 0 3px 8px rgba(255, 130, 30, 0.55);
+}
+
+.float-dmg.resisted {
+  font-size: 12px;
+  color: #b4cce6;
+  text-shadow: 0 1.5px 0 #0f1b2b;
+}
+
 .float-dmg.crit {
-  font-size: 18px;
-  color: #ffe156;
-  text-shadow: 0 2.5px 0 #662403, 0 4px 10px rgba(255, 130, 30, 0.75);
+  font-size: 21px;
+  color: #ffe44d;
+  text-shadow: 0 2.5px 0 #662403, 0 4px 12px rgba(255, 145, 30, 0.85);
+}
+
+.float-dmg.base {
+  font-size: 20px;
+  color: #ff5c4d;
+  text-shadow: 0 2.5px 0 #3d0905, 0 4px 12px rgba(255, 50, 40, 0.85);
 }
 
 .float-dmg.gold {
   font-size: 14px;
   color: #ffd859;
   text-shadow: 0 2px 0 #472c04, 0 3px 6px rgba(0, 0, 0, 0.85);
+}
+
+.damage-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+  opacity: 0;
+  background: radial-gradient(circle at 50% 45%, rgba(255, 36, 36, 0) 48%, rgba(220, 28, 28, 0.65) 100%);
+  box-shadow: inset 0 0 44px rgba(255, 35, 35, 0.65);
+}
+
+.castle-hp-row.hit-shake {
+  animation: castleShake 0.24s ease-in-out infinite;
+}
+
+@keyframes castleShake {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(-3px, 1.5px); }
+  50% { transform: translate(3px, -1.5px); }
+  75% { transform: translate(-2px, -1px); }
 }
 
 .float-coin {

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {
   computeKnockback,
+  computePathAwareStagger,
   evalHitJolt,
   evalSquashPop,
   GhostHpTracker,
@@ -16,6 +17,8 @@ import {
   MICRO_HITSTOP_MIN,
   popScale,
 } from '../src/core/JuiceController.ts';
+import { FIXED_DT, SimulationEngine } from '../src/core/SimulationEngine.ts';
+import { LEVELS } from '../src/data/levels.ts';
 import {
   CameraController,
   REDUCED_MOTION_TRAUMA_CAP,
@@ -274,5 +277,56 @@ describe('Audio dynamics helpers', () => {
     assert.equal(lim.activeCount(0.1), 5);
     assert.equal(lim.activeCount(0.25), 0);
     assert.equal(lim.acquire(0.25, 0.2, 1), true);
+  });
+});
+
+describe('Path-aware stagger & SimulationEngine impact events (GF-2)', () => {
+  it('staggers enemies backward along the path even when hit from behind, and respects boss/reducedMotion scaling', () => {
+    // Enemy moves forward along -Z toward castle; projectile hits from behind (dirZ = -1)
+    const stag = computePathAwareStagger(0, -1, 0, -1, 'heavy');
+    assert.ok(stag.dz > 0.3, `back-line hit must still stagger opposite path (+Z), got dz=${stag.dz}`);
+    assert.ok(Math.abs(stag.distance - 0.46) < 1e-6);
+
+    const crit = computePathAwareStagger(0, -1, 0, -1, 'crit');
+    assert.ok(crit.distance > stag.distance && crit.tiltRad > stag.tiltRad);
+
+    const bossStag = computePathAwareStagger(0, -1, 0, -1, 'crit', { isBoss: true });
+    assert.ok(bossStag.distance < crit.distance * 0.4);
+
+    const rmStag = computePathAwareStagger(0, -1, 0, -1, 'heavy', { reducedMotion: true });
+    assert.ok(Math.abs(rmStag.distance - stag.distance * 0.45) < 1e-6);
+  });
+
+  it('emits PROJECTILE_IMPACT, directional ENEMY_HIT (with resisted flag), and BASE_HIT deterministically', () => {
+    const run = (seed: number) => {
+      const sim = new SimulationEngine(LEVELS[0], { seed });
+      sim.gold = 300;
+      sim.dispatch({ type: 'BUILD_TOWER', slotId: 'slot_1', towerId: 'squirrel' }, 'p1', 0);
+      sim.step(FIXED_DT);
+      const slot = sim.slots.get('slot_1')!;
+      sim.spawnEnemy('shield_loader', 200, 0.01, 10, {
+        x: slot.x + 1.2,
+        z: slot.z,
+        wpIndex: 1,
+        progress: 6,
+      });
+      const events = [];
+      for (let i = 0; i < 45; i++) {
+        sim.step(FIXED_DT);
+        events.push(...sim.drainEvents());
+      }
+      const impact = events.find((e) => e.type === 'PROJECTILE_IMPACT');
+      const hit = events.find((e) => e.type === 'ENEMY_HIT');
+      return { sim, events, impact, hit, checksum: sim.getChecksum() };
+    };
+
+    const a = run(8801);
+    const b = run(8801);
+    assert.equal(a.checksum, b.checksum);
+    assert.ok(a.impact && a.impact.type === 'PROJECTILE_IMPACT');
+    assert.equal(a.impact.towerId, 'squirrel');
+    assert.ok(a.hit && a.hit.type === 'ENEMY_HIT');
+    assert.ok(typeof a.hit.dirX === 'number' && typeof a.hit.dirZ === 'number');
+    assert.equal(a.hit.resisted, true, 'armored shield_loader vs basic squirrel triggers resisted deflection feedback');
   });
 });

@@ -41,8 +41,8 @@ export function evalSquashPop(
 
 /** Default stark white hit-flash length: ~2 solid frames at 60 fps + 1 frame falloff. */
 export const HIT_FLASH_DURATION = 0.055;
-/** Emissive intensity driven during the flash peak. */
-export const HIT_FLASH_EMISSIVE = 1.65;
+/** Emissive intensity driven during the flash peak (bright enough to punch through ACES + map textures). */
+export const HIT_FLASH_EMISSIVE = 3.8;
 
 /**
  * Hit-flash strength 0..1. Holds pure white (1.0) for the first 65 % of the window
@@ -92,6 +92,58 @@ export function computeKnockback(
     return { dx: 0, dz: 0, distance: 0, tiltRad: 0 };
   }
   return { dx: (dirX / len) * distance, dz: (dirZ / len) * distance, distance, tiltRad };
+}
+
+export type StaggerTier = 'light' | 'heavy' | 'crit';
+
+/**
+ * Path-aware knockback stagger scaled for the 22.4m mobile camera: blends 70% opposite the
+ * enemy's path travel vector with 30% hit direction so back-line shots stagger backward
+ * instead of pushing robots toward the Great Oak castle.
+ */
+export function computePathAwareStagger(
+  hitDirX: number,
+  hitDirZ: number,
+  pathFwdX: number,
+  pathFwdZ: number,
+  tier: StaggerTier,
+  opts: { isBoss?: boolean; reducedMotion?: boolean } = {},
+): KnockbackImpulse {
+  const fLen = Math.hypot(pathFwdX, pathFwdZ);
+  const hLen = Math.hypot(hitDirX, hitDirZ);
+  const backX = fLen > 1e-6 ? -pathFwdX / fLen : 0;
+  const backZ = fLen > 1e-6 ? -pathFwdZ / fLen : 0;
+  const hitX = hLen > 1e-6 ? hitDirX / hLen : 0;
+  const hitZ = hLen > 1e-6 ? hitDirZ / hLen : 0;
+
+  let sx = fLen > 1e-6 ? backX * 0.7 + hitX * 0.3 : hitX;
+  let sz = fLen > 1e-6 ? backZ * 0.7 + hitZ * 0.3 : hitZ;
+  let sLen = Math.hypot(sx, sz);
+  if (sLen < 1e-6 && fLen > 1e-6) {
+    sx = backX;
+    sz = backZ;
+    sLen = 1;
+  }
+  if (sLen < 1e-6) {
+    return { dx: 0, dz: 0, distance: 0, tiltRad: 0 };
+  }
+
+  let distance = tier === 'crit' ? 0.62 : tier === 'heavy' ? 0.46 : 0.26;
+  let tiltRad = tier === 'crit' ? 0.54 : tier === 'heavy' ? 0.42 : 0.26;
+  if (opts.isBoss) {
+    distance *= 0.35;
+    tiltRad *= 0.4;
+  }
+  if (opts.reducedMotion) {
+    distance *= 0.45;
+    tiltRad *= 0.45;
+  }
+  return {
+    dx: (sx / sLen) * distance,
+    dz: (sz / sLen) * distance,
+    distance,
+    tiltRad,
+  };
 }
 
 export const HIT_JOLT_DURATION = 0.2;
