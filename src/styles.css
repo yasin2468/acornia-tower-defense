@@ -510,6 +510,97 @@ body,
   flex-shrink: 0;
 }
 
+.journal-stage-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-color: rgba(87, 220, 255, 0.35);
+}
+
+.journal-canvas-wrap {
+  position: relative;
+  width: 100%;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 2px solid rgba(255, 255, 255, 0.14);
+  background: #162638;
+}
+
+#journal-turntable {
+  display: block;
+  width: 100%;
+  height: 190px;
+  cursor: grab;
+  touch-action: pan-y;
+}
+
+.journal-drag-hint {
+  position: absolute;
+  bottom: 6px;
+  right: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(13, 21, 32, 0.78);
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--accent-cyan);
+  pointer-events: none;
+}
+
+.journal-catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+
+.journal-entry-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(16, 26, 40, 0.78);
+  border: 1.5px solid rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.journal-entry-btn.selected {
+  border-color: var(--accent-cyan);
+  background: rgba(24, 52, 74, 0.85);
+}
+
+.journal-entry-btn.undiscovered {
+  opacity: 0.6;
+}
+
+.journal-cat-pill {
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--accent-gold);
+}
+
+.journal-entry-name {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.journal-gem-pip {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #27c78f;
+  color: #06281c;
+  font-size: 9.5px;
+  font-weight: 900;
+}
+
 /* Chest Showcase Grid (Shop Tab) */
 .chest-grid {
   display: grid;

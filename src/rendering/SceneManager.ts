@@ -17,7 +17,7 @@ import type {
   SimulationEngine,
   SlotState,
 } from '../core/SimulationEngine.ts';
-import { extractStaticPrimitives, type ModelName } from './AssetLoader.ts';
+import { extractStaticPrimitives, instantiateModel, type ModelName } from './AssetLoader.ts';
 import { CameraController } from './CameraController.ts';
 import { countDrawCalls } from './DrawCallCounter.ts';
 import { createCobbleRoadTexture, createMeadowTexture } from './ProceduralTextures.ts';
@@ -684,6 +684,11 @@ export class SceneManager {
   private bloomDisabled = false;
   private animTime = 0;
   private usePostProcessing = true;
+  private showcaseScene: THREE.Scene | null = null;
+  private showcaseCam: THREE.PerspectiveCamera | null = null;
+  private showcasePivot: THREE.Group | null = null;
+  private showcaseMixer: THREE.AnimationMixer | null = null;
+  private showcaseModelName: ModelName | '' = '';
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -2512,6 +2517,104 @@ export class SceneManager {
 
   getTowerColorPreview(id: TowerId): string {
     return id === 'squirrel' ? '#e07a3c' : id === 'beaver' ? '#b97a4b' : id === 'owl' ? '#5da9e9' : '#7c8b6f';
+  }
+
+  renderJournalShowcase(
+    targetCanvas: HTMLCanvasElement,
+    modelName: ModelName,
+    yawRad: number,
+    dt: number,
+  ): void {
+    const ctx2d = targetCanvas.getContext('2d');
+    if (!ctx2d) return;
+
+    if (!this.showcaseScene) {
+      this.showcaseScene = new THREE.Scene();
+      this.showcaseScene.background = new THREE.Color('#162638');
+      this.showcaseScene.environment = this.scene.environment;
+      this.showcaseScene.environmentIntensity = 0.45;
+
+      const hemi = new THREE.HemisphereLight('#c8e2ff', '#4b5a6e', 1.1);
+      const key = new THREE.DirectionalLight('#fff0d2', 1.7);
+      key.position.set(2.5, 4.0, 3.2);
+      const rim = new THREE.DirectionalLight('#64dcff', 0.9);
+      rim.position.set(-2.5, 2.2, -3.0);
+      this.showcaseScene.add(hemi, key, rim);
+
+      const pedestal = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.95, 1.08, 0.22, 24),
+        new THREE.MeshStandardMaterial({ color: '#46586b', roughness: 0.78 }),
+      );
+      pedestal.position.y = -0.11;
+      this.showcaseScene.add(pedestal);
+
+      this.showcasePivot = new THREE.Group();
+      this.showcaseScene.add(this.showcasePivot);
+      this.showcaseCam = new THREE.PerspectiveCamera(36, 1, 0.1, 30);
+      this.showcaseCam.position.set(0, 1.55, 4.1);
+      this.showcaseCam.lookAt(0, 0.85, 0);
+    }
+
+    if (this.showcasePivot && modelName !== this.showcaseModelName) {
+      this.showcasePivot.clear();
+      this.showcaseMixer = null;
+      const inst = instantiateModel(modelName);
+      if (inst) {
+        const box = new THREE.Box3().setFromObject(inst.scene);
+        const size = new THREE.Vector3();
+        const center = new THREE.Vector3();
+        box.getSize(size);
+        box.getCenter(center);
+        const maxDim = Math.max(0.4, size.x, size.y, size.z);
+        const scale = 1.65 / maxDim;
+        inst.scene.scale.setScalar(scale);
+        inst.scene.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
+        this.showcasePivot.add(inst.scene);
+
+        if (inst.animations.length > 0) {
+          this.showcaseMixer = new THREE.AnimationMixer(inst.scene);
+          const clip =
+            inst.animations.find((a) => /idle|walk|run/i.test(a.name)) ?? inst.animations[0];
+          this.showcaseMixer.clipAction(clip).play();
+        }
+        this.showcaseModelName = modelName;
+      }
+    }
+
+    if (this.showcasePivot) {
+      this.showcasePivot.rotation.y = yawRad;
+    }
+    if (this.showcaseMixer && dt > 0) {
+      this.showcaseMixer.update(dt);
+    }
+    if (!this.showcaseCam || !this.showcaseScene) return;
+
+    const srcW = this.renderer.domElement.width;
+    const srcH = this.renderer.domElement.height;
+    if (srcW <= 0 || srcH <= 0) return;
+
+    this.showcaseCam.aspect = srcW / srcH;
+    this.showcaseCam.fov = srcW < srcH ? 42 : 34;
+    this.showcaseCam.updateProjectionMatrix();
+    this.renderer.render(this.showcaseScene, this.showcaseCam);
+
+    const dstW = targetCanvas.width;
+    const dstH = targetCanvas.height;
+    const srcAspect = srcW / srcH;
+    const dstAspect = dstW / dstH;
+    let sx = 0;
+    let sy = 0;
+    let sw = srcW;
+    let sh = srcH;
+    if (srcAspect < dstAspect) {
+      sh = srcW / dstAspect;
+      sy = (srcH - sh) * 0.5;
+    } else {
+      sw = srcH * dstAspect;
+      sx = (srcW - sw) * 0.5;
+    }
+    ctx2d.clearRect(0, 0, dstW, dstH);
+    ctx2d.drawImage(this.renderer.domElement, sx, sy, sw, sh, 0, 0, dstW, dstH);
   }
 }
 

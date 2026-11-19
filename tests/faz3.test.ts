@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { SoundEngine } from '../src/audio/SoundEngine.ts';
 import { FIXED_DT, SimulationEngine } from '../src/core/SimulationEngine.ts';
 import { HEROES } from '../src/data/enemies.ts';
 import { LEVELS } from '../src/data/levels.ts';
@@ -11,7 +12,16 @@ import {
   computeTotalEarnedStars,
 } from '../src/data/talents.ts';
 import { MODEL_NAMES } from '../src/rendering/AssetLoader.ts';
-import { grantCampaignHeroUnlocks, resetTalents, unlockHeroWithGems, upgradeTalent } from '../src/services/ProgressionService.ts';
+import {
+  claimJournalReward,
+  discoverJournalEntries,
+  getJournalCatalog,
+  grantCampaignHeroUnlocks,
+  JOURNAL_REWARD_GEMS,
+  resetTalents,
+  unlockHeroWithGems,
+  upgradeTalent,
+} from '../src/services/ProgressionService.ts';
 import { createInitialSave, migrateSave, SAVE_VERSION, SaveManager } from '../src/services/SaveManager.ts';
 
 const NOW = 1_700_000_000_000;
@@ -164,5 +174,34 @@ describe('F3-2 — Kızıl Kuyruk ve Kaya Diş kahramanları', () => {
     const unlocked = grantCampaignHeroUnlocks(sm, 7);
     assert.deepEqual(unlocked, ['kaya_dis']);
     assert.ok(sm.get().unlockedHeroes.includes('kaya_dis'));
+  });
+});
+
+describe('F3-3 & F3-6 — Orman Günlüğü ve Akustik Biyom Müzikleri', () => {
+  it('Orman Günlüğü 17 birim listeler ve ilk keşif +10 Zümrüt ödülünü yalnızca 1 kez verir', () => {
+    const catalog = getJournalCatalog();
+    assert.equal(catalog.length, 17, '4 kule + 3 kahraman + 10 robot = 17 kayıt');
+
+    const sm = new SaveManager(NOW);
+    const before = sm.get().emeraldGems;
+    assert.equal(claimJournalReward(sm, 'turbo_hopper'), false, 'keşfedilmemiş birim ödül veremez');
+
+    discoverJournalEntries(sm, ['turbo_hopper']);
+    assert.equal(claimJournalReward(sm, 'turbo_hopper'), true);
+    assert.equal(sm.get().emeraldGems, before + JOURNAL_REWARD_GEMS);
+    assert.equal(claimJournalReward(sm, 'turbo_hopper'), false, 'aynı birim ikinci kez ödül veremez');
+  });
+
+  it('SoundEngine biyom müzik temasını ve kapatma anahtarlarını hatasız yönetir', () => {
+    const se = new SoundEngine();
+    se.setMusicTheme('canyon');
+    assert.equal(se.getMusicTheme(), 'canyon');
+    se.setMusicEnabled(false);
+    assert.equal(se.musicEnabled, false);
+    se.setMusicTheme('snow');
+    assert.equal(se.getMusicTheme(), 'snow');
+    se.setEnabled(false);
+    assert.equal(se.enabled, false);
+    se.setMusicTheme('none');
   });
 });

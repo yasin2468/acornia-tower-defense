@@ -1,4 +1,4 @@
-import { HEROES, type HeroId } from '../data/enemies.ts';
+import { ENEMY_LIST, HEROES, HERO_LIST, type HeroId } from '../data/enemies.ts';
 import {
   clampTalentRank,
   computeAvailableTalentStars,
@@ -6,7 +6,8 @@ import {
   getNextTalentCost,
   type TalentBranchId,
 } from '../data/talents.ts';
-import { CARD_MAX_LEVEL } from '../data/towers.ts';
+import { CARD_MAX_LEVEL, TOWER_LIST } from '../data/towers.ts';
+import type { ModelName } from '../rendering/AssetLoader.ts';
 import { isVipActive } from './CommercialServices.ts';
 import type { CardUnitId, SaveManager, SaveState } from './SaveManager.ts';
 
@@ -185,4 +186,70 @@ export function grantCampaignHeroUnlocks(saveManager: SaveManager, clearedLevelI
     }
   });
   return unlocked;
+}
+
+export const JOURNAL_REWARD_GEMS = 10;
+
+export interface JournalEntry {
+  id: string;
+  category: 'tower' | 'hero' | 'enemy';
+  modelName: ModelName;
+  nameKey: string;
+  descKey: string;
+  statSummary: string;
+}
+
+export function getJournalCatalog(): JournalEntry[] {
+  const towers: JournalEntry[] = TOWER_LIST.map((tw) => ({
+    id: tw.id,
+    category: 'tower',
+    modelName: `tower_${tw.id}_t1` as ModelName,
+    nameKey: tw.nameKey,
+    descKey: tw.roleKey,
+    statSummary: `DMG ${tw.tier1.damage} · RNG ${tw.tier1.range}m · ${tw.tier1.cost}`,
+  }));
+  const heroModelMap: Record<HeroId, ModelName> = {
+    boz_pence: 'hero_bear',
+    kizil_kuyruk: 'hero_fox',
+    kaya_dis: 'hero_boar',
+  };
+  const heroes: JournalEntry[] = HERO_LIST.map((h) => ({
+    id: h.id,
+    category: 'hero',
+    modelName: heroModelMap[h.id],
+    nameKey: h.nameKey,
+    descKey: h.descKey,
+    statSummary: `HP ${h.maxHp} · DMG ${h.damage} · BLK ${h.blockCap}`,
+  }));
+  const enemies: JournalEntry[] = ENEMY_LIST.map((e) => ({
+    id: e.id,
+    category: 'enemy',
+    modelName: `enemy_${e.id}` as ModelName,
+    nameKey: e.nameKey,
+    descKey: e.descKey,
+    statSummary: `HP ${e.baseHp} · SPD ${e.speed} · %${Math.round(e.armor * 100)}`,
+  }));
+  return [...towers, ...heroes, ...enemies];
+}
+
+export function discoverJournalEntries(saveManager: SaveManager, ids: readonly string[]): void {
+  const cur = saveManager.get().discoveredIds;
+  const toAdd = ids.filter((id) => !cur.includes(id));
+  if (toAdd.length === 0) return;
+  saveManager.update((draft) => {
+    for (const id of toAdd) {
+      if (!draft.discoveredIds.includes(id)) draft.discoveredIds.push(id);
+    }
+  });
+}
+
+export function claimJournalReward(saveManager: SaveManager, entryId: string): boolean {
+  const s = saveManager.get();
+  if (!s.discoveredIds.includes(entryId)) return false;
+  if (s.claimedJournalIds.includes(entryId)) return false;
+  saveManager.update((draft) => {
+    draft.claimedJournalIds.push(entryId);
+    draft.emeraldGems += JOURNAL_REWARD_GEMS;
+  });
+  return true;
 }

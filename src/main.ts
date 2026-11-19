@@ -26,7 +26,11 @@ import {
   RemoteConfigService,
 } from './services/CommercialServices.ts';
 import { NetworkService } from './services/NetworkService.ts';
-import { grantCampaignHeroUnlocks } from './services/ProgressionService.ts';
+import {
+  discoverJournalEntries,
+  getJournalCatalog,
+  grantCampaignHeroUnlocks,
+} from './services/ProgressionService.ts';
 import { SaveManager } from './services/SaveManager.ts';
 import { BattleView } from './ui/BattleView.ts';
 import { MetaView } from './ui/MetaView.ts';
@@ -133,7 +137,8 @@ network.onPeerLeft = () => {
 
 function syncAudioAndCameraSettings(): void {
   const s = saveManager.get().settings;
-  sound.enabled = s.soundEnabled;
+  sound.setEnabled(s.soundEnabled);
+  sound.setMusicEnabled(s.musicEnabled);
   sceneMgr.cameraCtrl.setShakeStrength(s.shakeStrength);
   sceneMgr.setBatterySaver(s.batterySaver30Fps);
   // Reduced Motion: OS preference, or the player dialled shake to 0 %.
@@ -146,6 +151,7 @@ function renderMeta(): void {
   mode = 'meta';
   juice.reset();
   syncAudioAndCameraSettings();
+  sound.setMusicTheme('menu');
   metaView.render(uiRoot);
 }
 
@@ -192,6 +198,14 @@ async function startLevel(
   }
 
   syncAudioAndCameraSettings();
+  sound.setMusicTheme(spec.biome);
+  discoverJournalEntries(
+    saveManager,
+    [
+      heroId,
+      ...spec.waves.flatMap((w) => w.groups.map((g) => g.enemyId)),
+    ],
+  );
   sceneMgr.loadLevel(spec, save.equippedHat, save.heroClass, heroId);
   battleView.resetForLevel(spec.id);
   mode = 'battle';
@@ -344,6 +358,9 @@ const resizeObserver = new ResizeObserver(() => {
 });
 resizeObserver.observe(shell);
 
+window.addEventListener('pointerdown', () => sound.resume(), { passive: true });
+
+let ensuringShowcaseModel = '';
 function frame(nowMs: number): void {
   requestAnimationFrame(frame);
   const rawDt = Math.min(0.1, (nowMs - lastFrameMs) / 1000);
@@ -352,6 +369,22 @@ function frame(nowMs: number): void {
     return;
   }
   lastFrameMs = nowMs;
+
+  if (mode === 'meta' && metaView.activeTab === 'journal') {
+    const turntable = uiRoot.querySelector<HTMLCanvasElement>('#journal-turntable');
+    if (turntable) {
+      const entry = getJournalCatalog().find((e) => e.id === metaView.selectedJournalId);
+      if (entry) {
+        if (ensuringShowcaseModel !== entry.modelName) {
+          ensuringShowcaseModel = entry.modelName;
+          void ensureModelsLoaded([entry.modelName]);
+        }
+        metaView.journalYaw += rawDt * 0.55;
+        sceneMgr.renderJournalShowcase(turntable, entry.modelName, metaView.journalYaw, rawDt);
+      }
+    }
+    return;
+  }
 
   if (mode === 'battle' && activeSim) {
     juice.step(rawDt);

@@ -34,14 +34,97 @@ export class VoiceLimiter {
 }
 
 type Priority = 0 | 1 | 2;
+export type MusicTheme = 'none' | 'menu' | 'forest' | 'canyon' | 'cavern' | 'snow';
+
+interface BiomeProgression {
+  tempoMs: number;
+  notes: readonly number[];
+  wave: OscillatorType;
+  gain: number;
+}
+
+const BIOME_MUSIC: Record<Exclude<MusicTheme, 'none'>, BiomeProgression> = {
+  menu: { tempoMs: 460, notes: [261.6, 329.6, 392.0, 493.9, 392.0, 329.6, 293.7, 392.0], wave: 'triangle', gain: 0.042 },
+  forest: { tempoMs: 420, notes: [293.7, 349.2, 440.0, 523.3, 440.0, 392.0, 349.2, 440.0], wave: 'triangle', gain: 0.04 },
+  canyon: { tempoMs: 360, notes: [220.0, 261.6, 329.6, 392.0, 440.0, 392.0, 329.6, 293.7], wave: 'triangle', gain: 0.042 },
+  cavern: { tempoMs: 520, notes: [246.9, 311.1, 370.0, 493.9, 370.0, 311.1, 277.2, 370.0], wave: 'sine', gain: 0.045 },
+  snow: { tempoMs: 490, notes: [329.6, 392.0, 493.9, 587.3, 659.3, 493.9, 392.0, 329.6], wave: 'sine', gain: 0.04 },
+};
 
 export class SoundEngine {
   private ctx: AudioContext | null = null;
   private bus: AudioNode | null = null;
+  private musicBus: GainNode | null = null;
   private noiseBuf: AudioBuffer | null = null;
   private readonly limiter = new VoiceLimiter(26, 6);
   private readonly lastGroupAt = new Map<string, number>();
+  private musicTheme: MusicTheme = 'none';
+  private musicTimer: ReturnType<typeof setInterval> | null = null;
+  private musicStep = 0;
   enabled = true;
+  musicEnabled = true;
+
+  getMusicTheme(): MusicTheme {
+    return this.musicTheme;
+  }
+
+  resume(): void {
+    const ctx = this.ensureContext();
+    if (ctx && ctx.state === 'suspended') {
+      void ctx.resume().catch(() => {});
+    }
+  }
+
+  setMusicTheme(theme: MusicTheme): void {
+    this.musicTheme = theme;
+    this.syncMusicLoop();
+  }
+
+  setMusicEnabled(enabled: boolean): void {
+    this.musicEnabled = enabled;
+    this.syncMusicLoop();
+  }
+
+  setEnabled(enabled: boolean): void {
+    this.enabled = enabled;
+    this.syncMusicLoop();
+  }
+
+  private syncMusicLoop(): void {
+    if (this.musicTimer !== null) {
+      clearInterval(this.musicTimer);
+      this.musicTimer = null;
+    }
+    if (!this.enabled || !this.musicEnabled || this.musicTheme === 'none' || typeof window === 'undefined') {
+      if (this.musicBus && this.ctx) {
+        this.musicBus.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.05);
+      }
+      return;
+    }
+    const spec = BIOME_MUSIC[this.musicTheme];
+    this.musicTimer = setInterval(() => this.playMusicStep(spec), spec.tempoMs);
+  }
+
+  private playMusicStep(spec: BiomeProgression): void {
+    if (!this.enabled || !this.musicEnabled || this.musicTheme === 'none') return;
+    const ctx = this.ctx;
+    if (!ctx || ctx.state !== 'running' || !this.musicBus) return;
+    const now = ctx.currentTime;
+    this.musicBus.gain.setTargetAtTime(1.0, now, 0.08);
+    const freq = spec.notes[this.musicStep % spec.notes.length];
+    this.musicStep += 1;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = spec.wave;
+    osc.frequency.setValueAtTime(freq, now);
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.linearRampToValueAtTime(spec.gain, now + 0.04);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.34);
+    osc.connect(g);
+    g.connect(this.musicBus);
+    osc.start(now);
+    osc.stop(now + 0.36);
+  }
 
   private ensureContext(): AudioContext | null {
     if (!this.enabled || typeof window === 'undefined') return null;
@@ -64,6 +147,10 @@ export class SoundEngine {
       master.connect(comp);
       comp.connect(this.ctx.destination);
       this.bus = master;
+      const mBus = this.ctx.createGain();
+      mBus.gain.value = 1.0;
+      mBus.connect(comp);
+      this.musicBus = mBus;
     }
     if (this.ctx.state === 'suspended') {
       void this.ctx.resume().catch(() => {});

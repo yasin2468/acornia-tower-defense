@@ -35,9 +35,12 @@ import {
   AFK_QUICK_BOOST_HOURS,
   AFK_QUICK_BOOST_OAK,
   AFK_QUICK_BOOST_TOTAL_SHARDS,
+  JOURNAL_REWARD_GEMS,
   calculateAfkAccumulation,
   claimAfkPatrol,
+  claimJournalReward,
   getCardUpgradeCost,
+  getJournalCatalog,
   grantQuickAfkBoost,
   openForestChest,
   resetTalents,
@@ -48,7 +51,7 @@ import {
 import type { CardUnitId, SaveManager } from '../services/SaveManager.ts';
 import { ICONS, PORTRAIT_URLS, UI_ICON_URLS } from './icons.ts';
 
-export type MetaTab = 'map' | 'multi' | 'cards' | 'shop';
+export type MetaTab = 'map' | 'multi' | 'cards' | 'journal' | 'shop';
 
 export interface MetaViewCallbacks {
   onStartLevel: (levelId: number, ironMode: boolean) => void;
@@ -61,6 +64,8 @@ export class MetaView {
   ironMode = false;
   showSettings = false;
   showBestiary = false;
+  selectedJournalId = 'boz_pence';
+  journalYaw = 0.45;
   multiMode: MultiMode = 'coop';
   roomCode = '';
   statusNotice = '';
@@ -120,6 +125,9 @@ export class MetaView {
           <button class="nav-tab ${this.activeTab === 'cards' ? 'active' : ''}" data-tab="cards">
             <span class="svg-ico">${ICONS.cards}</span><span>${t(loc, 'nav.cards')}</span>
           </button>
+          <button class="nav-tab ${this.activeTab === 'journal' ? 'active' : ''}" data-tab="journal">
+            <span class="svg-ico">${ICONS.bestiary}</span><span>${t(loc, 'nav.journal')}</span>
+          </button>
           <button class="nav-tab ${this.activeTab === 'shop' ? 'active' : ''}" data-tab="shop">
             <span class="svg-ico">${ICONS.shop}</span><span>${t(loc, 'nav.shop')}</span>
           </button>
@@ -136,6 +144,7 @@ export class MetaView {
     if (this.activeTab === 'map') return this.renderMapTab(loc);
     if (this.activeTab === 'multi') return this.renderMultiTab(loc);
     if (this.activeTab === 'cards') return this.renderCardsTab(loc);
+    if (this.activeTab === 'journal') return this.renderJournalTab(loc);
     return this.renderShopTab(loc);
   }
 
@@ -232,7 +241,7 @@ export class MetaView {
       .map((eid) => {
         const spec = ENEMIES[eid];
         return `
-          <button type="button" class="threat-chip ${spec.isBoss ? 'boss' : ''}" data-open-bestiary="1">
+          <button type="button" class="threat-chip ${spec.isBoss ? 'boss' : ''}" data-open-journal-id="${eid}">
             <span class="threat-dot" style="background:${spec.color}; border-color:${spec.accentColor};"></span>
             <span>${t(loc, spec.nameKey)}</span>
             ${spec.isBoss ? `<span class="threat-boss-tag">${t(loc, 'map.bossTag')}</span>` : ''}
@@ -527,6 +536,55 @@ export class MetaView {
     `;
   }
 
+  private renderJournalTab(loc: Locale): string {
+    const save = this.saveManager.get();
+    const catalog = getJournalCatalog();
+    const active = catalog.find((e) => e.id === this.selectedJournalId) ?? catalog[0];
+    const isDiscovered = save.discoveredIds.includes(active.id);
+    const isClaimed = save.claimedJournalIds.includes(active.id);
+
+    const gridHtml = catalog
+      .map((entry) => {
+        const disc = save.discoveredIds.includes(entry.id);
+        const claimed = save.claimedJournalIds.includes(entry.id);
+        const sel = entry.id === active.id;
+        return `
+          <button type="button" class="journal-entry-btn ${sel ? 'selected' : ''} ${disc ? '' : 'undiscovered'}" data-journal-id="${entry.id}">
+            <span class="journal-cat-pill">${t(loc, `journal.cat.${entry.category}`)}</span>
+            <span class="journal-entry-name">${t(loc, entry.nameKey)}</span>
+            ${disc && !claimed ? `<span class="journal-gem-pip">+${JOURNAL_REWARD_GEMS}</span>` : ''}
+          </button>
+        `;
+      })
+      .join('');
+
+    const claimBtn = isDiscovered
+      ? `<button class="btn btn-sm ${isClaimed ? '' : 'btn-gold'}" id="btn-claim-journal" ${isClaimed ? 'disabled' : ''}>
+           ${isClaimed ? t(loc, 'journal.claimed') : tParams(loc, 'journal.claimReward', { gems: JOURNAL_REWARD_GEMS })}
+         </button>`
+      : `<button class="btn btn-sm" disabled>${t(loc, 'journal.locked')}</button>`;
+
+    return `
+      <div style="font-size:15px; font-weight:900; color:#ffe17a;">${t(loc, 'journal.title')}</div>
+      <div style="font-size:11px; color:var(--text-muted); margin-top:-4px;">${t(loc, 'journal.sub')}</div>
+      <div class="card-panel journal-stage-card">
+        <div class="journal-canvas-wrap">
+          <canvas id="journal-turntable" width="320" height="196"></canvas>
+          <div class="journal-drag-hint">${t(loc, 'journal.dragHint')}</div>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+          <div>
+            <div style="font-size:14.5px; font-weight:900; color:#ffffff;">${t(loc, active.nameKey)}</div>
+            <div style="font-size:11px; font-weight:700; color:var(--accent-cyan);">${active.statSummary}</div>
+            <div style="font-size:11.5px; color:var(--text-muted); margin-top:2px;">${t(loc, active.descKey)}</div>
+          </div>
+        </div>
+        ${claimBtn}
+      </div>
+      <div class="journal-catalog-grid">${gridHtml}</div>
+    `;
+  }
+
   private renderShopTab(loc: Locale): string {
     const save = this.saveManager.get();
     const nowMs = Date.now();
@@ -605,6 +663,18 @@ export class MetaView {
           <div style="display:flex; justify-content:space-between; align-items:center; font-size:13px; font-weight:700;">
             <span>${t(loc, 'settings.sound')}</span>
             <button class="game-switch ${s.soundEnabled ? 'on' : ''}" id="chk-sound" type="button" aria-pressed="${s.soundEnabled}">
+              <span class="game-switch-knob"></span>
+            </button>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; font-size:13px; font-weight:700;">
+            <span>${t(loc, 'settings.music')}</span>
+            <button class="game-switch ${s.musicEnabled ? 'on' : ''}" id="chk-music" type="button" aria-pressed="${s.musicEnabled}">
+              <span class="game-switch-knob"></span>
+            </button>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; font-size:13px; font-weight:700;">
+            <span>${t(loc, 'settings.haptics')}</span>
+            <button class="game-switch ${s.hapticsEnabled ? 'on' : ''}" id="chk-haptics" type="button" aria-pressed="${s.hapticsEnabled}">
               <span class="game-switch-knob"></span>
             </button>
           </div>
@@ -835,6 +905,22 @@ export class MetaView {
       };
     }
 
+    const chkMusic = container.querySelector<HTMLButtonElement>('#chk-music');
+    if (chkMusic) {
+      chkMusic.onclick = () => {
+        this.saveManager.update((d) => { d.settings.musicEnabled = !d.settings.musicEnabled; });
+        this.callbacks.onRefresh();
+      };
+    }
+
+    const chkHaptics = container.querySelector<HTMLButtonElement>('#chk-haptics');
+    if (chkHaptics) {
+      chkHaptics.onclick = () => {
+        this.saveManager.update((d) => { d.settings.hapticsEnabled = !d.settings.hapticsEnabled; });
+        this.callbacks.onRefresh();
+      };
+    }
+
     const chkBattery = container.querySelector<HTMLButtonElement>('#chk-battery');
     if (chkBattery) {
       chkBattery.onclick = () => {
@@ -853,16 +939,48 @@ export class MetaView {
     const openBestiary = container.querySelector<HTMLButtonElement>('#btn-open-bestiary');
     if (openBestiary) {
       openBestiary.onclick = () => {
-        this.showBestiary = true;
+        this.activeTab = 'journal';
         this.callbacks.onRefresh();
       };
     }
-    container.querySelectorAll<HTMLElement>('[data-open-bestiary]').forEach((el) => {
+    container.querySelectorAll<HTMLElement>('[data-open-journal-id]').forEach((el) => {
       el.onclick = () => {
-        this.showBestiary = true;
+        this.selectedJournalId = el.dataset.openJournalId ?? 'boz_pence';
+        this.activeTab = 'journal';
         this.callbacks.onRefresh();
       };
     });
+    container.querySelectorAll<HTMLElement>('[data-journal-id]').forEach((el) => {
+      el.onclick = () => {
+        this.selectedJournalId = el.dataset.journalId ?? 'boz_pence';
+        this.callbacks.onRefresh();
+      };
+    });
+    const claimJournalBtn = container.querySelector<HTMLButtonElement>('#btn-claim-journal');
+    if (claimJournalBtn) {
+      claimJournalBtn.onclick = () => {
+        if (claimJournalReward(this.saveManager, this.selectedJournalId)) {
+          this.statusNotice = `+${JOURNAL_REWARD_GEMS} ${t(loc, 'cur.gem')}`;
+        }
+        this.callbacks.onRefresh();
+      };
+    }
+    const turntable = container.querySelector<HTMLCanvasElement>('#journal-turntable');
+    if (turntable) {
+      let dragging = false;
+      let lastX = 0;
+      turntable.onpointerdown = (ev) => {
+        dragging = true;
+        lastX = ev.clientX;
+      };
+      turntable.onpointermove = (ev) => {
+        if (!dragging) return;
+        this.journalYaw += (ev.clientX - lastX) * 0.015;
+        lastX = ev.clientX;
+      };
+      turntable.onpointerup = () => { dragging = false; };
+      turntable.onpointerleave = () => { dragging = false; };
+    }
     const closeBestiary = container.querySelector<HTMLButtonElement>('#btn-close-bestiary');
     if (closeBestiary) {
       closeBestiary.onclick = () => {

@@ -24,13 +24,13 @@ aynı anda değiştirmez. Durumlar: `planlandi` → `devam` → `dogrulaniyor` �
 | T-A | Kopya yıldız/ödül sabitlerinin tekilleştirilmesi, Three.js `manualChunks` paket bölme ve seviye-öncelikli lazy GLB yükleme | Carbon | dogrulandi | `tests/drawcall.test.ts` (8/8 pass, toplam 77/77 pass) + `tsc` OK + `vite build` 0 chunk uyarısı ✓ |
 | F3-1 | 4 dallı Taktik Yetenek Ağacı (`SaveManager` v4 + `SimulationEngine` + `MetaView`) | Carbon | dogrulandi | `tests/faz3.test.ts` (3/3 pass, toplam 80/80 pass) + `tsc` OK + build ✓ |
 | F3-2 | 2 yeni kahraman: Kızıl Kuyruk (`hero_fox.glb`) ve Kaya Diş (`hero_boar.glb`) | Carbon | dogrulandi | Blender Cycles portre + `hero_fox`/`hero_boar.glb` + `tests/faz3.test.ts` (84/84 pass) + build ✓ |
+| F3-3 | Orman Günlüğü (`360°` 3D vitrin + Zümrüt ödülü) & Akustik Biyom Müzikleri (`F3-6`) | Carbon | dogrulandi | `SceneManager.renderJournalShowcase` + `SoundEngine` biyom müziği + `tests/faz3.test.ts` (86/86 pass) + build ✓ |
 
 ## Kuyruk (Carbon doldurur)
 
 | # | İş | Not |
 |---|---|---|
-| F3-3 | Orman Günlüğü (`360°` 3D vitrin + Zümrüt ödülü) & Akustik Biyom Müzikleri (`F3-6`) | devam |
-| F3-4 | Kayıp Orman Seferi (5 aşamalı Roguelike oyun sonu + 6 Orman Tılsımı) | sirada |
+| F3-4 | Kayıp Orman Seferi (5 aşamalı Roguelike oyun sonu + 6 Orman Tılsımı) | devam |
 | F3-5 | 14 Günlük PvP Kupa Ligi, Harita Pin/Emoji, 30 Kademeli Sezonluk Orman Bileti & Haptics/SDK kancaları | sirada |
 
 ## Devir notu
