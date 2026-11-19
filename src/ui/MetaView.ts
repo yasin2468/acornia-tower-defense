@@ -10,6 +10,12 @@ import {
 } from '../data/enemies.ts';
 import { LEVELS, WORLD_MAP_NODES, isLevelUnlocked, type LevelSpec } from '../data/levels.ts';
 import {
+  RELICS,
+  chooseExpeditionRelic,
+  startNewExpedition,
+  type RelicId,
+} from '../data/roguelike.ts';
+import {
   TALENT_BRANCHES,
   TALENT_MAX_RANK,
   computeAvailableTalentStars,
@@ -55,6 +61,8 @@ export type MetaTab = 'map' | 'multi' | 'cards' | 'journal' | 'shop';
 
 export interface MetaViewCallbacks {
   onStartLevel: (levelId: number, ironMode: boolean) => void;
+  onStartExpedition: () => void;
+  onDevUnlock?: () => void;
   onRefresh: () => void;
 }
 
@@ -307,6 +315,78 @@ export class MetaView {
           <span class="svg-ico">${selUnlocked ? ICONS.play : ICONS.lock}</span>
           <span>${selUnlocked ? t(loc, 'map.play') : t(loc, 'map.lockedHint')}</span>
         </button>
+      </div>
+      ${this.renderExpeditionPortal(loc)}
+    `;
+  }
+
+  private renderExpeditionPortal(loc: Locale): string {
+    const save = this.saveManager.get();
+    const unlocked = (save.levelStars[12] ?? 0) > 0 || save.expeditionsCompleted > 0 || Boolean(save.activeExpedition);
+    const run = save.activeExpedition;
+
+    if (!unlocked) {
+      return `
+        <div class="card-panel rogue-portal-card" id="rogue-portal-card">
+          <div style="font-size:14px; font-weight:900; color:#ffe17a;">${t(loc, 'rogue.title')}</div>
+          <div style="font-size:11.5px; color:var(--text-muted);">${t(loc, 'rogue.lockedHint')}</div>
+        </div>
+      `;
+    }
+
+    if (!run) {
+      return `
+        <div class="card-panel rogue-portal-card" id="rogue-portal-card">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+            <div style="font-size:14px; font-weight:900; color:#ffe17a;">${t(loc, 'rogue.title')}</div>
+            <span class="pill-badge gold">★ ${save.expeditionsCompleted}</span>
+          </div>
+          <div style="font-size:11.5px; color:var(--text-muted);">${t(loc, 'rogue.sub')}</div>
+          <button class="btn btn-gold" id="btn-rogue-start">${t(loc, 'rogue.startBtn')}</button>
+        </div>
+      `;
+    }
+
+    const towersText = run.allowedTowers.map((tid) => t(loc, TOWERS[tid].nameKey)).join(' · ');
+    const relicsText =
+      run.relics.length > 0
+        ? run.relics.map((rid) => t(loc, RELICS[rid].nameKey)).join(' · ')
+        : '—';
+
+    const bodyHtml =
+      run.pendingRelicChoices.length > 0
+        ? `
+          <div style="font-size:12px; font-weight:800; color:var(--accent-cyan);">${t(loc, 'rogue.pickTitle')}</div>
+          <div class="relic-choice-grid">
+            ${run.pendingRelicChoices
+              .map(
+                (rid) => `
+                  <button type="button" class="relic-card-btn" data-pick-relic="${rid}">
+                    <span style="font-size:12px; font-weight:900; color:#ffe17a;">${t(loc, RELICS[rid].nameKey)}</span>
+                    <span style="font-size:10.5px; color:var(--text-muted); line-height:1.25;">${t(loc, RELICS[rid].descKey)}</span>
+                  </button>
+                `,
+              )
+              .join('')}
+          </div>
+        `
+        : `
+          <div style="display:flex; gap:8px;">
+            <button class="btn btn-primary" style="flex:1;" id="btn-rogue-continue">${tParams(loc, 'rogue.continueBtn', { stage: run.stageIndex + 1 })}</button>
+            <button class="btn btn-sm" id="btn-rogue-abandon">${t(loc, 'rogue.abandonBtn')}</button>
+          </div>
+        `;
+
+    return `
+      <div class="card-panel rogue-portal-card" id="rogue-portal-card">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+          <div style="font-size:14px; font-weight:900; color:#ffe17a;">${t(loc, 'rogue.title')}</div>
+          <span class="pill-badge">${tParams(loc, 'rogue.stageBadge', { stage: run.stageIndex + 1 })}</span>
+        </div>
+        <div style="font-size:11.5px; font-weight:800; color:var(--accent-green);">${tParams(loc, 'rogue.hpBadge', { hp: run.hp, max: run.maxHp })}</div>
+        <div style="font-size:11px; color:var(--text-muted);">${t(loc, 'rogue.towersLabel')}: <strong style="color:#fff;">${towersText}</strong></div>
+        <div style="font-size:11px; color:var(--text-muted);">${t(loc, 'rogue.relicsLabel')}: <strong style="color:#ffe17a;">${relicsText}</strong></div>
+        ${bodyHtml}
       </div>
     `;
   }
@@ -688,6 +768,11 @@ export class MetaView {
             <span>${t(loc, 'settings.shake')}: ${s.shakeStrength}%</span>
             <input type="range" id="rng-shake" min="0" max="100" value="${s.shakeStrength}" />
           </label>
+          ${
+            this.callbacks.onDevUnlock
+              ? `<button class="btn btn-sm btn-gold" id="btn-dev-unlock" type="button">${t(loc, 'settings.devUnlock')}</button>`
+              : ''
+          }
         </div>
       </div>
     `;
@@ -729,6 +814,41 @@ export class MetaView {
 
     const startBtn = container.querySelector<HTMLButtonElement>('#btn-start-level');
     if (startBtn) startBtn.onclick = () => this.callbacks.onStartLevel(this.selectedLevelId, this.ironMode);
+
+    const rogueStart = container.querySelector<HTMLButtonElement>('#btn-rogue-start');
+    if (rogueStart) {
+      rogueStart.onclick = () => {
+        this.saveManager.update((d) => {
+          d.activeExpedition = startNewExpedition();
+        });
+        this.callbacks.onStartExpedition();
+      };
+    }
+
+    const rogueContinue = container.querySelector<HTMLButtonElement>('#btn-rogue-continue');
+    if (rogueContinue) rogueContinue.onclick = () => this.callbacks.onStartExpedition();
+
+    const rogueAbandon = container.querySelector<HTMLButtonElement>('#btn-rogue-abandon');
+    if (rogueAbandon) {
+      rogueAbandon.onclick = () => {
+        this.saveManager.update((d) => {
+          d.activeExpedition = null;
+        });
+        this.callbacks.onRefresh();
+      };
+    }
+
+    container.querySelectorAll<HTMLElement>('[data-pick-relic]').forEach((btn) => {
+      btn.onclick = () => {
+        const rid = btn.dataset.pickRelic as RelicId;
+        this.saveManager.update((d) => {
+          if (d.activeExpedition) {
+            d.activeExpedition = chooseExpeditionRelic(d.activeExpedition, rid);
+          }
+        });
+        this.callbacks.onRefresh();
+      };
+    });
 
     const normalBtn = container.querySelector<HTMLButtonElement>('#btn-mode-normal');
     const ironBtn = container.querySelector<HTMLButtonElement>('#btn-mode-iron');
@@ -933,6 +1053,16 @@ export class MetaView {
     if (rngShake) {
       rngShake.oninput = () => {
         this.saveManager.update((d) => { d.settings.shakeStrength = Number(rngShake.value); });
+      };
+    }
+
+    const devUnlockBtn = container.querySelector<HTMLButtonElement>('#btn-dev-unlock');
+    if (devUnlockBtn && this.callbacks.onDevUnlock) {
+      devUnlockBtn.onclick = () => {
+        this.callbacks.onDevUnlock?.();
+        this.showSettings = false;
+        this.statusNotice = t(loc, 'settings.devUnlockedToast');
+        this.callbacks.onRefresh();
       };
     }
 

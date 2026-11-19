@@ -6,6 +6,7 @@ import {
   type SimulationEngine,
 } from '../core/SimulationEngine.ts';
 import { ENEMIES, HEROES, resolveHeroVisualVariant, type EnemyId } from '../data/enemies.ts';
+import { EXPEDITION_CLEAR_GEMS, EXPEDITION_CLEAR_OAK } from '../data/roguelike.ts';
 import { TOWER_LIST, TOWERS, type TargetingPriority, type TowerId } from '../data/towers.ts';
 import { t, tParams, type Locale } from '../i18n/locales.ts';
 import type { SceneManager } from '../rendering/SceneManager.ts';
@@ -539,7 +540,8 @@ export class BattleView {
       .filter((s) => s.tower && s.tower.smokedTimer > 0)
       .map((s) => s.id)
       .join(',');
-    const contextKey = `${this.selectedSlotId ?? 'none'}|${selSlot?.stumpLocked ? 'stump' : selSlot?.tower ? `${selSlot.tower.towerId}_${selSlot.tower.tier}_${selSlot.tower.priority}` : 'empty'}|${sim.gold}|${this.tutorialPhase}|${smokedSlots}`;
+    const allowedKey = sim.allowedTowers ? sim.allowedTowers.join(',') : 'all';
+    const contextKey = `${this.selectedSlotId ?? 'none'}|${selSlot?.stumpLocked ? 'stump' : selSlot?.tower ? `${selSlot.tower.towerId}_${selSlot.tower.tier}_${selSlot.tower.priority}` : 'empty'}|${sim.gold}|${this.tutorialPhase}|${smokedSlots}|${allowedKey}`;
 
     if (contextKey !== this.lastContextKey) {
       this.lastContextKey = contextKey;
@@ -708,10 +710,12 @@ export class BattleView {
       ];
       const rings = TOWER_LIST.map((tw, idx) => {
         const p = positions[idx];
+        const allowed = !sim.allowedTowers || sim.allowedTowers.includes(tw.id);
+        const canBuild = allowed && sim.gold >= tw.tier1.cost;
         return `
-          <button class="radial-btn" style="left:${p.left}; top:${p.top};" data-build-tower="${tw.id}" ${sim.gold >= tw.tier1.cost ? '' : 'disabled'} title="${t(loc, tw.nameKey)}">
+          <button class="radial-btn ${allowed ? '' : 'locked-tower'}" style="left:${p.left}; top:${p.top};" data-build-tower="${tw.id}" ${canBuild ? '' : 'disabled'} title="${t(loc, tw.nameKey)}">
             <img src="${PORTRAIT_URLS[tw.id]}" alt="${t(loc, tw.nameKey)}" />
-            <span class="radial-cost">${tw.tier1.cost}</span>
+            <span class="radial-cost">${allowed ? tw.tier1.cost : '🔒'}</span>
           </button>
         `;
       }).join('');
@@ -897,13 +901,24 @@ export class BattleView {
 
     if (sim.status === 'won') {
       const stars = computeBattleStars(sim.baseHp, sim.ironMode);
+      const isExpedition = sim.level.id > 100;
+      const expStage = Math.max(1, sim.level.id - 100);
+      const isExpeditionMid = isExpedition && expStage < 5;
+      const titleText = isExpedition
+        ? tParams(loc, 'rogue.stageVictory', { stage: expStage })
+        : `${t(loc, 'hud.victory')} · ${'★'.repeat(stars)}`;
+      const rewardLine = isExpeditionMid
+        ? t(loc, 'rogue.pickTitle')
+        : isExpedition
+          ? `+${EXPEDITION_CLEAR_OAK} ${t(loc, 'cur.oak')} · +${EXPEDITION_CLEAR_GEMS} ${t(loc, 'cur.gem')}`
+          : `+${VICTORY_OAK_REWARD} ${t(loc, 'cur.oak')} · +${VICTORY_GEM_REWARD} ${t(loc, 'cur.gem')}`;
       return `
         <div class="modal-backdrop">
           <div class="modal-card">
-            <div style="font-size:20px; font-weight:800; color:var(--accent-gold);">${t(loc, 'hud.victory')} · ${'★'.repeat(stars)}</div>
-            <div style="font-size:13px; color:var(--text-muted);">+${VICTORY_OAK_REWARD} ${t(loc, 'cur.oak')} · +${VICTORY_GEM_REWARD} ${t(loc, 'cur.gem')}</div>
-            <button class="btn btn-gold" id="btn-double-reward">${t(loc, 'hud.doubleReward')}</button>
-            <button class="btn btn-primary" id="btn-exit-map">${t(loc, 'hud.exitMap')}</button>
+            <div style="font-size:20px; font-weight:800; color:var(--accent-gold);">${titleText}</div>
+            <div style="font-size:13px; color:var(--text-muted);">${rewardLine}</div>
+            ${isExpedition ? '' : `<button class="btn btn-gold" id="btn-double-reward">${t(loc, 'hud.doubleReward')}</button>`}
+            <button class="btn btn-primary" id="btn-exit-map">${isExpeditionMid ? t(loc, 'rogue.pickRelicBtn') : t(loc, 'hud.exitMap')}</button>
           </div>
         </div>
       `;

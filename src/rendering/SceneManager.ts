@@ -1666,6 +1666,7 @@ export class SceneManager {
     if (this.heroRig) {
       this.heroRig.root.visible = !sim.hero.dead;
       this.heroRig.root.position.set(sim.hero.x, 0, sim.hero.z);
+      this.heroRig.root.scale.setScalar(sim.relics.includes('giant_hero') ? 1.22 : 1.0);
       this.heroRig.body.rotation.y = sim.hero.facingAngle;
       const ringMat = this.heroRig.ring.material as THREE.MeshBasicMaterial;
       if (sim.hero.activeBuff === 'banner') {

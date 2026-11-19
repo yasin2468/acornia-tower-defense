@@ -8,7 +8,13 @@ import {
   type SimEvent,
 } from './core/SimulationEngine.ts';
 import { ENEMIES, HEROES } from './data/enemies.ts';
-import { LEVELS } from './data/levels.ts';
+import { LEVELS, type LevelSpec } from './data/levels.ts';
+import {
+  EXPEDITION_CLEAR_GEMS,
+  EXPEDITION_CLEAR_OAK,
+  advanceExpeditionStage,
+  buildExpeditionLevelSpec,
+} from './data/roguelike.ts';
 import { t, tParams } from './i18n/locales.ts';
 import { SoundEngine } from './audio/SoundEngine.ts';
 import {
@@ -72,14 +78,29 @@ let mode: 'loading' | 'meta' | 'battle' = 'loading';
 let activeSim: SimulationEngine | null = null;
 let currentLevelId = 1;
 let currentIronMode = false;
+let currentIsExpedition = false;
 let victoryRecorded = false;
 let simAccumulator = 0;
 let lastFrameMs = performance.now();
 let lastRenderUiMs = 0;
 let lastStatePingMs = 0;
 
+function applyDevUnlock(): void {
+  saveManager.update((d) => {
+    for (let id = 1; id <= 12; id++) {
+      d.levelStars[id] = Math.max(d.levelStars[id] ?? 0, 3);
+    }
+    for (const h of ['boz_pence', 'kizil_kuyruk', 'kaya_dis'] as const) {
+      if (!d.unlockedHeroes.includes(h)) d.unlockedHeroes.push(h);
+      if (!d.discoveredIds.includes(h)) d.discoveredIds.push(h);
+    }
+  });
+}
+
 const metaView = new MetaView(saveManager, adService, billingService, network, {
   onStartLevel: (levelId, ironMode) => void startLevel(levelId, ironMode),
+  onStartExpedition: () => void startExpeditionStage(),
+  onDevUnlock: import.meta.env.DEV ? () => applyDevUnlock() : undefined,
   onRefresh: () => renderMeta(),
 });
 
@@ -89,7 +110,20 @@ const battleView = new BattleView(
   billingService,
   remoteConfig,
   {
-    onRestart: () => void startLevel(currentLevelId, currentIronMode),
+    onRestart: () => {
+      if (currentIsExpedition) {
+        if (activeSim?.status === 'lost') {
+          saveManager.update((d) => {
+            d.activeExpedition = null;
+          });
+          exitToMap();
+          return;
+        }
+        void startExpeditionStage();
+        return;
+      }
+      void startLevel(currentLevelId, currentIronMode);
+    },
     onExitToMap: () => exitToMap(),
     onSendPvpMerc: (enemyId, cost) => {
       if (!activeSim || activeSim.status !== 'playing' || activeSim.gold < cost) return;
@@ -155,18 +189,24 @@ function renderMeta(): void {
   metaView.render(uiRoot);
 }
 
-async function startLevel(
-  levelId: number,
-  ironMode: boolean,
-  customSeed?: number,
-  isMultiMatch = false,
+async function launchBattleSpec(
+  spec: LevelSpec,
+  options: {
+    ironMode: boolean;
+    customSeed?: number;
+    isMultiMatch: boolean;
+    isExpedition: boolean;
+    allowedTowers?: import('./data/towers.ts').TowerId[];
+    relics?: import('./data/roguelike.ts').RelicId[];
+    initialBaseHp?: number;
+  },
 ): Promise<void> {
-  if (!isMultiMatch && network.state !== 'idle') {
+  if (!options.isMultiMatch && network.state !== 'idle') {
     network.leaveRoom();
   }
-  const spec = LEVELS.find((l) => l.id === levelId) ?? LEVELS[0];
   currentLevelId = spec.id;
-  currentIronMode = ironMode;
+  currentIronMode = options.ironMode;
+  currentIsExpedition = options.isExpedition;
   victoryRecorded = false;
   simAccumulator = 0;
   lastStatePingMs = 0;
@@ -184,16 +224,19 @@ async function startLevel(
   await ensureModelsLoaded(deps);
 
   activeSim = new SimulationEngine(spec, {
-    seed: customSeed,
-    ironMode,
+    seed: options.customSeed,
+    ironMode: options.ironMode,
     cardLevels: save.cardLevels,
     heroId,
     heroClass: save.heroClass,
-    talents: isMultiMatch ? undefined : save.talents,
-    extraStartGold: isMultiMatch ? 0 : remoteConfig.get().startGoldDelta,
-    waitForFirstWave: !isPromoMode && !isMultiMatch,
+    talents: options.isMultiMatch ? undefined : save.talents,
+    extraStartGold: options.isMultiMatch ? 0 : remoteConfig.get().startGoldDelta,
+    waitForFirstWave: !isPromoMode && !options.isMultiMatch,
+    allowedTowers: options.allowedTowers,
+    relics: options.relics,
+    initialBaseHp: options.initialBaseHp,
   });
-  if (isMultiMatch && network.mode === 'coop') {
+  if (options.isMultiMatch && network.mode === 'coop') {
     activeSim.onLocalDispatch = (cmd, tick) => network.sendGameCommand(cmd, tick);
   }
 
@@ -209,14 +252,48 @@ async function startLevel(
   sceneMgr.loadLevel(spec, save.equippedHat, save.heroClass, heroId);
   battleView.resetForLevel(spec.id);
   mode = 'battle';
-  analytics.track('level_start', { levelId: spec.id, ironMode });
+  analytics.track('level_start', { levelId: spec.id, ironMode: options.ironMode, expedition: options.isExpedition });
   battleView.render(uiRoot, activeSim, sceneMgr);
+}
+
+async function startLevel(
+  levelId: number,
+  ironMode: boolean,
+  customSeed?: number,
+  isMultiMatch = false,
+): Promise<void> {
+  const spec = LEVELS.find((l) => l.id === levelId) ?? LEVELS[0];
+  await launchBattleSpec(spec, { ironMode, customSeed, isMultiMatch, isExpedition: false });
+}
+
+async function startExpeditionStage(): Promise<void> {
+  const run = saveManager.get().activeExpedition;
+  if (!run || run.pendingRelicChoices.length > 0) {
+    renderMeta();
+    return;
+  }
+  const spec = buildExpeditionLevelSpec(run);
+  await launchBattleSpec(spec, {
+    ironMode: false,
+    customSeed: run.seed + run.stageIndex * 97,
+    isMultiMatch: false,
+    isExpedition: true,
+    allowedTowers: run.allowedTowers,
+    relics: run.relics,
+    initialBaseHp: run.hp,
+  });
 }
 
 function exitToMap(): void {
   if (network.state !== 'idle') {
     network.leaveRoom();
   }
+  if (currentIsExpedition && activeSim?.status === 'lost') {
+    saveManager.update((d) => {
+      d.activeExpedition = null;
+    });
+  }
+  currentIsExpedition = false;
   activeSim = null;
   renderMeta();
 }
@@ -284,20 +361,47 @@ function processBattleEvents(events: SimEvent[]): void {
       }
     } else if (ev.type === 'GAME_WON' && !victoryRecorded) {
       victoryRecorded = true;
-      saveManager.update((d) => {
-        d.levelStars[currentLevelId] = Math.max(d.levelStars[currentLevelId] ?? 0, ev.stars);
-        if (currentIronMode) d.ironCleared[currentLevelId] = true;
-        d.oakCoins += VICTORY_OAK_REWARD;
-        d.emeraldGems += VICTORY_GEM_REWARD;
-      });
-      const newlyUnlocked = grantCampaignHeroUnlocks(saveManager, currentLevelId);
-      if (newlyUnlocked.length > 0) {
-        metaView.statusNotice = tParams(loc, 'hero.select.unlockedToast', {
-          name: t(loc, HEROES[newlyUnlocked[0]].nameKey),
+      if (currentIsExpedition && activeSim) {
+        const run = saveManager.get().activeExpedition;
+        if (run) {
+          const { nextRun, completed } = advanceExpeditionStage(run, activeSim.baseHp);
+          saveManager.update((d) => {
+            if (completed) {
+              d.oakCoins += EXPEDITION_CLEAR_OAK;
+              d.emeraldGems += EXPEDITION_CLEAR_GEMS;
+              d.expeditionsCompleted += 1;
+              if (!d.unlockedHats.includes('wizard')) d.unlockedHats.push('wizard');
+              d.activeExpedition = null;
+            } else {
+              d.activeExpedition = nextRun;
+            }
+          });
+          if (completed) {
+            metaView.statusNotice = t(loc, 'rogue.completedToast');
+          }
+        }
+        analytics.track('expedition_stage_win', { levelId: currentLevelId, stars: ev.stars });
+      } else {
+        saveManager.update((d) => {
+          d.levelStars[currentLevelId] = Math.max(d.levelStars[currentLevelId] ?? 0, ev.stars);
+          if (currentIronMode) d.ironCleared[currentLevelId] = true;
+          d.oakCoins += VICTORY_OAK_REWARD;
+          d.emeraldGems += VICTORY_GEM_REWARD;
+        });
+        const newlyUnlocked = grantCampaignHeroUnlocks(saveManager, currentLevelId);
+        if (newlyUnlocked.length > 0) {
+          metaView.statusNotice = tParams(loc, 'hero.select.unlockedToast', {
+            name: t(loc, HEROES[newlyUnlocked[0]].nameKey),
+          });
+        }
+        analytics.track('level_win', { levelId: currentLevelId, stars: ev.stars });
+      }
+    } else if (ev.type === 'GAME_LOST') {
+      if (currentIsExpedition && activeSim?.reviveUsed) {
+        saveManager.update((d) => {
+          d.activeExpedition = null;
         });
       }
-      analytics.track('level_win', { levelId: currentLevelId, stars: ev.stars });
-    } else if (ev.type === 'GAME_LOST') {
       analytics.track('level_fail', { levelId: currentLevelId, wave: (activeSim?.currentWaveIndex ?? 0) + 1 });
     }
   }
@@ -470,6 +574,9 @@ async function boot(): Promise<void> {
       if (sub) sub.textContent = `${t(saveManager.get().settings.locale, 'loading.models')} ${pct}%`;
     });
     warmRemainingModelsInBackground();
+    if (import.meta.env.DEV && urlParams.get('unlock') === '1') {
+      applyDevUnlock();
+    }
 
     const roomParam = urlParams.get('room');
     if (isPromoMode) {

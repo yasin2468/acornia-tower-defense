@@ -6,6 +6,13 @@ import { SoundEngine } from '../src/audio/SoundEngine.ts';
 import { FIXED_DT, SimulationEngine } from '../src/core/SimulationEngine.ts';
 import { HEROES } from '../src/data/enemies.ts';
 import { LEVELS } from '../src/data/levels.ts';
+import { TOWERS } from '../src/data/towers.ts';
+import {
+  advanceExpeditionStage,
+  buildExpeditionLevelSpec,
+  chooseExpeditionRelic,
+  startNewExpedition,
+} from '../src/data/roguelike.ts';
 import {
   computeAvailableTalentStars,
   computeTalentModifiers,
@@ -203,5 +210,86 @@ describe('F3-3 & F3-6 — Orman Günlüğü ve Akustik Biyom Müzikleri', () => 
     se.setEnabled(false);
     assert.equal(se.enabled, false);
     se.setMusicTheme('none');
+  });
+});
+
+describe('F3-4 — Kayıp Orman Seferi (Roguelike ve 6 Orman Tılsımı)', () => {
+  it('startNewExpedition 20 farklı seedde daima en az 1 hava savunma kulesi garantiler', () => {
+    for (let s = 1; s <= 20; s++) {
+      const run = startNewExpedition(s * 997);
+      assert.equal(run.allowedTowers.length, 2);
+      const hasAir = run.allowedTowers.some((id) => TOWERS[id].canHitAir);
+      assert.equal(hasAir, true, `seed=${s * 997} hava kulesi içermeli`);
+    }
+  });
+
+  it('5 aşama ilerler, aşamalar arasında 3 tılsımdan seçim yapar ve canı nextRuna taşır', () => {
+    let run = startNewExpedition(12345);
+    for (let stage = 0; stage < 4; stage++) {
+      const spec = buildExpeditionLevelSpec(run);
+      assert.equal(spec.id, 100 + stage + 1);
+      assert.equal(spec.baseHp, run.maxHp);
+
+      const { nextRun, completed } = advanceExpeditionStage(run, 105 - stage * 10);
+      assert.equal(completed, false);
+      assert.ok(nextRun);
+      assert.equal(nextRun.stageIndex, stage + 1);
+      assert.equal(nextRun.pendingRelicChoices.length, 3);
+      run = chooseExpeditionRelic(nextRun, nextRun.pendingRelicChoices[0]);
+      assert.equal(run.relics.length, stage + 1);
+      assert.equal(run.pendingRelicChoices.length, 0);
+    }
+
+    const last = advanceExpeditionStage(run, 65);
+    assert.equal(last.completed, true);
+    assert.equal(last.nextRun, null);
+  });
+
+  it('allowedTowers kısıtı, giant_hero, lightning_refund ve frost_thorns simülasyonda çalışır', () => {
+    const sim = new SimulationEngine(LEVELS[0], {
+      seed: 7401,
+      allowedTowers: ['squirrel', 'owl'],
+      relics: ['giant_hero', 'lightning_refund', 'frost_thorns'],
+      initialBaseHp: 95,
+    });
+    assert.equal(sim.baseHp, 95);
+    assert.equal(sim.maxBaseHp, LEVELS[0].baseHp);
+
+    // beaver izinli değil -> inşa edilemez
+    sim.dispatch({ type: 'BUILD_TOWER', slotId: 'slot_1', towerId: 'beaver' }, 'p1', 0);
+    sim.step(FIXED_DT);
+    assert.equal(sim.slots.get('slot_1')?.tower, null, 'izin dışı kule inşa edilememeli');
+
+    // squirrel izinli -> inşa edilebilir
+    sim.dispatch({ type: 'BUILD_TOWER', slotId: 'slot_1', towerId: 'squirrel' }, 'p1', 0);
+    sim.step(FIXED_DT);
+    assert.equal(sim.slots.get('slot_1')?.tower?.towerId, 'squirrel');
+
+    // giant_hero HP +%45 artışı
+    assert.equal(sim.hero.maxHp, Math.round(HEROES.boz_pence.maxHp * 1.45));
+
+    // lightning_refund: satış %95 iade + 4m çevredekilere 80 hasar şoku
+    const nearBot = sim.spawnEnemy('scout_bot', 150, 0.01, 4, {
+      x: sim.slots.get('slot_1')!.x + 0.5,
+      z: sim.slots.get('slot_1')!.z,
+      wpIndex: 1,
+      progress: 4,
+    });
+    assert.equal(sim.getTowerSellRefund(100), 95);
+    sim.dispatch({ type: 'SELL_TOWER', slotId: 'slot_1' }, 'p1', 0);
+    sim.step(FIXED_DT);
+    assert.ok(nearBot.hp < 150, 'lightning_refund satışta yakındaki robota elektrik hasarı vurmalı');
+
+    // frost_thorns: herhangi bir kule vuruşu robotu yavaşlatmalı
+    sim.gold = 300;
+    sim.dispatch({ type: 'BUILD_TOWER', slotId: 'slot_2', towerId: 'squirrel' }, 'p1', 0);
+    const targetBot = sim.spawnEnemy('scout_bot', 200, 0.5, 4, {
+      x: sim.slots.get('slot_2')!.x + 1.0,
+      z: sim.slots.get('slot_2')!.z,
+      wpIndex: 1,
+      progress: 6,
+    });
+    for (let i = 0; i < 45; i++) sim.step(FIXED_DT);
+    assert.ok(targetBot.slowTimer > 0 && targetBot.slowPct >= 0.2, 'frost_thorns hedefi yavaşlatmalı');
   });
 });
