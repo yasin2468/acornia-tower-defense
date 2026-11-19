@@ -311,6 +311,8 @@ async function startLevel(
 async function startExpeditionStage(): Promise<void> {
   const run = saveManager.get().activeExpedition;
   if (!run || run.pendingRelicChoices.length > 0) {
+    metaView.activeTab = 'map';
+    metaView.showExpeditionModal = Boolean(run?.pendingRelicChoices.length);
     renderMeta();
     return;
   }
@@ -336,8 +338,11 @@ function exitToMap(): void {
       d.activeExpedition = null;
     });
   }
+  const activeRun = saveManager.get().activeExpedition;
   currentIsExpedition = false;
   activeSim = null;
+  metaView.activeTab = 'map';
+  metaView.showExpeditionModal = Boolean(activeRun);
   renderMeta();
 }
 

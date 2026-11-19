@@ -70,9 +70,21 @@ import {
   upgradeTalent,
 } from '../services/ProgressionService.ts';
 import type { CardUnitId, SaveManager } from '../services/SaveManager.ts';
-import { ICONS, PORTRAIT_URLS, UI_ICON_URLS } from './icons.ts';
+import { ICONS, KENNEY_UI_URLS, PORTRAIT_URLS, UI_ICON_URLS } from './icons.ts';
 
 export type MetaTab = 'map' | 'multi' | 'cards' | 'journal' | 'shop';
+export type CardsSubTab = 'towers' | 'heroes' | 'talents';
+
+interface NavBadges {
+  map: string;
+  multi: string;
+  cards: string;
+  journal: string;
+  shop: string;
+  towersSub: number;
+  heroesSub: number;
+  talentsSub: number;
+}
 
 export interface MetaViewCallbacks {
   onStartLevel: (levelId: number, ironMode: boolean) => void;
@@ -83,10 +95,13 @@ export interface MetaViewCallbacks {
 
 export class MetaView {
   activeTab: MetaTab = 'map';
+  cardsSubTab: CardsSubTab = 'towers';
   selectedLevelId = 1;
   ironMode = false;
   showSettings = false;
   showBestiary = false;
+  showPatrolModal = false;
+  showExpeditionModal = false;
   selectedJournalId = 'boz_pence';
   journalYaw = 0.45;
   multiMode: MultiMode = 'coop';
@@ -98,6 +113,7 @@ export class MetaView {
   private readonly billingService: BillingService;
   private readonly network: NetworkService;
   private readonly callbacks: MetaViewCallbacks;
+  private escKeyHandler: ((ev: KeyboardEvent) => void) | null = null;
 
   constructor(
     saveManager: SaveManager,
@@ -113,60 +129,149 @@ export class MetaView {
     this.callbacks = callbacks;
   }
 
+  private computeNavBadges(nowMs: number): NavBadges {
+    const save = this.saveManager.get();
+    const afk = calculateAfkAccumulation(save, nowMs);
+
+    const hasExpeditionPick = Boolean(save.activeExpedition && save.activeExpedition.pendingRelicChoices.length > 0);
+    const map = hasExpeditionPick || afk.oakCoins >= 1 ? '!' : '';
+
+    const hasLeagueClaim = LEAGUE_TIERS.some(
+      (tier) =>
+        tier.id !== 'oak' &&
+        save.trophies >= tier.minTrophies &&
+        !save.claimedLeagueTiers.includes(tier.id),
+    );
+    const multi = hasLeagueClaim ? '!' : '';
+
+    let towersSub = 0;
+    for (const tw of TOWER_LIST) {
+      const lvl = save.cardLevels[tw.id] ?? 1;
+      const cost = getCardUpgradeCost(lvl);
+      if ((save.cardShards[tw.id] ?? 0) >= cost.shards && save.oakCoins >= cost.oakCoins) {
+        towersSub += 1;
+      }
+    }
+
+    let heroesSub = 0;
+    for (const h of HERO_LIST) {
+      const unlocked = save.unlockedHeroes.includes(h.id);
+      if (unlocked) {
+        const lvl = save.cardLevels[h.id] ?? 1;
+        const cost = getCardUpgradeCost(lvl);
+        if ((save.cardShards[h.id] ?? 0) >= cost.shards && save.oakCoins >= cost.oakCoins) {
+          heroesSub += 1;
+        }
+      } else if (h.gemUnlockCost > 0 && save.emeraldGems >= h.gemUnlockCost) {
+        heroesSub += 1;
+      }
+    }
+
+    const availableStars = computeAvailableTalentStars(save.levelStars, save.ironCleared, save.talents);
+    let talentsSub = 0;
+    for (const b of TALENT_BRANCHES) {
+      const cost = getNextTalentCost(save.talents[b.id] ?? 0);
+      if (cost !== null && availableStars >= cost) {
+        talentsSub += 1;
+      }
+    }
+
+    const totalCardActions = towersSub + heroesSub + talentsSub;
+    const cards = totalCardActions > 0 ? String(totalCardActions) : '';
+
+    const unclaimedJournal = getJournalCatalog().filter(
+      (entry) => save.discoveredIds.includes(entry.id) && !save.claimedJournalIds.includes(entry.id),
+    ).length;
+    const journal = unclaimedJournal > 0 ? String(unclaimedJournal) : '';
+
+    const vipStatus = getVipDailyStatus(save, nowMs);
+    const curTier = getSeasonCurrentTier(save.seasonPassKills);
+    let hasSeasonClaim = false;
+    for (let tier = 1; tier <= curTier; tier++) {
+      const freeOk = !save.claimedSeasonFreeTiers.includes(tier);
+      const goldOk = save.seasonGoldUnlocked && !save.claimedSeasonGoldTiers.includes(tier);
+      if (freeOk || goldOk) {
+        hasSeasonClaim = true;
+        break;
+      }
+    }
+    const shop =
+      save.dailyFreeChestsUsed < 2 || vipStatus.canClaim || hasSeasonClaim ? '!' : '';
+
+    return { map, multi, cards, journal, shop, towersSub, heroesSub, talentsSub };
+  }
+
   render(container: HTMLElement): void {
+    const nowMs = Date.now();
     const save = this.saveManager.get();
     const loc = save.settings.locale;
     const totalStars = Object.values(save.levelStars).reduce((a, b) => a + b, 0);
+    const badges = this.computeNavBadges(nowMs);
+
+    const navBadgeHtml = (text: string, variant: 'green' | 'red' = 'green'): string =>
+      text ? `<span class="nav-pip ${variant}" aria-hidden="true">${text}</span>` : '';
 
     container.innerHTML = `
-      <div class="meta-screen">
+      <div class="meta-screen" data-kenney-skin="oak-parchment">
         <header class="meta-header">
-          <div>
+          <div class="oak-brand-plaque">
             <div class="brand-title">${t(loc, 'app.title')}</div>
             <div class="brand-sub">${t(loc, 'app.subtitle')}</div>
           </div>
           <div class="wallet-row">
-            <span class="pill-badge gold"><img src="${UI_ICON_URLS.acornCoins}" alt="" />${save.oakCoins}</span>
-            <span class="pill-badge gem"><img src="${UI_ICON_URLS.gems}" alt="" />${save.emeraldGems}</span>
-            <span class="pill-badge" style="padding-left:8px;"><span class="svg-ico" style="width:15px;height:15px;">${ICONS.star}</span>${totalStars}</span>
-            <button class="icon-btn" id="btn-settings" aria-label="${t(loc, 'settings.title')}">
+            <span class="oak-stat-slot gold"><img src="${UI_ICON_URLS.acornCoins}" alt="" /><span>${save.oakCoins}</span></span>
+            <span class="oak-stat-slot gem"><img src="${UI_ICON_URLS.gems}" alt="" /><span>${save.emeraldGems}</span></span>
+            <span class="oak-stat-slot star"><span class="svg-ico" style="width:14px;height:14px;">${ICONS.star}</span><span>${totalStars}</span></span>
+            <button class="oak-gear-btn" id="btn-settings" aria-label="${t(loc, 'settings.title')}">
               <span class="svg-ico">${ICONS.gear}</span>
             </button>
           </div>
         </header>
-        <main class="meta-body" id="meta-body">
-          ${this.statusNotice ? `<div class="card-panel" style="border-color: var(--accent-gold); font-size: 12px; font-weight:700;">${this.statusNotice}</div>` : ''}
-          ${this.renderTabBody(loc)}
+        <main class="meta-body ${this.activeTab === 'map' ? 'meta-body-map' : ''}" id="meta-body">
+          ${this.statusNotice ? `<div class="meta-toast-banner">${this.statusNotice}</div>` : ''}
+          ${this.renderTabBody(loc, badges)}
         </main>
-        <nav class="bottom-nav">
+        <nav class="bottom-nav" aria-label="Menu">
           <button class="nav-tab ${this.activeTab === 'map' ? 'active' : ''}" data-tab="map">
-            <span class="svg-ico">${ICONS.map}</span><span>${t(loc, 'nav.map')}</span>
+            ${navBadgeHtml(badges.map, 'green')}
+            <span class="svg-ico nav-ico">${ICONS.navMap}</span>
+            <span class="nav-label">${t(loc, 'nav.map')}</span>
           </button>
           <button class="nav-tab ${this.activeTab === 'multi' ? 'active' : ''}" data-tab="multi">
-            <span class="svg-ico">${ICONS.users}</span><span>${t(loc, 'nav.multi')}</span>
+            ${navBadgeHtml(badges.multi, 'red')}
+            <span class="svg-ico nav-ico">${ICONS.navArena}</span>
+            <span class="nav-label">${t(loc, 'nav.arena')}</span>
           </button>
           <button class="nav-tab ${this.activeTab === 'cards' ? 'active' : ''}" data-tab="cards">
-            <span class="svg-ico">${ICONS.cards}</span><span>${t(loc, 'nav.cards')}</span>
+            ${navBadgeHtml(badges.cards, 'green')}
+            <span class="svg-ico nav-ico">${ICONS.navUnits}</span>
+            <span class="nav-label">${t(loc, 'nav.units')}</span>
           </button>
           <button class="nav-tab ${this.activeTab === 'journal' ? 'active' : ''}" data-tab="journal">
-            <span class="svg-ico">${ICONS.bestiary}</span><span>${t(loc, 'nav.journal')}</span>
+            ${navBadgeHtml(badges.journal, 'green')}
+            <span class="svg-ico nav-ico">${ICONS.navJournal}</span>
+            <span class="nav-label">${t(loc, 'nav.journal')}</span>
           </button>
           <button class="nav-tab ${this.activeTab === 'shop' ? 'active' : ''}" data-tab="shop">
-            <span class="svg-ico">${ICONS.shop}</span><span>${t(loc, 'nav.shop')}</span>
+            ${navBadgeHtml(badges.shop, 'red')}
+            <span class="svg-ico nav-ico">${ICONS.navShop}</span>
+            <span class="nav-label">${t(loc, 'nav.shopShort')}</span>
           </button>
         </nav>
         ${this.showSettings ? this.renderSettingsModal(loc) : ''}
         ${this.showBestiary ? this.renderBestiaryModal(loc) : ''}
+        ${this.showPatrolModal ? this.renderPatrolModal(loc) : ''}
+        ${this.showExpeditionModal ? this.renderExpeditionModal(loc) : ''}
       </div>
     `;
 
     this.bindEvents(container, loc);
   }
 
-  private renderTabBody(loc: Locale): string {
+  private renderTabBody(loc: Locale, badges: NavBadges): string {
     if (this.activeTab === 'map') return this.renderMapTab(loc);
     if (this.activeTab === 'multi') return this.renderMultiTab(loc);
-    if (this.activeTab === 'cards') return this.renderCardsTab(loc);
+    if (this.activeTab === 'cards') return this.renderCardsTab(loc, badges);
     if (this.activeTab === 'journal') return this.renderJournalTab(loc);
     return this.renderShopTab(loc);
   }
@@ -210,6 +315,7 @@ export class MetaView {
     const selLevel = LEVELS.find((l) => l.id === this.selectedLevelId) ?? LEVELS[0];
     const hasCleared = (save.levelStars[selLevel.id] ?? 0) > 0;
     const selUnlocked = isLevelUnlocked(selLevel.id, save.levelStars);
+    const run = save.activeExpedition;
 
     const frontierNode = WORLD_MAP_NODES.find(
       (n) => isLevelUnlocked(n.id, save.levelStars) && (save.levelStars[n.id] ?? 0) === 0,
@@ -219,10 +325,12 @@ export class MetaView {
       if (isLevelUnlocked(n.id, save.levelStars)) maxUnlockedIdx = idx;
     });
 
-    const fullPathD = this.buildSmoothTrailPath(WORLD_MAP_NODES);
-    const unlockedPathD = this.buildSmoothTrailPath(WORLD_MAP_NODES.slice(0, maxUnlockedIdx + 1));
+    const padY = (y: number): number => Number((11 + ((y - 6.8) * (88 - 11)) / (91 - 6.8)).toFixed(2));
+    const displayNodes = WORLD_MAP_NODES.map((n) => ({ ...n, yPct: padY(n.yPct) }));
+    const fullPathD = this.buildSmoothTrailPath(displayNodes);
+    const unlockedPathD = this.buildSmoothTrailPath(displayNodes.slice(0, maxUnlockedIdx + 1));
 
-    const nodesHtml = WORLD_MAP_NODES.map((n) => {
+    const nodesHtml = displayNodes.map((n) => {
       const unlocked = isLevelUnlocked(n.id, save.levelStars);
       const stars = save.levelStars[n.id] ?? 0;
       const isSelected = n.id === this.selectedLevelId;
@@ -263,75 +371,134 @@ export class MetaView {
     const threatsHtml = stageEnemies
       .map((eid) => {
         const spec = ENEMIES[eid];
+        const enemyName = t(loc, spec.nameKey);
         return `
-          <button type="button" class="threat-chip ${spec.isBoss ? 'boss' : ''}" data-open-journal-id="${eid}">
-            <span class="threat-dot" style="background:${spec.color}; border-color:${spec.accentColor};"></span>
-            <span>${t(loc, spec.nameKey)}</span>
-            ${spec.isBoss ? `<span class="threat-boss-tag">${t(loc, 'map.bossTag')}</span>` : ''}
+          <button
+            type="button"
+            class="threat-medallion ${spec.isBoss ? 'boss' : ''}"
+            data-open-journal-id="${eid}"
+            title="${enemyName}"
+            aria-label="${enemyName}"
+          >
+            <span class="threat-medallion-core" style="background: radial-gradient(circle at 35% 30%, ${spec.accentColor} 0%, ${spec.color} 100%);">
+              <span class="svg-ico" style="width:13px;height:13px;color:#fff7e6;">${spec.isBoss ? ICONS.skullCrown : ICONS.swords}</span>
+            </span>
+            ${spec.isBoss ? `<span class="threat-boss-mini">${t(loc, 'map.bossTag')}</span>` : ''}
           </button>
         `;
       })
       .join('');
 
-    return `
-      <div class="card-panel afk-bar">
-        <div style="display:flex; align-items:center; gap:9px;">
-          <img class="afk-chest-thumb" src="${UI_ICON_URLS.chestFree}" alt="" />
-          <div>
-            <div style="font-size: 13px; font-weight: 800;">${t(loc, 'map.afk.title')} · ${afk.hoursElapsed}/${t(loc, afk.capHours === 16 ? 'afk.duration16' : 'afk.duration8')}</div>
-            <div style="font-size: 11px; color: var(--text-muted);">+${afk.oakCoins} Palamut · +${afk.shards} Kart (${tParams(loc, 'map.afk.vip', { duration: t(loc, 'afk.duration16') })})</div>
-          </div>
-        </div>
-        <div style="display:flex; gap:6px;">
-          <button class="btn btn-sm btn-gold" id="btn-afk-claim" ${afk.oakCoins < 1 ? 'disabled' : ''}>${t(loc, 'map.afk.collect')}</button>
-          <button class="btn btn-sm" id="btn-afk-boost">${tParams(loc, 'map.afk.boost', { amount: AFK_QUICK_BOOST_OAK, hours: AFK_QUICK_BOOST_HOURS })}</button>
-        </div>
-      </div>
+    const rogueBadge = run
+      ? `<span class="medallion-pip ${run.pendingRelicChoices.length > 0 ? 'alert' : ''}">${run.pendingRelicChoices.length > 0 ? '!' : `${run.stageIndex + 1}/5`}</span>`
+      : '';
 
-      <div class="world-map-box">
+    return `
+      <div class="world-map-box map-full">
         <svg class="world-map-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
-          <path d="${fullPathD}" fill="none" stroke="rgba(12, 18, 28, 0.56)" stroke-width="2.5" stroke-linecap="round" />
-          <path d="${fullPathD}" fill="none" stroke="rgba(220, 232, 245, 0.36)" stroke-width="1.25" stroke-dasharray="1.1 2.3" stroke-linecap="round" />
-          <path d="${unlockedPathD}" fill="none" stroke="rgba(255, 226, 122, 0.88)" stroke-width="1.65" stroke-dasharray="1.4 2.2" stroke-linecap="round" />
+          <path d="${fullPathD}" fill="none" stroke="rgba(42, 24, 10, 0.62)" stroke-width="2.6" stroke-linecap="round" />
+          <path d="${fullPathD}" fill="none" stroke="rgba(248, 232, 198, 0.45)" stroke-width="1.2" stroke-dasharray="1.1 2.3" stroke-linecap="round" />
+          <path d="${unlockedPathD}" fill="none" stroke="#ffd86b" stroke-width="1.7" stroke-dasharray="1.4 2.2" stroke-linecap="round" />
         </svg>
-        <div class="biome-tag biome-tag-snow" style="top: 8px; left: 8px;">IV · ${t(loc, 'map.biome.snow')}</div>
-        <div class="biome-tag biome-tag-cavern" style="top: 28%; left: 8px;">III · ${t(loc, 'map.biome.cavern')}</div>
-        <div class="biome-tag biome-tag-canyon" style="top: 62%; left: 8px;">II · ${t(loc, 'map.biome.canyon')}</div>
-        <div class="biome-tag biome-tag-forest" style="bottom: 8px; left: 8px;">I · ${t(loc, 'map.biome.forest')}</div>
-        <button type="button" class="map-bestiary-btn" id="btn-open-bestiary">
-          <span class="svg-ico" style="width:14px;height:14px;">${ICONS.bestiary}</span>
-          <span>${t(loc, 'map.bestiary')} · ${ENEMY_LIST.length}</span>
+
+        <button type="button" class="map-medallion patrol ${afk.oakCoins >= 1 ? 'ready' : ''}" id="btn-open-patrol">
+          <span class="medallion-disc">
+            <img class="medallion-disc-bg" src="${KENNEY_UI_URLS.roundBrownDark}" alt="" />
+            <img class="medallion-disc-icon" src="${UI_ICON_URLS.chestFree}" alt="" />
+            ${afk.oakCoins >= 1 ? `<span class="medallion-pip">${tParams(loc, 'map.afk.ready', { coins: afk.oakCoins })}</span>` : ''}
+          </span>
+          <span class="medallion-ribbon">${t(loc, 'map.afk.short')}</span>
         </button>
+
+        <div class="map-medallion-col">
+          <button type="button" class="map-medallion rogue ${run ? 'active' : ''}" id="btn-open-expedition">
+            <span class="medallion-disc">
+              <img class="medallion-disc-bg" src="${KENNEY_UI_URLS.roundBrownDark}" alt="" />
+              <span class="svg-ico medallion-svg-icon">${ICONS.roguePortal}</span>
+              ${rogueBadge}
+            </span>
+            <span class="medallion-ribbon">${t(loc, 'map.rogueShort')}</span>
+          </button>
+          <button type="button" class="map-medallion atlas" id="btn-open-bestiary">
+            <span class="medallion-disc">
+              <img class="medallion-disc-bg" src="${KENNEY_UI_URLS.roundBrownDark}" alt="" />
+              <span class="svg-ico medallion-svg-icon">${ICONS.atlasBook}</span>
+            </span>
+            <span class="medallion-ribbon">${t(loc, 'map.atlasShort')} · ${ENEMY_LIST.length}</span>
+          </button>
+        </div>
+
+        <div class="biome-tag biome-tag-snow" style="top: 86px; left: 8px;">IV · ${t(loc, 'map.biome.snow')}</div>
+        <div class="biome-tag biome-tag-cavern" style="top: 32%; left: 8px;">III · ${t(loc, 'map.biome.cavern')}</div>
+        <div class="biome-tag biome-tag-canyon" style="top: 60%; left: 8px;">II · ${t(loc, 'map.biome.canyon')}</div>
+        <div class="biome-tag biome-tag-forest" style="bottom: 10px; left: 8px;">I · ${t(loc, 'map.biome.forest')}</div>
         ${nodesHtml}
       </div>
 
-      <div class="card-panel stage-briefing">
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
-          <div>
-            <div style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
+      <section class="parchment-drawer">
+        <div class="drawer-head">
+          <div class="drawer-stage-meta">
+            <div class="drawer-stage-pills">
               <span class="stage-biome-pill biome-${selLevel.biome}">${t(loc, `map.biome.${selLevel.biome}`)}</span>
               ${selLevel.isBossStage ? `<span class="stage-boss-pill">${t(loc, 'map.bossStage')}</span>` : ''}
             </div>
-            <div style="font-size:15px; font-weight:900;">${selLevel.id}. ${t(loc, selLevel.nameKey)}</div>
-            <div style="font-size:11.5px; color:var(--text-muted);">${selLevel.waves.length} ${t(loc, 'hud.wave')} · ${selLevel.startGold} Palamut</div>
+            <div class="drawer-stage-title">${selLevel.id}. ${t(loc, selLevel.nameKey)}</div>
+            <div class="drawer-stage-sub">${selLevel.waves.length} ${t(loc, 'hud.wave')} · ${selLevel.startGold} ${t(loc, 'cur.oak')}</div>
           </div>
-          <div style="display:flex; gap:6px; flex-shrink:0;">
-            <button class="btn btn-sm ${!this.ironMode ? 'btn-primary' : ''}" id="btn-mode-normal" ${selUnlocked ? '' : 'disabled'}>${t(loc, 'map.mode.normal')}</button>
-            <button class="btn btn-sm ${this.ironMode ? 'btn-gold' : ''}" id="btn-mode-iron" ${selUnlocked && hasCleared ? '' : 'disabled'}>${t(loc, 'map.mode.iron')}</button>
-          </div>
+          <div class="drawer-threats" aria-label="${t(loc, 'map.threats')}">${threatsHtml}</div>
         </div>
 
-        <div class="stage-threats-wrap">
-          <div class="stage-threats-label">${t(loc, 'map.threats')} (${stageEnemies.length})</div>
-          <div class="stage-threats">${threatsHtml}</div>
+        <div class="oak-mode-toggle" role="group" aria-label="${t(loc, 'map.mode.normal')} / ${t(loc, 'map.mode.iron')}">
+          <button type="button" class="oak-mode-btn ${!this.ironMode ? 'active normal' : ''}" id="btn-mode-normal" ${selUnlocked ? '' : 'disabled'}>${t(loc, 'map.mode.normal')}</button>
+          <button type="button" class="oak-mode-btn ${this.ironMode ? 'active iron' : ''}" id="btn-mode-iron" ${selUnlocked && hasCleared ? '' : 'disabled'}>${t(loc, 'map.mode.iron')}</button>
         </div>
 
-        <button class="btn ${selUnlocked ? 'btn-primary' : ''}" id="btn-start-level" style="width:100%; padding:12px; font-size:14.5px;" ${selUnlocked ? '' : 'disabled'}>
+        <button class="btn btn-oak-play ${selUnlocked ? 'btn-primary' : ''}" id="btn-start-level" ${selUnlocked ? '' : 'disabled'}>
           <span class="svg-ico">${selUnlocked ? ICONS.play : ICONS.lock}</span>
           <span>${selUnlocked ? t(loc, 'map.play') : t(loc, 'map.lockedHint')}</span>
         </button>
+      </section>
+    `;
+  }
+
+  private renderPatrolModal(loc: Locale): string {
+    const save = this.saveManager.get();
+    const afk = calculateAfkAccumulation(save);
+    return `
+      <div class="modal-backdrop" data-modal-backdrop="patrol">
+        <div class="modal-card oak-parchment-modal">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+            <div class="modal-oak-title">${t(loc, 'map.afk.title')}</div>
+            <button class="btn btn-sm" id="btn-close-patrol" type="button">${t(loc, 'map.close')}</button>
+          </div>
+          <div class="patrol-modal-body">
+            <img class="afk-chest-thumb" src="${UI_ICON_URLS.chestFree}" alt="" />
+            <div>
+              <div class="parchment-strong">${afk.hoursElapsed}/${t(loc, afk.capHours === 16 ? 'afk.duration16' : 'afk.duration8')}</div>
+              <div class="parchment-muted">+${afk.oakCoins} ${t(loc, 'cur.oak')} · +${afk.shards} ${t(loc, 'nav.cards')}</div>
+              <div class="parchment-muted" style="font-size:10.5px;">${tParams(loc, 'map.afk.vip', { duration: t(loc, 'afk.duration16') })}</div>
+            </div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <button class="btn btn-gold" id="btn-afk-claim" ${afk.oakCoins < 1 ? 'disabled' : ''}>${t(loc, 'map.afk.collect')}</button>
+            <button class="btn btn-sm" id="btn-afk-boost">${tParams(loc, 'map.afk.boost', { amount: AFK_QUICK_BOOST_OAK, hours: AFK_QUICK_BOOST_HOURS })}</button>
+          </div>
+        </div>
       </div>
-      ${this.renderExpeditionPortal(loc)}
+    `;
+  }
+
+  private renderExpeditionModal(loc: Locale): string {
+    return `
+      <div class="modal-backdrop" data-modal-backdrop="expedition">
+        <div class="modal-card oak-modal-dark">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+            <div style="font-size:16px; font-weight:900; color:#ffe17a;">${t(loc, 'rogue.title')}</div>
+            <button class="btn btn-sm" id="btn-close-expedition" type="button">${t(loc, 'map.close')}</button>
+          </div>
+          ${this.renderExpeditionPortal(loc)}
+        </div>
+      </div>
     `;
   }
 
@@ -410,7 +577,7 @@ export class MetaView {
     const rowsHtml = ENEMY_LIST.map((e) => {
       const biomeLabel = e.biomeTag ? t(loc, `map.biome.${e.biomeTag}`) : '';
       return `
-        <div class="bestiary-row ${e.isBoss ? 'boss' : ''}">
+        <button type="button" class="bestiary-row ${e.isBoss ? 'boss' : ''}" data-open-journal-id="${e.id}">
           <div class="bestiary-swatch" style="background: linear-gradient(155deg, ${e.color} 0%, ${e.accentColor} 100%);">
             <span class="svg-ico" style="width:18px;height:18px;color:#ffffff;">${e.isBoss ? ICONS.skullCrown : ICONS.swords}</span>
           </div>
@@ -426,17 +593,17 @@ export class MetaView {
             <div class="bestiary-stats">${t(loc, 'bestiary.hp')} ${e.baseHp} · ${t(loc, 'bestiary.speed')} ${e.speed} · ${t(loc, 'bestiary.armor')} %${Math.round(e.armor * 100)}</div>
             <div class="bestiary-desc">${t(loc, e.descKey)}</div>
           </div>
-        </div>
+        </button>
       `;
     }).join('');
 
     return `
-      <div class="modal-backdrop">
-        <div class="modal-card bestiary-modal">
+      <div class="modal-backdrop" data-modal-backdrop="bestiary">
+        <div class="modal-card bestiary-modal oak-parchment-modal">
           <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
             <div>
-              <div style="font-size:16px; font-weight:900; color:#ffe17a;">${t(loc, 'map.bestiary')} (${ENEMY_LIST.length})</div>
-              <div style="font-size:11px; color:var(--text-muted);">${t(loc, 'map.bestiarySub')}</div>
+              <div class="modal-oak-title">${t(loc, 'map.bestiary')} (${ENEMY_LIST.length})</div>
+              <div class="parchment-muted" style="font-size:11px;">${t(loc, 'map.bestiarySub')}</div>
             </div>
             <button class="btn btn-sm btn-primary" id="btn-close-bestiary">${t(loc, 'map.close')}</button>
           </div>
@@ -531,156 +698,179 @@ export class MetaView {
     `;
   }
 
-  private renderCardsTab(loc: Locale): string {
+  private renderCardsTab(loc: Locale, badges: NavBadges): string {
     const save = this.saveManager.get();
-    const units: Array<{ id: CardUnitId; label: string; portraitUrl: string }> = [
-      ...TOWER_LIST.map((tw) => ({
-        id: tw.id as CardUnitId,
-        label: t(loc, tw.nameKey),
-        portraitUrl: PORTRAIT_URLS[tw.id],
-      })),
-      ...HERO_LIST.map((h) => ({
-        id: h.id as CardUnitId,
-        label: t(loc, h.nameKey),
-        portraitUrl: PORTRAIT_URLS[h.id],
-      })),
-    ];
 
-    const cardsHtml = units
-      .map((u) => {
-        const lvl = save.cardLevels[u.id] ?? 1;
-        const shards = save.cardShards[u.id] ?? 0;
+    const subNavHtml = `
+      <div class="cards-subnav" role="tablist" aria-label="${t(loc, 'cards.title')}">
+        <button type="button" class="cards-sub-btn ${this.cardsSubTab === 'towers' ? 'active' : ''}" data-cards-sub="towers" role="tab" aria-selected="${this.cardsSubTab === 'towers'}">
+          <span>${t(loc, 'cards.sub.towers')}</span>
+          ${badges.towersSub > 0 ? `<span class="sub-pip">${badges.towersSub}</span>` : ''}
+        </button>
+        <button type="button" class="cards-sub-btn ${this.cardsSubTab === 'heroes' ? 'active' : ''}" data-cards-sub="heroes" role="tab" aria-selected="${this.cardsSubTab === 'heroes'}">
+          <span>${t(loc, 'cards.sub.heroes')}</span>
+          ${badges.heroesSub > 0 ? `<span class="sub-pip">${badges.heroesSub}</span>` : ''}
+        </button>
+        <button type="button" class="cards-sub-btn ${this.cardsSubTab === 'talents' ? 'active' : ''}" data-cards-sub="talents" role="tab" aria-selected="${this.cardsSubTab === 'talents'}">
+          <span>${t(loc, 'cards.sub.talents')}</span>
+          ${badges.talentsSub > 0 ? `<span class="sub-pip">${badges.talentsSub}</span>` : ''}
+        </button>
+      </div>
+    `;
+
+    let bodyHtml = '';
+    if (this.cardsSubTab === 'towers') {
+      const towerCardsHtml = TOWER_LIST.map((tw) => {
+        const lvl = save.cardLevels[tw.id] ?? 1;
+        const shards = save.cardShards[tw.id] ?? 0;
         const cost = getCardUpgradeCost(lvl);
         const pct = Math.min(100, Math.round((shards / cost.shards) * 100));
         const canUpgrade = shards >= cost.shards && save.oakCoins >= cost.oakCoins;
-        const spec = u.id in TOWERS ? TOWERS[u.id as TowerId] : null;
-        const heroSpec = !spec && u.id in HEROES ? HEROES[u.id as HeroId] : null;
-        const isLockedHero = Boolean(heroSpec && !save.unlockedHeroes.includes(heroSpec.id));
-        const branchNote = spec
-          ? `${t(loc, spec.evolutions[0].nameKey)} / ${t(loc, spec.evolutions[1].nameKey)}`
-          : heroSpec && heroSpec.id !== 'boz_pence'
-            ? t(loc, heroSpec.roleKey)
-            : t(loc, HERO_CLASSES[save.heroClass].nameKey);
+        const branchNote = `${t(loc, tw.evolutions[0].nameKey)} / ${t(loc, tw.evolutions[1].nameKey)}`;
         return `
-          <div class="collector-card ${isLockedHero ? 'locked' : ''}">
+          <div class="collector-card">
             <span class="collector-level-badge">${t(loc, 'cards.level')}${lvl}</span>
-            <img class="collector-portrait" src="${u.portraitUrl}" alt="${u.label}" />
-            <div class="collector-name">${u.label}</div>
+            <img class="collector-portrait" src="${PORTRAIT_URLS[tw.id]}" alt="${t(loc, tw.nameKey)}" />
+            <div class="collector-name">${t(loc, tw.nameKey)}</div>
             <div class="collector-sub">${branchNote}</div>
             <div class="shard-bar">
               <div class="shard-bar-fill" style="width:${pct}%"></div>
               <span class="shard-bar-text">${shards}/${cost.shards}</span>
             </div>
-            <button class="btn btn-sm ${canUpgrade && !isLockedHero ? 'btn-primary' : ''}" style="width:100%;" data-card-up="${u.id}" ${canUpgrade && !isLockedHero ? '' : 'disabled'}>
+            <button class="btn btn-sm ${canUpgrade ? 'btn-primary' : ''}" style="width:100%;" data-card-up="${tw.id}" ${canUpgrade ? '' : 'disabled'}>
               ${t(loc, 'cards.upgrade')} (${cost.oakCoins})
             </button>
           </div>
         `;
-      })
-      .join('');
-
-    const heroesHtml = HERO_LIST.map((h) => {
-      const unlocked = save.unlockedHeroes.includes(h.id);
-      const selected = save.selectedHero === h.id;
-      const canBuy = !unlocked && h.gemUnlockCost > 0 && save.emeraldGems >= h.gemUnlockCost;
-      const actionBtn = unlocked
-        ? `<button class="btn btn-sm ${selected ? 'btn-gold' : 'btn-primary'}" data-select-hero="${h.id}" ${selected ? 'disabled' : ''}>${t(loc, selected ? 'hero.select.active' : 'hero.select.pick')}</button>`
-        : `<button class="btn btn-sm ${canBuy ? 'btn-gold' : ''}" data-unlock-hero="${h.id}" ${canBuy ? '' : 'disabled'}>${tParams(loc, 'hero.select.unlockGems', { gems: h.gemUnlockCost })}</button>`;
-      return `
-        <div class="hero-roster-row ${selected ? 'active' : ''}">
-          <img class="hero-roster-thumb" src="${PORTRAIT_URLS[h.id]}" alt="${t(loc, h.nameKey)}" />
-          <div style="flex:1; min-width:0;">
-            <div style="font-size:12.5px; font-weight:900; color:#ffffff;">${t(loc, h.nameKey)}</div>
-            <div style="font-size:10.5px; font-weight:700; color:var(--accent-cyan);">${t(loc, h.roleKey)}</div>
-            <div style="font-size:10px; color:var(--text-muted);">${unlocked ? t(loc, h.descKey) : tParams(loc, 'hero.select.unlockAt', { lvl: h.unlockLevel })}</div>
+      }).join('');
+      bodyHtml = `<div class="collector-grid">${towerCardsHtml}</div>`;
+    } else if (this.cardsSubTab === 'heroes') {
+      const heroesHtml = HERO_LIST.map((h) => {
+        const unlocked = save.unlockedHeroes.includes(h.id);
+        const selected = save.selectedHero === h.id;
+        const canBuy = !unlocked && h.gemUnlockCost > 0 && save.emeraldGems >= h.gemUnlockCost;
+        const lvl = save.cardLevels[h.id] ?? 1;
+        const shards = save.cardShards[h.id] ?? 0;
+        const cost = getCardUpgradeCost(lvl);
+        const pct = Math.min(100, Math.round((shards / cost.shards) * 100));
+        const canUpgrade = unlocked && shards >= cost.shards && save.oakCoins >= cost.oakCoins;
+        const actionBtn = unlocked
+          ? `<button class="btn btn-sm ${selected ? 'btn-gold' : 'btn-primary'}" data-select-hero="${h.id}" ${selected ? 'disabled' : ''}>${t(loc, selected ? 'hero.select.active' : 'hero.select.pick')}</button>`
+          : `<button class="btn btn-sm ${canBuy ? 'btn-gold' : ''}" data-unlock-hero="${h.id}" ${canBuy ? '' : 'disabled'}>${tParams(loc, 'hero.select.unlockGems', { gems: h.gemUnlockCost })}</button>`;
+        return `
+          <div class="hero-roster-row ${selected ? 'active' : ''}">
+            <div class="hero-roster-main">
+              <img class="hero-roster-thumb" src="${PORTRAIT_URLS[h.id]}" alt="${t(loc, h.nameKey)}" />
+              <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:2px;">
+                <div style="font-size:13px; font-weight:900; color:#fff7e6;">${t(loc, h.nameKey)} · ${t(loc, 'cards.level')}${lvl}</div>
+                <div style="font-size:10.5px; font-weight:700; color:var(--accent-cyan);">${t(loc, h.roleKey)}</div>
+                <div style="font-size:10.5px; color:var(--text-muted);">${unlocked ? t(loc, h.descKey) : tParams(loc, 'hero.select.unlockAt', { lvl: h.unlockLevel })}</div>
+              </div>
+              ${actionBtn}
+            </div>
+            <div class="hero-shard-row">
+              <div class="shard-bar" style="flex:1;">
+                <div class="shard-bar-fill" style="width:${pct}%"></div>
+                <span class="shard-bar-text">${shards}/${cost.shards}</span>
+              </div>
+              <button class="btn btn-sm ${canUpgrade ? 'btn-primary' : ''}" data-card-up="${h.id}" ${canUpgrade ? '' : 'disabled'}>
+                ${t(loc, 'cards.upgrade')} (${cost.oakCoins})
+              </button>
+            </div>
           </div>
-          ${actionBtn}
+        `;
+      }).join('');
+
+      const classIds: HeroClassId[] = ['auto', 'classic', 'viking', 'royal'];
+      const activeCls = HERO_CLASSES[save.heroClass];
+      const classesHtml = classIds
+        .map((cid) => {
+          const spec = HERO_CLASSES[cid];
+          const active = save.heroClass === cid;
+          return `
+            <button class="btn btn-sm ${active ? 'btn-gold' : ''}" data-hero-class="${cid}" title="${t(loc, spec.descKey)}">
+              ${t(loc, spec.nameKey)}
+            </button>
+          `;
+        })
+        .join('');
+
+      const hats: HatId[] = ['none', 'pirate', 'chef', 'wizard', 'viking'];
+      const hatsHtml = hats
+        .map((h) => {
+          const unlocked = save.unlockedHats.includes(h);
+          const active = save.equippedHat === h;
+          return `
+            <button class="btn btn-sm ${active ? 'btn-gold' : ''}" data-hat="${h}" ${unlocked ? '' : 'disabled'}>
+              ${t(loc, `hat.${h}`)}
+            </button>
+          `;
+        })
+        .join('');
+
+      bodyHtml = `
+        <div class="card-panel" style="display:flex; flex-direction:column; gap:8px;">
+          <div style="font-size:13.5px; font-weight:900; color:#ffe17a;">${t(loc, 'hero.select.title')}</div>
+          <div style="display:flex; flex-direction:column; gap:7px;">${heroesHtml}</div>
+        </div>
+        ${
+          save.selectedHero === 'boz_pence'
+            ? `
+              <div class="card-panel" style="display:flex; flex-direction:column; gap:8px;">
+                <div style="font-size:13px; font-weight:800; color:#ffe17a;">${t(loc, 'hero.class.title')}</div>
+                <div style="display:flex; flex-wrap:wrap; gap:6px;">${classesHtml}</div>
+                <div style="font-size:11.5px; color:var(--text-muted); font-weight:700;">${t(loc, activeCls.descKey)}</div>
+              </div>
+            `
+            : ''
+        }
+        <div class="card-panel" style="display:flex; flex-direction:column; gap:8px;">
+          <div style="font-size:13px; font-weight:800; color:#ffe17a;">${t(loc, 'cards.hats')}</div>
+          <div style="display:flex; flex-wrap:wrap; gap:6px;">${hatsHtml}</div>
         </div>
       `;
-    }).join('');
-
-    const classIds: HeroClassId[] = ['auto', 'classic', 'viking', 'royal'];
-    const activeCls = HERO_CLASSES[save.heroClass];
-    const classesHtml = classIds
-      .map((cid) => {
-        const spec = HERO_CLASSES[cid];
-        const active = save.heroClass === cid;
+    } else {
+      const availableStars = computeAvailableTalentStars(save.levelStars, save.ironCleared, save.talents);
+      const spentStars = computeSpentTalentStars(save.talents);
+      const talentsHtml = TALENT_BRANCHES.map((b) => {
+        const rank = save.talents[b.id] ?? 0;
+        const cost = getNextTalentCost(rank);
+        const canBuy = cost !== null && availableStars >= cost;
+        const pips = Array.from({ length: TALENT_MAX_RANK }, (_, idx) => `<span class="talent-pip ${idx < rank ? 'on' : ''}"></span>`).join('');
         return `
-          <button class="btn btn-sm ${active ? 'btn-gold' : ''}" data-hero-class="${cid}" title="${t(loc, spec.descKey)}">
-            ${t(loc, spec.nameKey)}
-          </button>
-        `;
-      })
-      .join('');
-
-    const hats: HatId[] = ['none', 'pirate', 'chef', 'wizard', 'viking'];
-    const hatsHtml = hats
-      .map((h) => {
-        const unlocked = save.unlockedHats.includes(h);
-        const active = save.equippedHat === h;
-        return `
-          <button class="btn btn-sm ${active ? 'btn-gold' : ''}" data-hat="${h}" ${unlocked ? '' : 'disabled'}>
-            ${t(loc, `hat.${h}`)}
-          </button>
-        `;
-      })
-      .join('');
-
-    const availableStars = computeAvailableTalentStars(save.levelStars, save.ironCleared, save.talents);
-    const spentStars = computeSpentTalentStars(save.talents);
-    const talentsHtml = TALENT_BRANCHES.map((b) => {
-      const rank = save.talents[b.id] ?? 0;
-      const cost = getNextTalentCost(rank);
-      const canBuy = cost !== null && availableStars >= cost;
-      const pips = Array.from({ length: TALENT_MAX_RANK }, (_, idx) => `<span class="talent-pip ${idx < rank ? 'on' : ''}"></span>`).join('');
-      return `
-        <div class="talent-branch-card">
-          <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
-            <div style="font-size:12.5px; font-weight:900; color:#ffffff;">${t(loc, b.nameKey)}</div>
-            <span class="collector-level-badge" style="position:static;">${rank}/${TALENT_MAX_RANK}</span>
+          <div class="talent-branch-card">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
+              <div style="font-size:12.5px; font-weight:900; color:#fff7e6;">${t(loc, b.nameKey)}</div>
+              <span class="collector-level-badge" style="position:static;">${rank}/${TALENT_MAX_RANK}</span>
+            </div>
+            <div style="font-size:10.5px; color:var(--text-muted); font-weight:700;">${t(loc, b.descKey)}</div>
+            <div style="font-size:10px; color:var(--accent-cyan); font-weight:700;">${t(loc, b.capKey)}</div>
+            <div class="talent-pips">${pips}</div>
+            <button class="btn btn-sm ${canBuy ? 'btn-gold' : ''}" data-talent-up="${b.id}" ${canBuy ? '' : 'disabled'}>
+              ${cost === null ? t(loc, 'talent.maxed') : tParams(loc, 'talent.upgradeCost', { cost })}
+            </button>
           </div>
-          <div style="font-size:10.5px; color:var(--text-muted); font-weight:700;">${t(loc, b.descKey)}</div>
-          <div style="font-size:10px; color:var(--accent-cyan); font-weight:700;">${t(loc, b.capKey)}</div>
-          <div class="talent-pips">${pips}</div>
-          <button class="btn btn-sm ${canBuy ? 'btn-gold' : ''}" data-talent-up="${b.id}" ${canBuy ? '' : 'disabled'}>
-            ${cost === null ? t(loc, 'talent.maxed') : tParams(loc, 'talent.upgradeCost', { cost })}
-          </button>
+        `;
+      }).join('');
+
+      bodyHtml = `
+        <div class="card-panel" style="display:flex; flex-direction:column; gap:8px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+            <div>
+              <div style="font-size:13.5px; font-weight:900; color:#ffe17a;">${t(loc, 'talent.title')}</div>
+              <div style="font-size:11px; color:var(--accent-gold); font-weight:800;">${tParams(loc, 'talent.available', { stars: availableStars })}</div>
+            </div>
+            <button class="btn btn-sm" id="btn-talent-reset" ${spentStars > 0 ? '' : 'disabled'}>${t(loc, 'talent.reset')}</button>
+          </div>
+          <div class="talent-grid">${talentsHtml}</div>
         </div>
       `;
-    }).join('');
+    }
 
     return `
-      <div style="font-size:15px; font-weight:900; color:#ffe17a;">${t(loc, 'cards.title')}</div>
-      <div class="card-panel" style="display:flex; flex-direction:column; gap:8px; border-color: rgba(110, 231, 183, 0.35);">
-        <div style="font-size:13.5px; font-weight:900; color:#ffe17a;">${t(loc, 'hero.select.title')}</div>
-        <div style="display:flex; flex-direction:column; gap:6px;">${heroesHtml}</div>
-      </div>
-      <div class="collector-grid">${cardsHtml}</div>
-      <div class="card-panel" style="display:flex; flex-direction:column; gap:8px; border-color: rgba(255, 202, 69, 0.35);">
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
-          <div>
-            <div style="font-size:13.5px; font-weight:900; color:#ffe17a;">${t(loc, 'talent.title')}</div>
-            <div style="font-size:11px; color:var(--accent-gold); font-weight:800;">${tParams(loc, 'talent.available', { stars: availableStars })}</div>
-          </div>
-          <button class="btn btn-sm" id="btn-talent-reset" ${spentStars > 0 ? '' : 'disabled'}>${t(loc, 'talent.reset')}</button>
-        </div>
-        <div class="talent-grid">${talentsHtml}</div>
-      </div>
-      ${
-        save.selectedHero === 'boz_pence'
-          ? `
-            <div class="card-panel" style="display:flex; flex-direction:column; gap:8px; border-color: rgba(255, 202, 69, 0.35);">
-              <div style="font-size:13px; font-weight:800; color:#ffe17a;">${t(loc, 'hero.class.title')}</div>
-              <div style="display:flex; flex-wrap:wrap; gap:6px;">${classesHtml}</div>
-              <div style="font-size:11.5px; color:var(--text-muted); font-weight:700;">${t(loc, activeCls.descKey)}</div>
-            </div>
-          `
-          : ''
-      }
-      <div class="card-panel" style="display:flex; flex-direction:column; gap:8px;">
-        <div style="font-size:13px; font-weight:800;">${t(loc, 'cards.hats')}</div>
-        <div style="display:flex; flex-wrap:wrap; gap:6px;">${hatsHtml}</div>
-      </div>
+      <div class="oak-section-title">${t(loc, 'cards.title')}</div>
+      ${subNavHtml}
+      ${bodyHtml}
     `;
   }
 
@@ -864,8 +1054,8 @@ export class MetaView {
   private renderSettingsModal(loc: Locale): string {
     const s = this.saveManager.get().settings;
     return `
-      <div class="modal-backdrop">
-        <div class="modal-card">
+      <div class="modal-backdrop" data-modal-backdrop="settings">
+        <div class="modal-card oak-modal-dark">
           <div style="display:flex; justify-content:space-between; align-items:center;">
             <span style="font-size:17px; font-weight:800;">${t(loc, 'settings.title')}</span>
             <button class="btn btn-sm btn-primary" id="btn-close-settings">OK</button>
@@ -923,6 +1113,54 @@ export class MetaView {
         this.callbacks.onRefresh();
       };
     });
+
+    container.querySelectorAll<HTMLElement>('[data-cards-sub]').forEach((btn) => {
+      btn.onclick = () => {
+        this.cardsSubTab = (btn.dataset.cardsSub as CardsSubTab) ?? 'towers';
+        this.callbacks.onRefresh();
+      };
+    });
+
+    const openPatrol = container.querySelector<HTMLButtonElement>('#btn-open-patrol');
+    if (openPatrol) openPatrol.onclick = () => { this.showPatrolModal = true; this.callbacks.onRefresh(); };
+
+    const closePatrol = container.querySelector<HTMLButtonElement>('#btn-close-patrol');
+    if (closePatrol) closePatrol.onclick = () => { this.showPatrolModal = false; this.callbacks.onRefresh(); };
+
+    const openExpedition = container.querySelector<HTMLButtonElement>('#btn-open-expedition');
+    if (openExpedition) openExpedition.onclick = () => { this.showExpeditionModal = true; this.callbacks.onRefresh(); };
+
+    const closeExpedition = container.querySelector<HTMLButtonElement>('#btn-close-expedition');
+    if (closeExpedition) closeExpedition.onclick = () => { this.showExpeditionModal = false; this.callbacks.onRefresh(); };
+
+    container.querySelectorAll<HTMLElement>('[data-modal-backdrop]').forEach((bd) => {
+      bd.onclick = (ev) => {
+        if (ev.target !== bd) return;
+        this.showSettings = false;
+        this.showBestiary = false;
+        this.showPatrolModal = false;
+        this.showExpeditionModal = false;
+        this.callbacks.onRefresh();
+      };
+    });
+
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      if (this.escKeyHandler) {
+        window.removeEventListener('keydown', this.escKeyHandler);
+        this.escKeyHandler = null;
+      }
+      if (this.showSettings || this.showBestiary || this.showPatrolModal || this.showExpeditionModal) {
+        this.escKeyHandler = (ev: KeyboardEvent) => {
+          if (ev.key !== 'Escape') return;
+          this.showSettings = false;
+          this.showBestiary = false;
+          this.showPatrolModal = false;
+          this.showExpeditionModal = false;
+          this.callbacks.onRefresh();
+        };
+        window.addEventListener('keydown', this.escKeyHandler);
+      }
+    }
 
     container.querySelectorAll<HTMLElement>('[data-multi-mode]').forEach((btn) => {
       btn.onclick = () => {
@@ -993,7 +1231,8 @@ export class MetaView {
     if (afkClaim) {
       afkClaim.onclick = () => {
         const reward = claimAfkPatrol(this.saveManager);
-        this.statusNotice = `+${reward.oakCoins} Palamut, +${reward.shards} Kart`;
+        this.statusNotice = tParams(loc, 'map.afk.toast', { oak: reward.oakCoins, shards: reward.shards });
+        this.showPatrolModal = false;
         this.callbacks.onRefresh();
       };
     }
@@ -1006,6 +1245,7 @@ export class MetaView {
         this.statusNotice = ok
           ? tParams(loc, 'map.afk.boostGranted', { amount: AFK_QUICK_BOOST_OAK, cards: AFK_QUICK_BOOST_TOTAL_SHARDS })
           : '2/2';
+        this.showPatrolModal = false;
         this.callbacks.onRefresh();
       };
     }
@@ -1237,13 +1477,14 @@ export class MetaView {
     const openBestiary = container.querySelector<HTMLButtonElement>('#btn-open-bestiary');
     if (openBestiary) {
       openBestiary.onclick = () => {
-        this.activeTab = 'journal';
+        this.showBestiary = true;
         this.callbacks.onRefresh();
       };
     }
     container.querySelectorAll<HTMLElement>('[data-open-journal-id]').forEach((el) => {
       el.onclick = () => {
         this.selectedJournalId = el.dataset.openJournalId ?? 'boz_pence';
+        this.showBestiary = false;
         this.activeTab = 'journal';
         this.callbacks.onRefresh();
       };
