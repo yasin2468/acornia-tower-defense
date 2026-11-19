@@ -22,6 +22,12 @@ import { CameraController } from './CameraController.ts';
 import { countDrawCalls } from './DrawCallCounter.ts';
 import { createCobbleRoadTexture, createMeadowTexture } from './ProceduralTextures.ts';
 import {
+  STAGE_LIGHTING_THEMES,
+  buildStageConcept,
+  type StageAnimatedProp,
+  type StagePulseMat,
+} from './StageConcepts.ts';
+import {
   createEnemyRig,
   createGreatOakCastle,
   createHeroRig,
@@ -691,8 +697,10 @@ export class SceneManager {
   private muzzleFlashes: MuzzleFlash[] = [];
   private dyingBodies: DyingBody[] = [];
 
-  private meadowTexCache = new Map<LevelSpec['biome'], THREE.CanvasTexture>();
-  private cobbleTexCache = new Map<LevelSpec['biome'], THREE.CanvasTexture>();
+  private meadowTexCache = new Map<string, THREE.CanvasTexture>();
+  private cobbleTexCache = new Map<string, THREE.CanvasTexture>();
+  private stageAnimatedProps: StageAnimatedProp[] = [];
+  private stagePulseMats: StagePulseMat[] = [];
   private hemiLight: THREE.HemisphereLight;
 
   private lowFpsCounter = 0;
@@ -1240,7 +1248,7 @@ export class SceneManager {
         canopyTint: '#7a3b2a',
       },
     };
-    const theme = biomeTheme[level.biome];
+    const theme = STAGE_LIGHTING_THEMES[level.concept] ?? biomeTheme[level.biome];
     this.scene.background = new THREE.Color(theme.bg);
     if (this.scene.fog instanceof THREE.FogExp2) {
       this.scene.fog.color.set(theme.fog);
@@ -1250,15 +1258,16 @@ export class SceneManager {
     this.sunLight.color.set(theme.sunColor);
     this.sunLight.intensity = theme.sunIntensity;
 
-    let meadowTex = this.meadowTexCache.get(level.biome);
+    const texKey = level.concept ?? level.biome;
+    let meadowTex = this.meadowTexCache.get(texKey);
     if (!meadowTex) {
-      meadowTex = createMeadowTexture(level.biome);
-      this.meadowTexCache.set(level.biome, meadowTex);
+      meadowTex = createMeadowTexture(texKey);
+      this.meadowTexCache.set(texKey, meadowTex);
     }
-    let cobbleTex = this.cobbleTexCache.get(level.biome);
+    let cobbleTex = this.cobbleTexCache.get(texKey);
     if (!cobbleTex) {
-      cobbleTex = createCobbleRoadTexture(level.biome);
-      this.cobbleTexCache.set(level.biome, cobbleTex);
+      cobbleTex = createCobbleRoadTexture(texKey);
+      this.cobbleTexCache.set(texKey, cobbleTex);
     }
 
     const ground = new THREE.Mesh(
@@ -1587,6 +1596,11 @@ export class SceneManager {
     this.ambientMotes = buildAmbientMotes(level.biome);
     this.levelGroup.add(this.ambientMotes.mesh);
 
+    const conceptFx = buildStageConcept(level, curves);
+    this.levelGroup.add(conceptFx.group);
+    this.stageAnimatedProps = conceptFx.animatedProps;
+    this.stagePulseMats = conceptFx.pulseMats;
+
     const heroVariant = resolveHeroVisualVariant(heroClass, 1);
     this.heroVisualKey = `${heroId}_${heroVariant}_${equippedHat}`;
     this.heroRig = createHeroRig(heroId, equippedHat, heroVariant);
@@ -1611,6 +1625,8 @@ export class SceneManager {
     this.dynamicGroup.clear();
     this.slotMeshes.clear();
     this.barrelMeshes.clear();
+    this.stageAnimatedProps = [];
+    this.stagePulseMats = [];
     this.ambientMotes = null;
     this.lanternLights = [];
     this.towerRigs.clear();
@@ -2086,6 +2102,17 @@ export class SceneManager {
       if (pool) {
         m.position.set(pool.x, 0.06, pool.z);
         m.scale.setScalar(pool.radius);
+      }
+    }
+
+    if (!this.reducedMotion) {
+      for (const ap of this.stageAnimatedProps) {
+        if (ap.axis === 'x') ap.obj.rotation.x += realDt * ap.speed;
+        else if (ap.axis === 'y') ap.obj.rotation.y += realDt * ap.speed;
+        else ap.obj.rotation.z += realDt * ap.speed;
+      }
+      for (const pm of this.stagePulseMats) {
+        pm.mat.emissiveIntensity = pm.base + Math.sin(this.animTime * pm.speed) * pm.amp;
       }
     }
 

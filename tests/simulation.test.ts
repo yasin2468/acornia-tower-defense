@@ -121,9 +121,9 @@ describe('Palamut Kalesi deterministic simulation & economy', () => {
     assert.equal(LEVELS.filter((l) => l.biome === 'foundry').length, 4, 'biome foundry');
 
     assert.equal(isLevelUnlocked(1, {}), true);
-    assert.equal(isLevelUnlocked(4, {}), true);
-    assert.equal(isLevelUnlocked(5, {}), false);
-    assert.equal(isLevelUnlocked(5, { 4: 2 }), true);
+    assert.equal(isLevelUnlocked(10, {}), true);
+    assert.equal(isLevelUnlocked(11, {}), false);
+    assert.equal(isLevelUnlocked(11, { 10: 2 }), true);
     assert.equal(isLevelUnlocked(16, { 15: 1 }), true);
 
     const distSeg = (px: number, pz: number, ax: number, az: number, bx: number, bz: number) => {

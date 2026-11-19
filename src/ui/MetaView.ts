@@ -114,6 +114,10 @@ export class MetaView {
   private readonly network: NetworkService;
   private readonly callbacks: MetaViewCallbacks;
   private escKeyHandler: ((ev: KeyboardEvent) => void) | null = null;
+  private mapKeyHandler: ((ev: KeyboardEvent) => void) | null = null;
+  private prevMapPanPct: number | null = null;
+  private lastSlideDir: 'left' | 'right' | null = null;
+  private pillStripScrollLeft = 0;
 
   constructor(
     saveManager: SaveManager,
@@ -310,6 +314,112 @@ export class MetaView {
     return d;
   }
 
+  private selectStageById(id: number): void {
+    const clamped = Math.max(1, Math.min(LEVELS.length, id));
+    if (clamped !== this.selectedLevelId) {
+      this.lastSlideDir = clamped > this.selectedLevelId ? 'right' : 'left';
+      this.selectedLevelId = clamped;
+      this.ironMode = false;
+    }
+    this.callbacks.onRefresh();
+  }
+
+  private computeMapPanPct(xPct: number): number {
+    // Track width is 360% of viewport: center target xPct at 50% viewport, clamped to [0, -72.2222]%.
+    return Math.max(-72.2222, Math.min(0, 13.8889 - xPct));
+  }
+
+  private renderStageMiniMapSvg(level: LevelSpec): string {
+    const toX = (x: number) => ((x + 4.4) / 8.8) * 68 + 3;
+    const toY = (z: number) => ((10.2 - z) / 20.4) * 84 + 3;
+    const ptsAttr = (pts: Array<{ x: number; z: number }>) =>
+      pts.map((p) => `${toX(p.x).toFixed(1)},${toY(p.z).toFixed(1)}`).join(' ');
+
+    const bgMap: Record<LevelSpec['biome'], { bg: string; road: string; accent: string }> = {
+      forest: { bg: '#2c4f3b', road: '#f2e2bf', accent: '#62d98a' },
+      canyon: { bg: '#633725', road: '#f5cfa0', accent: '#ff944d' },
+      cavern: { bg: '#242347', road: '#cad8f2', accent: '#6df5ff' },
+      snow: { bg: '#5a7d9e', road: '#f2f9ff', accent: '#9ae6ff' },
+      foundry: { bg: '#381e1c', road: '#d9b5a6', accent: '#ff7033' },
+    };
+    const pal = bgMap[level.biome];
+
+    // Stylized concept motif in mini-map background
+    let conceptShape = '';
+    if (
+      level.concept === 'mossy_stream' ||
+      level.concept === 'biolum_quartz_stream' ||
+      level.concept === 'cinder_slag_canal' ||
+      level.concept === 'twin_bridge_chasm' ||
+      level.concept === 'aurora_citadel_siege' ||
+      level.concept === 'magma_crucible_arena' ||
+      level.concept === 'crimson_powder_gorge'
+    ) {
+      const col =
+        level.concept === 'cinder_slag_canal' ||
+        level.concept === 'twin_bridge_chasm' ||
+        level.concept === 'magma_crucible_arena'
+          ? 'rgba(255, 108, 36, 0.55)'
+          : level.concept === 'crimson_powder_gorge'
+            ? 'rgba(68, 28, 18, 0.55)'
+            : 'rgba(66, 224, 245, 0.48)';
+      conceptShape = `<path d="M 2 44 Q 37 50 72 41" fill="none" stroke="${col}" stroke-width="6.5" stroke-linecap="round"/>`;
+    } else if (level.concept === 'acorn_island_shrine' || level.concept === 'frozen_mirror_lake') {
+      conceptShape = `<ellipse cx="37" cy="40" rx="22" ry="11" fill="rgba(78, 222, 240, 0.42)"/>`;
+    } else if (level.concept === 'amethyst_ley_sanctum' || level.concept === 'clockwork_gear_bridge') {
+      const rCol = level.concept === 'clockwork_gear_bridge' ? 'rgba(240, 178, 84, 0.5)' : 'rgba(216, 128, 255, 0.5)';
+      conceptShape = `<circle cx="37" cy="44" r="15" fill="none" stroke="${rCol}" stroke-width="2" stroke-dasharray="3 2"/><circle cx="37" cy="44" r="7" fill="none" stroke="${rCol}" stroke-width="1.6"/>`;
+    } else if (level.concept === 'oak_bastion_moat' || level.concept === 'iron_core_citadel') {
+      const mCol = level.concept === 'iron_core_citadel' ? 'rgba(255, 110, 32, 0.6)' : 'rgba(66, 194, 245, 0.5)';
+      conceptShape = `<rect x="4" y="10" width="66" height="6" rx="2" fill="${mCol}"/>`;
+    }
+
+    const slotsSvg = level.slots
+      .map(
+        (s) =>
+          `<circle cx="${toX(s.x).toFixed(1)}" cy="${toY(s.z).toFixed(1)}" r="2.2" fill="${s.runeSlot ? '#4ff2ff' : '#ffd559'}" stroke="#2a1405" stroke-width="0.9"/>`,
+      )
+      .join('');
+    const iceSvg = (level.iceZones ?? [])
+      .map(
+        (iz) =>
+          `<circle cx="${toX(iz.x).toFixed(1)}" cy="${toY(iz.z).toFixed(1)}" r="7" fill="rgba(164, 236, 255, 0.35)" stroke="#d9f6ff" stroke-width="0.9"/>`,
+      )
+      .join('');
+    const barrelSvg = (level.barrels ?? [])
+      .map(
+        (b) =>
+          `<circle cx="${toX(b.x).toFixed(1)}" cy="${toY(b.z).toFixed(1)}" r="2.5" fill="#ff7426" stroke="#fff3c4" stroke-width="0.8"/>`,
+      )
+      .join('');
+
+    const goal = level.path[level.path.length - 1];
+
+    return `
+      <svg class="stage-mini-map-svg" viewBox="0 0 74 90" aria-hidden="true">
+        <rect x="0" y="0" width="74" height="90" rx="8" fill="${pal.bg}"/>
+        ${conceptShape}
+        ${iceSvg}
+        <polyline points="${ptsAttr(level.path)}" fill="none" stroke="rgba(26,12,4,0.65)" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>
+        ${
+          level.secondaryPath
+            ? `<polyline points="${ptsAttr(level.secondaryPath)}" fill="none" stroke="rgba(26,12,4,0.65)" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>`
+            : ''
+        }
+        <polyline points="${ptsAttr(level.path)}" fill="none" stroke="${pal.road}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+        ${
+          level.secondaryPath
+            ? `<polyline points="${ptsAttr(level.secondaryPath)}" fill="none" stroke="${pal.road}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`
+            : ''
+        }
+        ${slotsSvg}
+        ${barrelSvg}
+        <rect x="${(toX(goal.x) - 5.5).toFixed(1)}" y="${(toY(goal.z) - 4).toFixed(1)}" width="11" height="7.5" rx="2" fill="#f7c85c" stroke="#2a1405" stroke-width="1.2"/>
+        <circle cx="${toX(level.path[0].x).toFixed(1)}" cy="${toY(level.path[0].z).toFixed(1)}" r="3.1" fill="${pal.accent}" stroke="#ffffff" stroke-width="1"/>
+      </svg>
+    `;
+  }
+
   private getStageUniqueEnemies(level: LevelSpec): EnemyId[] {
     const seen = new Set<EnemyId>();
     const list: EnemyId[] = [];
@@ -412,32 +522,35 @@ export class MetaView {
       if (isLevelUnlocked(n.id, save.levelStars)) maxUnlockedIdx = idx;
     });
 
-    const OAK_MAP_TRAIL: ReadonlyArray<{ xPct: number; yPct: number }> = [
-      { xPct: 54, yPct: 65.5 },
-      { xPct: 33, yPct: 62.5 },
-      { xPct: 20, yPct: 58.0 },
-      { xPct: 26, yPct: 53.0 },
-      { xPct: 44, yPct: 49.5 },
-      { xPct: 65, yPct: 46.8 },
-      { xPct: 74, yPct: 42.2 },
-      { xPct: 59, yPct: 38.8 },
-      { xPct: 36, yPct: 36.2 },
-      { xPct: 23, yPct: 32.0 },
-      { xPct: 38, yPct: 28.2 },
-      { xPct: 59, yPct: 25.5 },
-      { xPct: 72, yPct: 22.0 },
-      { xPct: 56, yPct: 18.8 },
-      { xPct: 38, yPct: 16.5 },
-      { xPct: 51, yPct: 13.5 },
+    const OAK_HORIZ_TRAIL: ReadonlyArray<{ xPct: number; yPct: number }> = [
+      { xPct: 5.5, yPct: 43.0 },
+      { xPct: 11.4, yPct: 37.0 },
+      { xPct: 17.3, yPct: 46.0 },
+      { xPct: 23.3, yPct: 39.0 },
+      { xPct: 29.2, yPct: 45.0 },
+      { xPct: 35.1, yPct: 37.5 },
+      { xPct: 41.1, yPct: 45.5 },
+      { xPct: 47.0, yPct: 36.5 },
+      { xPct: 53.0, yPct: 44.5 },
+      { xPct: 58.9, yPct: 38.0 },
+      { xPct: 64.8, yPct: 46.0 },
+      { xPct: 70.8, yPct: 36.5 },
+      { xPct: 76.7, yPct: 45.0 },
+      { xPct: 82.6, yPct: 37.5 },
+      { xPct: 88.6, yPct: 44.5 },
+      { xPct: 94.5, yPct: 38.5 },
     ];
 
     const displayNodes = WORLD_MAP_NODES.map((n, idx) => ({
       ...n,
-      xPct: OAK_MAP_TRAIL[idx]?.xPct ?? n.xPct,
-      yPct: OAK_MAP_TRAIL[idx]?.yPct ?? n.yPct,
+      xPct: OAK_HORIZ_TRAIL[idx]?.xPct ?? n.xPct,
+      yPct: OAK_HORIZ_TRAIL[idx]?.yPct ?? n.yPct,
     }));
     const fullPathD = this.buildSmoothTrailPath(displayNodes);
     const unlockedPathD = this.buildSmoothTrailPath(displayNodes.slice(0, maxUnlockedIdx + 1));
+    const selDisplayNode = displayNodes.find((n) => n.id === selLevel.id) ?? displayNodes[0];
+    const targetPanPct = this.computeMapPanPct(selDisplayNode.xPct);
+    const initialPanPct = this.prevMapPanPct ?? targetPanPct;
 
     const nodesHtml = displayNodes.map((n) => {
       const unlocked = isLevelUnlocked(n.id, save.levelStars);
@@ -456,6 +569,49 @@ export class MetaView {
           aria-label="${n.id}. ${t(loc, n.nameKey)}"
         >
           ${this.renderShieldPinSvg(pinState, n.isBossStage, n.id, stars)}
+          <span class="stage-pin-ribbon">${t(loc, n.nameKey)}</span>
+        </button>
+      `;
+    }).join('');
+
+    const regionBannersHtml = [
+      { xPct: 11.4, biome: 'forest' as const, range: '1–3' },
+      { xPct: 29.2, biome: 'canyon' as const, range: '4–6' },
+      { xPct: 47.0, biome: 'cavern' as const, range: '7–9' },
+      { xPct: 64.8, biome: 'snow' as const, range: '10–12' },
+      { xPct: 85.6, biome: 'foundry' as const, range: '13–16' },
+    ]
+      .map(
+        (r) => `
+        <div class="biome-region-banner biome-${r.biome}" style="left: ${r.xPct}%;">
+          <span>${t(loc, `map.biome.${r.biome}`)}</span>
+          <span class="biome-region-range">${r.range}</span>
+        </div>
+      `,
+      )
+      .join('');
+
+    const stagePillsHtml = LEVELS.map((lvl) => {
+      const unlocked = isLevelUnlocked(lvl.id, save.levelStars);
+      const stars = save.levelStars[lvl.id] ?? 0;
+      const isSelected = lvl.id === this.selectedLevelId;
+      const cls = isSelected
+        ? 'active'
+        : stars > 0
+          ? 'cleared'
+          : unlocked
+            ? 'unlocked'
+            : 'locked';
+      return `
+        <button
+          type="button"
+          class="stage-pill-btn ${cls}"
+          data-level="${lvl.id}"
+          aria-label="${lvl.id}. ${t(loc, lvl.nameKey)}"
+          aria-current="${isSelected ? 'step' : 'false'}"
+        >
+          <span>${lvl.id}</span>
+          ${lvl.isBossStage ? '<span class="stage-pill-boss" aria-hidden="true">★</span>' : ''}
         </button>
       `;
     }).join('');
@@ -485,12 +641,37 @@ export class MetaView {
       ? `<span class="medallion-pip ${run.pendingRelicChoices.length > 0 ? 'alert' : ''}">${run.pendingRelicChoices.length > 0 ? '!' : `${run.stageIndex + 1}/5`}</span>`
       : '';
 
+    const hasPrev = selLevel.id > 1;
+    const hasNext = selLevel.id < LEVELS.length;
+    const slideAnimClass =
+      this.lastSlideDir === 'right'
+        ? 'drawer-slide-right'
+        : this.lastSlideDir === 'left'
+          ? 'drawer-slide-left'
+          : '';
+
     return `
-      <div class="world-map-box map-full" style="background-image: url('${OAK_UI_URLS.worldMap}');">
-        <svg class="world-map-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
-          <path d="${fullPathD}" fill="none" stroke="rgba(42, 22, 8, 0.42)" stroke-width="1.8" stroke-linecap="round" />
-          <path d="${unlockedPathD}" fill="none" stroke="rgba(255, 224, 114, 0.78)" stroke-width="1.1" stroke-dasharray="1.3 2.1" stroke-linecap="round" />
-        </svg>
+      <div class="world-map-box map-full" id="world-map-viewport" style="background-image: url('${OAK_UI_URLS.worldMap}');">
+        <div class="map-horiz-track" id="map-horiz-track" data-target-pan="${targetPanPct.toFixed(4)}" style="transform: translate3d(${initialPanPct.toFixed(4)}%, 0, 0);">
+          <div class="map-horiz-bg-strip" aria-hidden="true">
+            <div class="map-horiz-bg-tile" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
+            <div class="map-horiz-bg-tile mirrored" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
+            <div class="map-horiz-bg-tile" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
+            <div class="map-horiz-bg-tile mirrored" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
+            <div class="map-biome-wash"></div>
+          </div>
+
+          <svg class="world-map-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <path d="${fullPathD}" fill="none" stroke="rgba(42, 22, 8, 0.5)" stroke-width="1.35" stroke-linecap="round" />
+            <path d="${unlockedPathD}" fill="none" stroke="rgba(255, 224, 114, 0.88)" stroke-width="0.72" stroke-dasharray="0.6 0.9" stroke-linecap="round" />
+          </svg>
+
+          ${regionBannersHtml}
+          ${nodesHtml}
+        </div>
+
+        <button type="button" class="map-nav-arrow left" id="btn-map-prev" ${hasPrev ? '' : 'disabled'} aria-label="${t(loc, 'map.prevStage')}">◀</button>
+        <button type="button" class="map-nav-arrow right" id="btn-map-next" ${hasNext ? '' : 'disabled'} aria-label="${t(loc, 'map.nextStage')}">▶</button>
 
         <button type="button" class="map-medallion patrol ${afk.oakCoins >= 1 ? 'ready' : ''}" id="btn-open-patrol">
           <span class="medallion-ring">
@@ -523,21 +704,35 @@ export class MetaView {
             </span>
           </button>
         </div>
-
-        ${nodesHtml}
       </div>
 
-      <section class="parchment-drawer">
+      <section class="parchment-drawer ${slideAnimClass}" id="parchment-drawer">
         <span class="brass-corner tl" aria-hidden="true"></span>
         <span class="brass-corner tr" aria-hidden="true"></span>
         <span class="brass-corner bl" aria-hidden="true"></span>
         <span class="brass-corner br" aria-hidden="true"></span>
-        <div class="drawer-head">
-          <div class="drawer-stage-meta">
-            <div class="drawer-stage-title">${selLevel.id}. ${t(loc, selLevel.nameKey)}</div>
-            <div class="drawer-stage-sub">${t(loc, `map.biome.${selLevel.biome}`)} · ${selLevel.waves.length} ${t(loc, 'hud.wave')}</div>
+
+        <div class="stage-pill-strip" id="stage-pill-strip" role="navigation" aria-label="${t(loc, 'nav.map')}">
+          ${stagePillsHtml}
+        </div>
+
+        <div class="drawer-stage-body">
+          <div class="stage-mini-map-wrap">
+            ${this.renderStageMiniMapSvg(selLevel)}
           </div>
-          <div class="drawer-threats" aria-label="${t(loc, 'map.threats')}">${threatsHtml}</div>
+          <div class="drawer-stage-info">
+            <div class="drawer-title-row">
+              <button type="button" class="drawer-step-btn" id="btn-drawer-prev" ${hasPrev ? '' : 'disabled'} aria-label="${t(loc, 'map.prevStage')}">◀</button>
+              <div class="drawer-stage-title">${selLevel.id}. ${t(loc, selLevel.nameKey)}</div>
+              <button type="button" class="drawer-step-btn" id="btn-drawer-next" ${hasNext ? '' : 'disabled'} aria-label="${t(loc, 'map.nextStage')}">▶</button>
+            </div>
+            <div class="drawer-concept-row">
+              <span class="stage-concept-pill">${t(loc, `level.${selLevel.id}.concept`)}</span>
+              <span class="drawer-stage-sub">${t(loc, `map.biome.${selLevel.biome}`)} · ${selLevel.waves.length} ${t(loc, 'hud.wave')}</span>
+            </div>
+            <div class="drawer-concept-desc">${t(loc, `level.${selLevel.id}.sub`)}</div>
+            <div class="drawer-threats" aria-label="${t(loc, 'map.threats')}">${threatsHtml}</div>
+          </div>
         </div>
 
         <div class="oak-mode-bar" role="group" aria-label="${t(loc, 'map.mode.normal')} / ${t(loc, 'map.mode.iron')}">
@@ -1284,11 +1479,104 @@ export class MetaView {
 
     container.querySelectorAll<HTMLElement>('[data-level]').forEach((btn) => {
       btn.onclick = () => {
-        this.selectedLevelId = Number(btn.dataset.level);
-        this.ironMode = false;
-        this.callbacks.onRefresh();
+        this.selectStageById(Number(btn.dataset.level));
       };
     });
+
+    const prevMapBtn = container.querySelector<HTMLButtonElement>('#btn-map-prev');
+    const nextMapBtn = container.querySelector<HTMLButtonElement>('#btn-map-next');
+    const prevDrawerBtn = container.querySelector<HTMLButtonElement>('#btn-drawer-prev');
+    const nextDrawerBtn = container.querySelector<HTMLButtonElement>('#btn-drawer-next');
+    if (prevMapBtn) prevMapBtn.onclick = () => this.selectStageById(this.selectedLevelId - 1);
+    if (nextMapBtn) nextMapBtn.onclick = () => this.selectStageById(this.selectedLevelId + 1);
+    if (prevDrawerBtn) prevDrawerBtn.onclick = () => this.selectStageById(this.selectedLevelId - 1);
+    if (nextDrawerBtn) nextDrawerBtn.onclick = () => this.selectStageById(this.selectedLevelId + 1);
+
+    const track = container.querySelector<HTMLElement>('#map-horiz-track');
+    if (track) {
+      const targetPan = track.dataset.targetPan ?? '0';
+      const applyPan = () => {
+        track.style.transform = `translate3d(${targetPan}%, 0, 0)`;
+        this.prevMapPanPct = Number(targetPan);
+      };
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(() => requestAnimationFrame(applyPan));
+      } else {
+        applyPan();
+      }
+    }
+
+    const pillStrip = container.querySelector<HTMLElement>('#stage-pill-strip');
+    if (pillStrip) {
+      pillStrip.scrollLeft = this.pillStripScrollLeft;
+      pillStrip.onscroll = () => {
+        this.pillStripScrollLeft = pillStrip.scrollLeft;
+      };
+    }
+
+    const activePill = container.querySelector<HTMLElement>('.stage-pill-btn.active');
+    if (activePill && pillStrip && typeof activePill.scrollIntoView === 'function') {
+      const stripRect = pillStrip.getBoundingClientRect?.();
+      const pillRect = activePill.getBoundingClientRect?.();
+      if (
+        !stripRect ||
+        !pillRect ||
+        pillRect.left < stripRect.left + 8 ||
+        pillRect.right > stripRect.right - 8
+      ) {
+        activePill.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }
+    } else if (activePill && typeof activePill.scrollIntoView === 'function') {
+      activePill.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
+
+    const bindHorizontalSwipe = (el: HTMLElement | null) => {
+      if (!el) return;
+      let startX = 0;
+      let startY = 0;
+      let tracking = false;
+      el.onpointerdown = (ev: PointerEvent) => {
+        const tgt = ev.target as HTMLElement | null;
+        if (tgt?.closest?.('#stage-pill-strip')) {
+          tracking = false;
+          return;
+        }
+        startX = ev.clientX;
+        startY = ev.clientY;
+        tracking = true;
+      };
+      el.onpointerup = (ev: PointerEvent) => {
+        if (!tracking) return;
+        tracking = false;
+        const dx = ev.clientX - startX;
+        const dy = ev.clientY - startY;
+        if (Math.abs(dx) >= 40 && Math.abs(dx) > Math.abs(dy) * 1.35) {
+          this.selectStageById(this.selectedLevelId + (dx < 0 ? 1 : -1));
+        }
+      };
+      el.onpointercancel = () => { tracking = false; };
+    };
+    bindHorizontalSwipe(container.querySelector<HTMLElement>('#world-map-viewport'));
+    bindHorizontalSwipe(container.querySelector<HTMLElement>('#parchment-drawer'));
+
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      if (this.mapKeyHandler) {
+        window.removeEventListener('keydown', this.mapKeyHandler);
+        this.mapKeyHandler = null;
+      }
+      if (this.activeTab === 'map' && !this.showSettings && !this.showBestiary && !this.showPatrolModal && !this.showExpeditionModal) {
+        this.mapKeyHandler = (ev: KeyboardEvent) => {
+          if (ev.key === 'ArrowRight') {
+            ev.preventDefault();
+            this.selectStageById(this.selectedLevelId + 1);
+          } else if (ev.key === 'ArrowLeft') {
+            ev.preventDefault();
+            this.selectStageById(this.selectedLevelId - 1);
+          }
+        };
+        window.addEventListener('keydown', this.mapKeyHandler);
+      }
+    }
 
     const startBtn = container.querySelector<HTMLButtonElement>('#btn-start-level');
     if (startBtn) startBtn.onclick = () => this.callbacks.onStartLevel(this.selectedLevelId, this.ironMode);

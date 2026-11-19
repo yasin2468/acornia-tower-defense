@@ -1,8 +1,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import * as THREE from 'three';
 import { FIXED_DT, SimulationEngine } from '../src/core/SimulationEngine.ts';
 import { LEVELS } from '../src/data/levels.ts';
 import { TOWERS } from '../src/data/towers.ts';
+import { t } from '../src/i18n/locales.ts';
+import { STAGE_LIGHTING_THEMES, buildStageConcept } from '../src/rendering/StageConcepts.ts';
 
 describe('Paket 1 — Boz Pençe akıllı nöbet, vuruş olayı ve sınıf ultileri', () => {
   it('nöbet noktasına yaklaşan düşmana kendiliğinden koşar, HERO_ATTACK üretir ve temizleyince nöbete döner', () => {
@@ -285,5 +288,39 @@ describe('Paket 4 — Hazırlık fazı, erken dalga bonusu ve üst HUD uyumu', (
     assert.equal(sim.currentWaveIndex, 1);
     assert.equal(sim.waveInProgress, true);
     assert.equal(sim.gold, goldBefore + 15);
+  });
+});
+
+describe('Paket 5 — 16 benzersiz bölüm konsepti, 3B sahne kurgusu ve TR/EN yerelleştirme eşliği', () => {
+  it('16 bölümün her biri benzersiz konsept, 3B sahne nesnesi ve TR/EN çeviri anahtarlarına sahiptir', () => {
+    const concepts = new Set<string>();
+    for (const lvl of LEVELS) {
+      concepts.add(lvl.concept);
+      assert.ok(STAGE_LIGHTING_THEMES[lvl.concept], `Lv${lvl.id} atmosfer teması eksik (${lvl.concept})`);
+
+      const curves = [
+        new THREE.CatmullRomCurve3(lvl.path.map((p) => new THREE.Vector3(p.x, 0.035, p.z)), false, 'catmullrom', 0.32),
+      ];
+      if (lvl.secondaryPath?.length) {
+        curves.push(
+          new THREE.CatmullRomCurve3(
+            lvl.secondaryPath.map((p) => new THREE.Vector3(p.x, 0.035, p.z)),
+            false,
+            'catmullrom',
+            0.32,
+          ),
+        );
+      }
+      const built = buildStageConcept(lvl, curves);
+      assert.ok(built.group.children.length >= 1, `Lv${lvl.id} 3B konsept grubu boş olmamalı`);
+
+      for (const loc of ['tr', 'en'] as const) {
+        const cKey = `level.${lvl.id}.concept`;
+        const sKey = `level.${lvl.id}.sub`;
+        assert.notEqual(t(loc, cKey), cKey, `${loc} eksik: ${cKey}`);
+        assert.notEqual(t(loc, sKey), sKey, `${loc} eksik: ${sKey}`);
+      }
+    }
+    assert.equal(concepts.size, 16, '16 bölümün konsept kimlikleri birbirinden tamamen farklı olmalı');
   });
 });

@@ -30,9 +30,28 @@ export interface WaveSpec {
   groups: WaveGroupSpec[];
 }
 
+export type StageConceptId =
+  | 'mossy_stream'
+  | 'acorn_island_shrine'
+  | 'oak_bastion_moat'
+  | 'crimson_powder_gorge'
+  | 'desert_windmill_oasis'
+  | 'twin_bridge_chasm'
+  | 'biolum_quartz_stream'
+  | 'abandoned_drill_mine'
+  | 'amethyst_ley_sanctum'
+  | 'frozen_mirror_lake'
+  | 'blizzard_watchtower'
+  | 'aurora_citadel_siege'
+  | 'cinder_slag_canal'
+  | 'clockwork_gear_bridge'
+  | 'magma_crucible_arena'
+  | 'iron_core_citadel';
+
 export interface LevelSpec {
   id: number;
   biome: 'forest' | 'canyon' | 'cavern' | 'snow' | 'foundry';
+  concept: StageConceptId;
   nameKey: string;
   unlocked: boolean;
   isBossStage?: boolean;
@@ -54,6 +73,7 @@ export const LEVELS: LevelSpec[] = [
   {
     id: 1,
     biome: 'forest',
+    concept: 'mossy_stream',
     nameKey: 'level.1.name',
     unlocked: true,
     mapPin: { xPct: 48, yPct: 91 },
@@ -150,6 +170,7 @@ export const LEVELS: LevelSpec[] = [
   {
     id: 2,
     biome: 'forest',
+    concept: 'acorn_island_shrine',
     nameKey: 'level.2.name',
     unlocked: true,
     mapPin: { xPct: 73, yPct: 83 },
@@ -262,6 +283,7 @@ export const LEVELS: LevelSpec[] = [
   {
     id: 3,
     biome: 'forest',
+    concept: 'oak_bastion_moat',
     nameKey: 'level.3.name',
     unlocked: true,
     isBossStage: true,
@@ -375,6 +397,7 @@ export const LEVELS: LevelSpec[] = [
   {
     id: 4,
     biome: 'canyon',
+    concept: 'crimson_powder_gorge',
     nameKey: 'level.4.name',
     unlocked: true,
     mapPin: { xPct: 73, yPct: 65 },
@@ -474,8 +497,9 @@ export const LEVELS: LevelSpec[] = [
   {
     id: 5,
     biome: 'canyon',
+    concept: 'desert_windmill_oasis',
     nameKey: 'level.5.name',
-    unlocked: false,
+    unlocked: true,
     mapPin: { xPct: 50, yPct: 56 },
     startGold: 205,
     baseHp: 150,
@@ -526,8 +550,9 @@ export const LEVELS: LevelSpec[] = [
   {
     id: 6,
     biome: 'canyon',
+    concept: 'twin_bridge_chasm',
     nameKey: 'level.6.name',
-    unlocked: false,
+    unlocked: true,
     isBossStage: true,
     mapPin: { xPct: 73, yPct: 47 },
     startGold: 245,
@@ -594,8 +619,9 @@ export const LEVELS: LevelSpec[] = [
   {
     id: 7,
     biome: 'cavern',
+    concept: 'biolum_quartz_stream',
     nameKey: 'level.7.name',
-    unlocked: false,
+    unlocked: true,
     mapPin: { xPct: 48, yPct: 38 },
     startGold: 295,
     baseHp: 150,
@@ -644,8 +670,9 @@ export const LEVELS: LevelSpec[] = [
   {
     id: 8,
     biome: 'cavern',
+    concept: 'abandoned_drill_mine',
     nameKey: 'level.8.name',
-    unlocked: false,
+    unlocked: true,
     mapPin: { xPct: 73, yPct: 30 },
     startGold: 320,
     baseHp: 150,
@@ -703,42 +730,41 @@ export const LEVELS: LevelSpec[] = [
   {
     id: 9,
     biome: 'cavern',
+    concept: 'amethyst_ley_sanctum',
     nameKey: 'level.9.name',
-    unlocked: false,
+    unlocked: true,
     isBossStage: true,
     mapPin: { xPct: 48, yPct: 22 },
     startGold: 365,
     baseHp: 150,
     killZoneMeters: 17.5,
     path: [
-      { x: -2.8, z: 9.8 },
-      { x: -3.2, z: 5.6 },
-      { x: -3.2, z: 0.4 },
-      { x: -3.0, z: -3.6 },
-      { x: 0.0, z: -4.8 },
-      { x: -2.6, z: -6.4 },
-      { x: 0.0, z: -7.9 },
+      { x: -3.2, z: 9.8 },
+      { x: -3.2, z: 6.8 },
+      { x: 0.0, z: 3.8 },
+      { x: 3.2, z: 0.8 },
+      { x: 3.2, z: -3.4 },
+      { x: 0.0, z: -5.4 },
       { x: 0.0, z: -9.0 },
     ],
     secondaryPath: [
-      { x: 2.8, z: 9.8 },
-      { x: 3.2, z: 5.6 },
-      { x: 3.2, z: 0.4 },
-      { x: 3.0, z: -3.6 },
-      { x: 0.0, z: -4.8 },
-      { x: 2.6, z: -6.4 },
-      { x: 0.0, z: -7.9 },
+      { x: 3.2, z: 9.8 },
+      { x: 3.2, z: 6.8 },
+      { x: 0.0, z: 3.8 },
+      { x: -3.2, z: 0.8 },
+      { x: -3.2, z: -3.4 },
+      { x: 0.0, z: -5.4 },
       { x: 0.0, z: -9.0 },
     ],
     slots: [
-      { id: 'slot_1', x: 0.0, z: 6.4 },
-      { id: 'slot_2', x: 0.0, z: 3.2 },
-      { id: 'slot_3', x: -1.2, z: 0.2, runeSlot: true },
-      { id: 'slot_4', x: 1.2, z: 0.2, runeSlot: true },
-      { id: 'slot_5', x: -0.9, z: -1.7 },
-      { id: 'slot_6', x: 0.9, z: -1.7 },
-      { id: 'slot_7', x: -1.4, z: 5.2, lockedByStump: true, stumpClearCost: 50 },
-      { id: 'slot_8', x: 1.4, z: 5.2, lockedByStump: true, stumpClearCost: 50 },
+      { id: 'slot_1', x: 0.0, z: 6.6 },
+      { id: 'slot_2', x: 0.0, z: 0.8 },
+      { id: 'slot_3', x: 0.0, z: -2.6 },
+      { id: 'slot_4', x: -1.4, z: -1.1, runeSlot: true },
+      { id: 'slot_5', x: 1.4, z: -1.1, runeSlot: true },
+      { id: 'slot_6', x: -2.55, z: 3.8 },
+      { id: 'slot_7', x: 2.55, z: 3.8, lockedByStump: true, stumpClearCost: 50 },
+      { id: 'slot_8', x: -2.2, z: -6.2, lockedByStump: true, stumpClearCost: 50 },
     ],
     lanterns: [
       { x: -4.2, z: 7.4 },
@@ -746,7 +772,7 @@ export const LEVELS: LevelSpec[] = [
       { x: -4.3, z: -1.6 },
       { x: 4.3, z: -1.6 },
     ],
-    heroStart: { x: 0.0, z: -4.8 },
+    heroStart: { x: 0.0, z: -5.4 },
     waves: [
       { waveNumber: 1, clearBonus: 33, groups: [{ enemyId: 'turbo_hopper', count: 15, spacing: 0.65, hpOverride: 81, bountyOverride: 7 }, { enemyId: 'scout_bot', count: 13, spacing: 0.72, hpOverride: 59, bountyOverride: 6 }] },
       { waveNumber: 2, clearBonus: 38, groups: [{ enemyId: 'chomp_brute', count: 7, spacing: 1.3, hpOverride: 226, bountyOverride: 15 }, { enemyId: 'repair_drone', count: 8, spacing: 0.9, hpOverride: 86, bountyOverride: 10 }] },
@@ -764,8 +790,9 @@ export const LEVELS: LevelSpec[] = [
   {
     id: 10,
     biome: 'snow',
+    concept: 'frozen_mirror_lake',
     nameKey: 'level.10.name',
-    unlocked: false,
+    unlocked: true,
     mapPin: { xPct: 72, yPct: 16 },
     startGold: 410,
     baseHp: 150,
@@ -817,6 +844,7 @@ export const LEVELS: LevelSpec[] = [
   {
     id: 11,
     biome: 'snow',
+    concept: 'blizzard_watchtower',
     nameKey: 'level.11.name',
     unlocked: false,
     mapPin: { xPct: 33, yPct: 15 },
@@ -881,6 +909,7 @@ export const LEVELS: LevelSpec[] = [
   {
     id: 12,
     biome: 'snow',
+    concept: 'aurora_citadel_siege',
     nameKey: 'level.12.name',
     unlocked: false,
     isBossStage: true,
@@ -954,6 +983,7 @@ export const LEVELS: LevelSpec[] = [
   {
     id: 13,
     biome: 'foundry',
+    concept: 'cinder_slag_canal',
     nameKey: 'level.13.name',
     unlocked: false,
     mapPin: { xPct: 71, yPct: 17.5 },
@@ -1007,6 +1037,7 @@ export const LEVELS: LevelSpec[] = [
   {
     id: 14,
     biome: 'foundry',
+    concept: 'clockwork_gear_bridge',
     nameKey: 'level.14.name',
     unlocked: false,
     mapPin: { xPct: 58, yPct: 13.5 },
@@ -1071,6 +1102,7 @@ export const LEVELS: LevelSpec[] = [
   {
     id: 15,
     biome: 'foundry',
+    concept: 'magma_crucible_arena',
     nameKey: 'level.15.name',
     unlocked: false,
     mapPin: { xPct: 41, yPct: 11.0 },
@@ -1078,37 +1110,37 @@ export const LEVELS: LevelSpec[] = [
     baseHp: 150,
     killZoneMeters: 19.0,
     path: [
-      { x: 3.1, z: 9.8 },
-      { x: 3.1, z: 6.5 },
-      { x: -3.2, z: 6.5 },
-      { x: -3.2, z: -6.3 },
+      { x: -3.1, z: 9.8 },
+      { x: -3.1, z: 6.5 },
+      { x: 3.2, z: 6.5 },
+      { x: 3.2, z: -6.3 },
       { x: 0.0, z: -6.3 },
       { x: 0.0, z: 2.0 },
-      { x: 3.2, z: 2.0 },
-      { x: 3.2, z: -6.6 },
+      { x: -3.2, z: 2.0 },
+      { x: -3.2, z: -6.6 },
       { x: 0.0, z: -7.9 },
       { x: 0.0, z: -9.0 },
     ],
     slots: [
-      { id: 'slot_1', x: -1.6, z: 4.4 },
-      { id: 'slot_2', x: -1.6, z: 1.2, runeSlot: true },
-      { id: 'slot_3', x: -1.6, z: -1.6 },
-      { id: 'slot_4', x: 1.6, z: -0.4, runeSlot: true },
-      { id: 'slot_5', x: 1.6, z: -3.6 },
-      { id: 'slot_6', x: 1.55, z: 4.2 },
-      { id: 'slot_7', x: -1.6, z: -4.4, lockedByStump: true, stumpClearCost: 60 },
-      { id: 'slot_8', x: 3.4, z: 4.2, lockedByStump: true, stumpClearCost: 60 },
+      { id: 'slot_1', x: 1.6, z: 4.4 },
+      { id: 'slot_2', x: 1.6, z: 1.2, runeSlot: true },
+      { id: 'slot_3', x: 1.6, z: -1.6 },
+      { id: 'slot_4', x: -1.6, z: -0.4, runeSlot: true },
+      { id: 'slot_5', x: -1.6, z: -3.6 },
+      { id: 'slot_6', x: -1.55, z: 4.2 },
+      { id: 'slot_7', x: 1.6, z: -4.4, lockedByStump: true, stumpClearCost: 60 },
+      { id: 'slot_8', x: -3.4, z: 4.2, lockedByStump: true, stumpClearCost: 60 },
     ],
     lanterns: [
-      { x: 4.2, z: 7.4 },
-      { x: -4.3, z: 4.0 },
-      { x: 4.3, z: -1.0 },
-      { x: -4.2, z: -5.2 },
+      { x: -4.2, z: 7.4 },
+      { x: 4.3, z: 4.0 },
+      { x: -4.3, z: -1.0 },
+      { x: 4.2, z: -5.2 },
     ],
     heroStart: { x: 0.0, z: -2.8 },
     barrels: [
       { id: 'barrel_1', x: 0.0, z: 6.4 },
-      { id: 'barrel_2', x: 1.6, z: 2.0 },
+      { id: 'barrel_2', x: -1.6, z: 2.0 },
     ],
     waves: [
       { waveNumber: 1, clearBonus: 86, groups: [{ enemyId: 'ember_bomber', count: 24, spacing: 0.4, hpOverride: 140, bountyOverride: 9 }, { enemyId: 'turbo_hopper', count: 18, spacing: 0.44, hpOverride: 95, bountyOverride: 7 }] },
@@ -1128,6 +1160,7 @@ export const LEVELS: LevelSpec[] = [
   {
     id: 16,
     biome: 'foundry',
+    concept: 'iron_core_citadel',
     nameKey: 'level.16.name',
     unlocked: false,
     isBossStage: true,
@@ -1196,13 +1229,14 @@ export const LEVELS: LevelSpec[] = [
 ];
 
 export function isLevelUnlocked(levelId: number, levelStars: Record<number, number>): boolean {
-  if (levelId <= 4) return true;
+  if (levelId <= 10) return true;
   return (levelStars[levelId - 1] ?? 0) > 0;
 }
 
 export interface WorldMapPreviewNode {
   id: number;
   biome: 'forest' | 'canyon' | 'cavern' | 'snow' | 'foundry';
+  concept: StageConceptId;
   nameKey: string;
   xPct: number;
   yPct: number;
@@ -1213,9 +1247,10 @@ export interface WorldMapPreviewNode {
 export const WORLD_MAP_NODES: WorldMapPreviewNode[] = LEVELS.map((lvl) => ({
   id: lvl.id,
   biome: lvl.biome,
+  concept: lvl.concept,
   nameKey: lvl.nameKey,
   xPct: lvl.mapPin.xPct,
   yPct: lvl.mapPin.yPct,
-  unlocked: lvl.id <= 4,
+  unlocked: lvl.id <= 10,
   isBossStage: Boolean(lvl.isBossStage),
 }));

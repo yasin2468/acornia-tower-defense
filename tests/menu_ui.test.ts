@@ -171,6 +171,14 @@ describe('UI-1 — Ulu Mese Parsomeni menu ve Kenney CC0 + boyama ozel varliklar
         'id="btn-open-expedition"',
         'id="btn-open-bestiary"',
         'id="btn-mode-toggle"',
+        'id="btn-map-prev"',
+        'id="btn-map-next"',
+        'id="btn-drawer-prev"',
+        'id="btn-drawer-next"',
+        'map-horiz-track',
+        'stage-pill-strip',
+        'stage-concept-pill',
+        'stage-mini-map-svg',
         'ui/oak/world_map_oak.jpg',
         'ui/oak/nav_map.png',
         'shield-pin-svg',
@@ -182,6 +190,17 @@ describe('UI-1 — Ulu Mese Parsomeni menu ve Kenney CC0 + boyama ozel varliklar
         'data-tab="shop"',
       ]) {
         assert.ok(container.innerHTML.includes(attr), `Harita sekmesinde ${attr} eksik`);
+      }
+
+      const pinMatches = [...container.innerHTML.matchAll(/class="stage-pin[^"]*"\s+style="left:\s*([\d.]+)%;\s*top:\s*([\d.]+)%;"/g)];
+      assert.equal(pinMatches.length, 16, '16 yatay kalkan pini render edilmeli');
+      let prevX = -1;
+      for (const m of pinMatches) {
+        const xPct = Number(m[1]);
+        const yPct = Number(m[2]);
+        assert.ok(xPct > prevX, `pin xPct (${xPct}) soldan sağa artmalı (önceki ${prevX})`);
+        assert.ok(yPct >= 28 && yPct <= 52, `pin yPct (${yPct}%) engelsiz yatay orta bantta (28-52%) kalmalı`);
+        prevX = xPct;
       }
 
       view.showPatrolModal = true;
