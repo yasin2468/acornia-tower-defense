@@ -177,6 +177,7 @@ async function startLevel(
     ironMode,
     cardLevels: save.cardLevels,
     heroClass: save.heroClass,
+    talents: isMultiMatch ? undefined : save.talents,
     extraStartGold: isMultiMatch ? 0 : remoteConfig.get().startGoldDelta,
     waitForFirstWave: !isPromoMode && !isMultiMatch,
   });

@@ -1,7 +1,6 @@
 import { easeOutCubic, GhostHpTracker, popScale } from '../core/JuiceController.ts';
 import {
   computeBattleStars,
-  computeSellRefund,
   VICTORY_GEM_REWARD,
   VICTORY_OAK_REWARD,
   type SimulationEngine,
@@ -713,7 +712,7 @@ export class BattleView {
     const tw = slot.tower;
     const spec = TOWERS[tw.towerId];
     const curStats = sim.getTowerStats(tw);
-    const refund = computeSellRefund(tw.totalSpent);
+    const refund = sim.getTowerSellRefund(tw.totalSpent);
     const starsTxt = `${'★'.repeat(tw.tier)}${'☆'.repeat(3 - tw.tier)}`;
 
     let statLine = `${t(loc, 'hud.damage')} ${curStats.damage} · ${t(loc, 'hud.rate')} ${curStats.fireRate} · ${t(loc, 'hud.range')} ${curStats.range}`;

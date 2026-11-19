@@ -1,3 +1,10 @@
+import {
+  clampTalentRank,
+  computeAvailableTalentStars,
+  createInitialTalents,
+  getNextTalentCost,
+  type TalentBranchId,
+} from '../data/talents.ts';
 import { CARD_MAX_LEVEL } from '../data/towers.ts';
 import { isVipActive } from './CommercialServices.ts';
 import type { CardUnitId, SaveManager, SaveState } from './SaveManager.ts';
@@ -111,4 +118,28 @@ export function openForestChest(
     }
   });
   return reward;
+}
+
+export function upgradeTalent(saveManager: SaveManager, branchId: TalentBranchId): boolean {
+  const s = saveManager.get();
+  const curRank = clampTalentRank(s.talents[branchId]);
+  const cost = getNextTalentCost(curRank);
+  if (cost === null) return false;
+  const available = computeAvailableTalentStars(s.levelStars, s.ironCleared, s.talents);
+  if (available < cost) return false;
+
+  saveManager.update((draft) => {
+    draft.talents[branchId] = curRank + 1;
+  });
+  return true;
+}
+
+export function resetTalents(saveManager: SaveManager): boolean {
+  const s = saveManager.get();
+  const hasAny = Object.values(s.talents).some((r) => clampTalentRank(r) > 0);
+  if (!hasAny) return false;
+  saveManager.update((draft) => {
+    draft.talents = createInitialTalents();
+  });
+  return true;
 }

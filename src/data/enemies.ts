@@ -207,6 +207,8 @@ export const ENEMIES: Record<EnemyId, EnemySpec> = {
 
 export const ENEMY_LIST: EnemySpec[] = Object.values(ENEMIES);
 
+export type HeroId = 'boz_pence' | 'kizil_kuyruk' | 'kaya_dis';
+
 export interface HeroSpec {
   id: 'boz_pence';
   nameKey: string;

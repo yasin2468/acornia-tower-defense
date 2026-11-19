@@ -1,5 +1,6 @@
 import { BEAR_HERO_SPEC, ENEMIES, HERO_CLASSES, resolveHeroVisualVariant, type EnemyId, type HeroClassId } from '../data/enemies.ts';
 import type { LevelSpec, Vec2 } from '../data/levels.ts';
+import { computeTalentModifiers, type TalentBranchId, type TalentModifiers } from '../data/talents.ts';
 import {
   SELL_REFUND_RATE,
   TOWERS,
@@ -160,8 +161,9 @@ interface SpawnQueueEntry {
 export interface SimOptions {
   seed?: number;
   ironMode?: boolean;
-  cardLevels?: Partial<Record<TowerId | 'boz_pence', number>>;
+  cardLevels?: Partial<Record<TowerId | 'boz_pence' | 'kizil_kuyruk' | 'kaya_dis', number>>;
   heroClass?: HeroClassId;
+  talents?: Partial<Record<TalentBranchId, number>>;
   extraStartGold?: number;
   towerDamageBonusPct?: number;
   waitForFirstWave?: boolean;
@@ -201,8 +203,9 @@ export class SimulationEngine {
   coopReserves: Record<'p1' | 'p2', number> = { p1: 50, p2: 50 };
   onLocalDispatch?: (cmd: GameCommandInput, tick: number) => void;
 
-  readonly cardLevels: Record<TowerId | 'boz_pence', number>;
+  readonly cardLevels: Record<TowerId | 'boz_pence' | 'kizil_kuyruk' | 'kaya_dis', number>;
   readonly heroClass: HeroClassId;
+  readonly talentMods: TalentModifiers;
   readonly towerDamageBonusPct: number;
 
   private nextUid = 1;
@@ -217,6 +220,7 @@ export class SimulationEngine {
     this.ironMode = Boolean(options.ironMode);
     this.waitingForFirstWave = Boolean(options.waitForFirstWave);
     this.heroClass = options.heroClass ?? 'auto';
+    this.talentMods = computeTalentModifiers(options.talents);
     this.towerDamageBonusPct = options.towerDamageBonusPct ?? 0;
 
     this.cardLevels = {
@@ -225,9 +229,11 @@ export class SimulationEngine {
       owl: options.cardLevels?.owl ?? 1,
       hedgehog: options.cardLevels?.hedgehog ?? 1,
       boz_pence: options.cardLevels?.boz_pence ?? 1,
+      kizil_kuyruk: options.cardLevels?.kizil_kuyruk ?? 1,
+      kaya_dis: options.cardLevels?.kaya_dis ?? 1,
     };
 
-    this.gold = level.startGold + (options.extraStartGold ?? 0);
+    this.gold = level.startGold + (options.extraStartGold ?? 0) + this.talentMods.extraStartGold;
     this.maxBaseHp = this.ironMode ? 1 : level.baseHp;
     this.baseHp = this.maxBaseHp;
 
@@ -248,7 +254,7 @@ export class SimulationEngine {
 
     const heroMult = cardLevelMultiplier(this.cardLevels.boz_pence);
     const cls = HERO_CLASSES[this.heroClass];
-    const heroHp = Math.round(BEAR_HERO_SPEC.maxHp * heroMult * cls.hpMult);
+    const heroHp = Math.round(BEAR_HERO_SPEC.maxHp * heroMult * cls.hpMult * this.talentMods.heroHpMult);
     this.hero = {
       x: level.heroStart.x,
       z: level.heroStart.z,
@@ -397,7 +403,7 @@ export class SimulationEngine {
         const slot = this.slots.get(cmd.slotId);
         const tower = slot?.tower;
         if (!slot || !tower) return;
-        const refund = computeSellRefund(tower.totalSpent);
+        const refund = this.getTowerSellRefund(tower.totalSpent);
         this.gold += refund;
         slot.tower = null;
         this.events.push({ type: 'TOWER_SOLD', slotId: slot.id, refund });
@@ -459,7 +465,7 @@ export class SimulationEngine {
         if (variant === 'classic') {
           h.skillCooldown = 18;
           h.hp = Math.min(h.maxHp, h.hp + Math.round(h.maxHp * 0.25));
-          const dmg = Math.round(65 * lvlMult * cardMult);
+          const dmg = Math.round(65 * lvlMult * cardMult * this.talentMods.heroDamageMult);
           for (const e of [...this.enemies]) {
             if (e.hp <= 0) continue;
             if (Math.hypot(e.x - h.x, e.z - h.z) <= 3.6) {
@@ -487,7 +493,7 @@ export class SimulationEngine {
           h.skillCooldown = 16;
           h.skillActiveTimer = 6.0;
           h.activeBuff = 'berserk';
-          const dmg = Math.round(85 * lvlMult * cardMult);
+          const dmg = Math.round(85 * lvlMult * cardMult * this.talentMods.heroDamageMult);
           for (const e of [...this.enemies]) {
             if (e.hp <= 0) continue;
             if (Math.hypot(e.x - tx, e.z - tz) <= 3.2) {
@@ -501,7 +507,7 @@ export class SimulationEngine {
           h.skillActiveTimer = 8.0;
           h.activeBuff = 'banner';
           h.hp = Math.min(h.maxHp, h.hp + Math.round(h.maxHp * 0.35));
-          const dmg = Math.round(50 * lvlMult * cardMult);
+          const dmg = Math.round(50 * lvlMult * cardMult * this.talentMods.heroDamageMult);
           for (const e of [...this.enemies]) {
             if (e.hp <= 0) continue;
             if (Math.hypot(e.x - h.x, e.z - h.z) <= 3.5) {
@@ -517,14 +523,15 @@ export class SimulationEngine {
       }
       case 'CAST_PINECONE_RAIN': {
         if (this.pineconeRainCooldown > 0) return;
-        this.pineconeRainCooldown = 24;
+        this.pineconeRainCooldown = Number((24 * this.talentMods.spellCooldownMult).toFixed(2));
+        const rainDmg = Math.round(45 * this.talentMods.rainDamageMult);
         let hits = 0;
         for (const e of [...this.enemies]) {
           if (e.hp <= 0) continue;
           const dist = Math.hypot(e.x - cmd.x, e.z - cmd.z);
           if (dist <= 3.0) {
             hits += 1;
-            this.damageEnemy(e, 45, 0.25, false);
+            this.damageEnemy(e, rainDmg, 0.25, false);
           }
         }
         this.events.push({ type: 'PINECONE_RAIN', x: cmd.x, z: cmd.z, hits });
@@ -532,7 +539,7 @@ export class SimulationEngine {
       }
       case 'CAST_ACORN_MAGNET': {
         if (this.magnetCooldown > 0) return;
-        this.magnetCooldown = 30;
+        this.magnetCooldown = Number((30 * this.talentMods.spellCooldownMult).toFixed(2));
         this.magnetActiveTimer = 8;
         break;
       }
@@ -774,7 +781,9 @@ export class SimulationEngine {
       h.clawShockCooldown -= dt;
       if (h.clawShockCooldown <= 0) {
         h.clawShockCooldown = BEAR_HERO_SPEC.clawShockInterval;
-        const shockDmg = Math.round(BEAR_HERO_SPEC.clawShockDamage * lvlMult * cardMult * cls.damageMult);
+        const shockDmg = Math.round(
+          BEAR_HERO_SPEC.clawShockDamage * lvlMult * cardMult * cls.damageMult * this.talentMods.heroDamageMult,
+        );
         let hits = 0;
         for (const e of this.enemies) {
           if (!e.isFlying && e.hp > 0 && Math.hypot(e.x - h.x, e.z - h.z) <= cls.clawShockRadius) {
@@ -789,7 +798,9 @@ export class SimulationEngine {
       if (h.attackCooldown <= 0) {
         h.attackCooldown = BEAR_HERO_SPEC.attackInterval * (h.activeBuff === 'berserk' ? 0.5 : 1.0);
         const target = nearbyGround[0];
-        const dmg = Math.round(BEAR_HERO_SPEC.damage * lvlMult * cardMult * cls.damageMult);
+        const dmg = Math.round(
+          BEAR_HERO_SPEC.damage * lvlMult * cardMult * cls.damageMult * this.talentMods.heroDamageMult,
+        );
         h.facingAngle = Math.atan2(target.x - h.x, target.z - h.z);
         this.damageEnemy(target, dmg, 0.15, false);
         this.grantHeroXp(12);
@@ -806,7 +817,7 @@ export class SimulationEngine {
         h.moving = false;
         h.skillActiveTimer = 0;
         h.activeBuff = 'none';
-        h.respawnTimer = BEAR_HERO_SPEC.respawnSeconds;
+        h.respawnTimer = Math.max(5, BEAR_HERO_SPEC.respawnSeconds - this.talentMods.heroRespawnReductionSec);
         for (const e of this.enemies) e.engagedByHero = false;
       }
     } else {
@@ -926,6 +937,10 @@ export class SimulationEngine {
     this.enemies = survivors;
   }
 
+  getTowerSellRefund(totalSpent: number): number {
+    return computeSellRefund(totalSpent, this.talentMods.sellRefundRate);
+  }
+
   getTowerStats(tower: TowerInstance): TowerTierStats {
     const spec = TOWERS[tower.towerId];
     const base =
@@ -934,8 +949,10 @@ export class SimulationEngine {
         : tower.tier === 2
           ? spec.tier2
           : (spec.evolutions.find((e) => e.id === tower.branchId) ?? spec.evolutions[0]).stats;
-    if (this.slots.get(tower.slotId)?.runeSlot) {
-      return { ...base, range: Number((base.range * 1.15).toFixed(2)) };
+    const runeMult = this.slots.get(tower.slotId)?.runeSlot ? 1.15 : 1.0;
+    const rangeMult = runeMult * (1 + this.talentMods.towerRangePct);
+    if (rangeMult !== 1.0) {
+      return { ...base, range: Number((base.range * rangeMult).toFixed(2)) };
     }
     return base;
   }
@@ -1004,7 +1021,7 @@ export class SimulationEngine {
       tower.angle = Math.atan2(target.x - tower.x, target.z - tower.z);
 
       const cardMult = cardLevelMultiplier(this.cardLevels[tower.towerId]);
-      const globalBonus = 1 + this.towerDamageBonusPct;
+      const globalBonus = 1 + this.towerDamageBonusPct + this.talentMods.towerDamagePct;
       const runeDmgBonus = slot.runeSlot ? 1.18 : 1.0;
       let dmg = stats.damage * cardMult * globalBonus * runeDmgBonus;
       let isCrit = false;

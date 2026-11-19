@@ -1,6 +1,14 @@
 import { ENEMIES, ENEMY_LIST, HERO_CLASSES, type EnemyId, type HeroClassId } from '../data/enemies.ts';
 import { LEVELS, WORLD_MAP_NODES, isLevelUnlocked, type LevelSpec } from '../data/levels.ts';
-import { TOWER_LIST, TOWERS, type HatId } from '../data/towers.ts';
+import {
+  TALENT_BRANCHES,
+  TALENT_MAX_RANK,
+  computeAvailableTalentStars,
+  computeSpentTalentStars,
+  getNextTalentCost,
+  type TalentBranchId,
+} from '../data/talents.ts';
+import { TOWER_LIST, TOWERS, type HatId, type TowerId } from '../data/towers.ts';
 import { t, tParams, type Locale } from '../i18n/locales.ts';
 import {
   claimVipDaily,
@@ -23,7 +31,9 @@ import {
   getCardUpgradeCost,
   grantQuickAfkBoost,
   openForestChest,
+  resetTalents,
   upgradeCard,
+  upgradeTalent,
 } from '../services/ProgressionService.ts';
 import type { CardUnitId, SaveManager } from '../services/SaveManager.ts';
 import { ICONS, PORTRAIT_URLS, UI_ICON_URLS } from './icons.ts';
@@ -372,7 +382,7 @@ export class MetaView {
         const cost = getCardUpgradeCost(lvl);
         const pct = Math.min(100, Math.round((shards / cost.shards) * 100));
         const canUpgrade = shards >= cost.shards && save.oakCoins >= cost.oakCoins;
-        const spec = u.id !== 'boz_pence' ? TOWERS[u.id] : null;
+        const spec = u.id in TOWERS ? TOWERS[u.id as TowerId] : null;
         const branchNote = spec
           ? `${t(loc, spec.evolutions[0].nameKey)} / ${t(loc, spec.evolutions[1].nameKey)}`
           : t(loc, HERO_CLASSES[save.heroClass].nameKey);
@@ -421,9 +431,42 @@ export class MetaView {
       })
       .join('');
 
+    const availableStars = computeAvailableTalentStars(save.levelStars, save.ironCleared, save.talents);
+    const spentStars = computeSpentTalentStars(save.talents);
+    const talentsHtml = TALENT_BRANCHES.map((b) => {
+      const rank = save.talents[b.id] ?? 0;
+      const cost = getNextTalentCost(rank);
+      const canBuy = cost !== null && availableStars >= cost;
+      const pips = Array.from({ length: TALENT_MAX_RANK }, (_, idx) => `<span class="talent-pip ${idx < rank ? 'on' : ''}"></span>`).join('');
+      return `
+        <div class="talent-branch-card">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
+            <div style="font-size:12.5px; font-weight:900; color:#ffffff;">${t(loc, b.nameKey)}</div>
+            <span class="collector-level-badge" style="position:static;">${rank}/${TALENT_MAX_RANK}</span>
+          </div>
+          <div style="font-size:10.5px; color:var(--text-muted); font-weight:700;">${t(loc, b.descKey)}</div>
+          <div style="font-size:10px; color:var(--accent-cyan); font-weight:700;">${t(loc, b.capKey)}</div>
+          <div class="talent-pips">${pips}</div>
+          <button class="btn btn-sm ${canBuy ? 'btn-gold' : ''}" data-talent-up="${b.id}" ${canBuy ? '' : 'disabled'}>
+            ${cost === null ? t(loc, 'talent.maxed') : tParams(loc, 'talent.upgradeCost', { cost })}
+          </button>
+        </div>
+      `;
+    }).join('');
+
     return `
       <div style="font-size:15px; font-weight:900; color:#ffe17a;">${t(loc, 'cards.title')}</div>
       <div class="collector-grid">${cardsHtml}</div>
+      <div class="card-panel" style="display:flex; flex-direction:column; gap:8px; border-color: rgba(255, 202, 69, 0.35);">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+          <div>
+            <div style="font-size:13.5px; font-weight:900; color:#ffe17a;">${t(loc, 'talent.title')}</div>
+            <div style="font-size:11px; color:var(--accent-gold); font-weight:800;">${tParams(loc, 'talent.available', { stars: availableStars })}</div>
+          </div>
+          <button class="btn btn-sm" id="btn-talent-reset" ${spentStars > 0 ? '' : 'disabled'}>${t(loc, 'talent.reset')}</button>
+        </div>
+        <div class="talent-grid">${talentsHtml}</div>
+      </div>
       <div class="card-panel" style="display:flex; flex-direction:column; gap:8px; border-color: rgba(255, 202, 69, 0.35);">
         <div style="font-size:13px; font-weight:800; color:#ffe17a;">${t(loc, 'hero.class.title')}</div>
         <div style="display:flex; flex-wrap:wrap; gap:6px;">${classesHtml}</div>
@@ -601,6 +644,21 @@ export class MetaView {
         this.callbacks.onRefresh();
       };
     });
+
+    container.querySelectorAll<HTMLElement>('[data-talent-up]').forEach((btn) => {
+      btn.onclick = () => {
+        upgradeTalent(this.saveManager, btn.dataset.talentUp as TalentBranchId);
+        this.callbacks.onRefresh();
+      };
+    });
+
+    const resetTalentBtn = container.querySelector<HTMLButtonElement>('#btn-talent-reset');
+    if (resetTalentBtn) {
+      resetTalentBtn.onclick = () => {
+        resetTalents(this.saveManager);
+        this.callbacks.onRefresh();
+      };
+    }
 
     container.querySelectorAll<HTMLElement>('[data-hero-class]').forEach((btn) => {
       btn.onclick = () => {
