@@ -465,35 +465,65 @@ function buildRoadCurbstones(curve: THREE.CatmullRomCurve3, concept: StageConcep
       break;
     }
     case 'venom_alchemist_marsh':
-    case 'starfall_glacier_bridge': {
+    case 'starfall_glacier_bridge':
+    case 'jade_monsoon_spires':
+    case 'emerald_sky_citadel':
+    case 'crystal_crown_labyrinth':
+    case 'aurora_warden_bridge': {
       curbGeo = new THREE.OctahedronGeometry(0.16, 0);
       curbGeo.scale(0.95, 1.45, 0.95);
       curbMat = new THREE.MeshStandardMaterial({
         color: '#ffffff',
-        emissive: concept === 'venom_alchemist_marsh' ? '#127a3f' : '#1b6dc4',
+        emissive:
+          concept === 'venom_alchemist_marsh' || concept === 'jade_monsoon_spires'
+            ? '#127a3f'
+            : concept === 'crystal_crown_labyrinth'
+              ? '#6424a8'
+              : '#1b6dc4',
         emissiveIntensity: 0.45,
         roughness: 0.25,
       });
       palette =
-        concept === 'venom_alchemist_marsh'
+        concept === 'venom_alchemist_marsh' || concept === 'jade_monsoon_spires'
           ? [new THREE.Color('#62f2a0'), new THREE.Color('#38b56c')]
-          : [new THREE.Color('#a8e2ff'), new THREE.Color('#66b5ff')];
+          : concept === 'crystal_crown_labyrinth'
+            ? [new THREE.Color('#d29eff'), new THREE.Color('#9e5ee6')]
+            : [new THREE.Color('#a8e2ff'), new THREE.Color('#66b5ff')];
       break;
     }
     case 'solar_plasma_reactor':
-    case 'astral_nexus_throne': {
+    case 'astral_nexus_throne':
+    case 'skyridge_wind_bridge':
+    case 'amber_cloud_aqueduct':
+    case 'obsidian_slag_rift':
+    case 'basalt_anvil_crossing':
+    case 'molten_rune_crucible':
+    case 'caldera_titan_gate':
+    case 'golden_canopy_causeway':
+    case 'eternal_oak_sanctum': {
       curbGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.42, 8);
       curbGeo.rotateX(Math.PI / 2);
+      const isWarmLava =
+        concept === 'solar_plasma_reactor' ||
+        concept === 'obsidian_slag_rift' ||
+        concept === 'basalt_anvil_crossing' ||
+        concept === 'molten_rune_crucible' ||
+        concept === 'caldera_titan_gate';
+      const isGolden =
+        concept === 'amber_cloud_aqueduct' ||
+        concept === 'golden_canopy_causeway' ||
+        concept === 'eternal_oak_sanctum';
       curbMat = new THREE.MeshStandardMaterial({
         color: '#ffffff',
-        emissive: concept === 'solar_plasma_reactor' ? '#7a2b06' : '#123e7a',
+        emissive: isWarmLava ? '#7a2b06' : isGolden ? '#7a5a10' : '#123e7a',
         emissiveIntensity: 0.4,
         roughness: 0.3,
         metalness: 0.72,
       });
-      palette =
-        concept === 'solar_plasma_reactor'
-          ? [new THREE.Color('#f59e3d'), new THREE.Color('#663e2e')]
+      palette = isWarmLava
+        ? [new THREE.Color('#f59e3d'), new THREE.Color('#663e2e')]
+        : isGolden
+          ? [new THREE.Color('#ffd86b'), new THREE.Color('#b08228')]
           : [new THREE.Color('#70d6ff'), new THREE.Color('#3d4c85')];
       break;
     }
@@ -1942,10 +1972,10 @@ export class SceneManager {
 
     for (const s of level.slots) {
       const hitArea = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.70, 0.74, 0.14, 16),
+        new THREE.CylinderGeometry(0.86, 0.88, 0.44, 16),
         new THREE.MeshBasicMaterial({ visible: false }),
       );
-      hitArea.position.set(s.x, 0.07, s.z);
+      hitArea.position.set(s.x, 0.22, s.z);
       hitArea.userData = { slotId: s.id };
       this.levelGroup.add(hitArea);
       hitArea.updateMatrixWorld(true);

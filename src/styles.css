@@ -1351,7 +1351,7 @@ body,
   top: 0;
   left: 0;
   bottom: 0;
-  width: 520%;
+  width: 780%;
   transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
   will-change: transform;
 }
@@ -1368,7 +1368,7 @@ body,
 }
 
 .map-horiz-bg-tile {
-  flex: 1 1 16.6667%;
+  flex: 1 1 11.1111%;
   height: 100%;
   background-size: cover;
   background-position: center;
@@ -1386,20 +1386,23 @@ body,
   background: linear-gradient(
     90deg,
     rgba(30, 74, 46, 0.24) 0%,
-    rgba(30, 74, 46, 0.14) 12%,
-    rgba(168, 86, 36, 0.28) 18%,
-    rgba(42, 34, 92, 0.38) 31%,
-    rgba(110, 168, 214, 0.30) 44%,
-    rgba(128, 38, 20, 0.42) 58%,
-    rgba(28, 92, 66, 0.38) 74%,
-    rgba(34, 42, 108, 0.44) 90%,
-    rgba(26, 28, 88, 0.46) 100%
+    rgba(30, 74, 46, 0.14) 9%,
+    rgba(168, 86, 36, 0.28) 14%,
+    rgba(42, 34, 92, 0.36) 22%,
+    rgba(110, 168, 214, 0.30) 30%,
+    rgba(128, 38, 20, 0.40) 40%,
+    rgba(28, 92, 66, 0.36) 50%,
+    rgba(34, 42, 108, 0.42) 61%,
+    rgba(72, 148, 208, 0.32) 72%,
+    rgba(148, 42, 22, 0.42) 82%,
+    rgba(66, 98, 38, 0.34) 93%,
+    rgba(176, 134, 42, 0.38) 100%
   );
 }
 
 .biome-region-banner {
   position: absolute;
-  top: 29.5%;
+  top: 22.5%;
   transform: translateX(-50%);
   z-index: 4;
   display: inline-flex;
@@ -1429,7 +1432,7 @@ body,
 
 .map-nav-arrow {
   position: absolute;
-  top: 47%;
+  top: 36%;
   transform: translateY(-50%);
   z-index: 14;
   width: 44px;
@@ -1842,15 +1845,24 @@ body,
 
 .drawer-threats {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: center;
-  gap: 4px;
+  align-items: center;
+  overflow-x: auto;
+  scrollbar-width: none;
+  gap: 3px;
+  padding: 2px 2px 5px;
+}
+
+.drawer-threats::-webkit-scrollbar {
+  display: none;
 }
 
 .threat-medallion {
   position: relative;
-  width: 29px;
-  height: 29px;
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
   border-radius: 999px;
   background: linear-gradient(180deg, #875024 0%, #4b280e 100%);
   border: 2px solid #ffd564;
@@ -3988,4 +4000,150 @@ body,
   height: 8px;
   border-radius: 999px;
   flex-shrink: 0;
+}
+
+.region-jump-strip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow-x: auto;
+  padding: 0 2px 3px;
+  scrollbar-width: none;
+}
+
+.region-jump-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.region-jump-chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1.5px solid #6b3d18;
+  background: #2d1708;
+  color: #fff6e0;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.region-jump-chip small {
+  font-size: 9px;
+  font-weight: 900;
+  color: #ffd564;
+}
+
+.region-jump-chip.active {
+  background: #ffd564;
+  border-color: #2b1406;
+  color: #2a1305;
+}
+
+.region-jump-chip.active small {
+  color: #5c2a06;
+}
+
+.region-jump-chip.locked:not(.active) {
+  opacity: 0.72;
+}
+
+.nav-soon-tag {
+  position: absolute;
+  top: -4px;
+  right: -2px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: #241409;
+  border: 1.5px solid #ffd564;
+  color: #ffe285;
+  font-size: 8.5px;
+  font-weight: 900;
+  line-height: 11px;
+  letter-spacing: 0.02em;
+  text-shadow: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.arena-soon-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-color: rgba(255, 213, 100, 0.45);
+  background: linear-gradient(180deg, #332515 0%, #1d150c 100%);
+}
+
+.arena-soon-modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.arena-soon-mode-card {
+  padding: 9px;
+  border-radius: 12px;
+  background: rgba(18, 12, 7, 0.72);
+  border: 1.5px solid rgba(255, 213, 100, 0.28);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.arena-soon-league {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-color: rgba(255, 202, 69, 0.35);
+}
+
+.arena-soon-tier-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.arena-soon-tier-chip {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(20, 14, 9, 0.8);
+  border: 1px solid rgba(255, 213, 100, 0.32);
+  color: #f7ebd4;
+  font-size: 10.5px;
+  font-weight: 800;
+}
+
+.settings-ver-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #241409;
+  border: 1.5px solid #ffd564;
+  color: #ffe285;
+  font-size: 10.5px;
+  font-weight: 900;
+}
+
+.settings-privacy-box {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(18, 11, 6, 0.65);
+  border: 1.5px solid rgba(255, 213, 100, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.settings-privacy-box strong {
+  color: #ffe17a;
+  font-size: 11.5px;
+}
+
+.settings-privacy-box span {
+  color: #dfd4be;
 }

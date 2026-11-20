@@ -34,7 +34,7 @@ export function computeVictoryRewards(
   stars: number,
   ironMode = false,
 ): { oak: number; gems: number } {
-  const stageIdx = Math.max(0, Math.min(23, Math.floor(levelId) - 1));
+  const stageIdx = Math.max(0, Math.min(35, Math.floor(levelId) - 1));
   const isBossStage =
     levelId === 3 ||
     levelId === 6 ||
@@ -42,7 +42,10 @@ export function computeVictoryRewards(
     levelId === 12 ||
     levelId === 16 ||
     levelId === 20 ||
-    levelId === 24;
+    levelId === 24 ||
+    levelId === 28 ||
+    levelId === 32 ||
+    levelId === 36;
   const starMult = stars >= 3 ? 1.0 : stars === 2 ? 0.9 : 0.8;
   const rawOak = VICTORY_OAK_REWARD + stageIdx * 12 + (isBossStage ? 30 : 0) + (ironMode ? 45 : 0);
   const rawGems = VICTORY_GEM_REWARD + Math.floor(stageIdx * 1.2) + (isBossStage ? 5 : 0) + (ironMode ? 8 : 0);

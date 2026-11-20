@@ -297,6 +297,141 @@ export const STAGE_LIGHTING_THEMES: Record<StageConceptId, StageAtmosphere> = {
     cliffTint: '#8da3e0',
     canopyTint: '#82d4ff',
   },
+  // BÖLÜM VIII — GÖKSIRTI BULUT KÖPRÜSÜ (25–28)
+  skyridge_wind_bridge: {
+    bg: '#689bd4',
+    fog: '#89b4e3',
+    hemiSky: '#e8f5ff',
+    hemiGround: '#4a6a91',
+    sunColor: '#fff7e0',
+    sunIntensity: 1.66,
+    border: '#89b9e8',
+    cliffTint: '#b8d7f5',
+    canopyTint: '#bce0ff',
+  },
+  amber_cloud_aqueduct: {
+    bg: '#a87143',
+    fog: '#bd8454',
+    hemiSky: '#ffe3ba',
+    hemiGround: '#6b4225',
+    sunColor: '#ffe0a6',
+    sunIntensity: 1.56,
+    border: '#d19862',
+    cliffTint: '#e3b07d',
+    canopyTint: '#f2a65a',
+  },
+  jade_monsoon_spires: {
+    bg: '#2c6e60',
+    fog: '#3d8575',
+    hemiSky: '#c7ffe8',
+    hemiGround: '#1e4a40',
+    sunColor: '#dfffe8',
+    sunIntensity: 1.44,
+    border: '#4fa38e',
+    cliffTint: '#6ebfa9',
+    canopyTint: '#48c78e',
+  },
+  emerald_sky_citadel: {
+    bg: '#386f8c',
+    fog: '#4d88a6',
+    hemiSky: '#c8f7ff',
+    hemiGround: '#234a5e',
+    sunColor: '#e8fbff',
+    sunIntensity: 1.58,
+    border: '#5fa8bd',
+    cliffTint: '#8ad4d8',
+    canopyTint: '#59e3b5',
+  },
+  // BÖLÜM IX — OBSİDYEN KALDERA (29–32)
+  obsidian_slag_rift: {
+    bg: '#361f24',
+    fog: '#4a2a30',
+    hemiSky: '#ff9d76',
+    hemiGround: '#241216',
+    sunColor: '#ffaf80',
+    sunIntensity: 1.38,
+    border: '#7a423e',
+    cliffTint: '#9c5a52',
+    canopyTint: '#ff6e40',
+  },
+  basalt_anvil_crossing: {
+    bg: '#5c3b2e',
+    fog: '#734a3b',
+    hemiSky: '#ffd0a6',
+    hemiGround: '#3b241c',
+    sunColor: '#ffd2a1',
+    sunIntensity: 1.46,
+    border: '#99644d',
+    cliffTint: '#ba8266',
+    canopyTint: '#e67d45',
+  },
+  molten_rune_crucible: {
+    bg: '#4d2219',
+    fog: '#632c20',
+    hemiSky: '#ffc278',
+    hemiGround: '#2e120d',
+    sunColor: '#ffba5c',
+    sunIntensity: 1.52,
+    border: '#ad5331',
+    cliffTint: '#d67449',
+    canopyTint: '#ff9436',
+  },
+  caldera_titan_gate: {
+    bg: '#2b191d',
+    fog: '#3d2228',
+    hemiSky: '#ff9e6d',
+    hemiGround: '#1a0e11',
+    sunColor: '#ffbe82',
+    sunIntensity: 1.48,
+    border: '#9c4333',
+    cliffTint: '#c45e47',
+    canopyTint: '#ff703d',
+  },
+  // BÖLÜM X — EBEDİ MEŞE KUTSALI (33–36)
+  golden_canopy_causeway: {
+    bg: '#665b26',
+    fog: '#7d7031',
+    hemiSky: '#fff0b3',
+    hemiGround: '#3d3616',
+    sunColor: '#ffe794',
+    sunIntensity: 1.54,
+    border: '#bd9d42',
+    cliffTint: '#d9ba5b',
+    canopyTint: '#f2c14e',
+  },
+  crystal_crown_labyrinth: {
+    bg: '#342754',
+    fog: '#44346b',
+    hemiSky: '#dfbaff',
+    hemiGround: '#211838',
+    sunColor: '#e8cfff',
+    sunIntensity: 1.32,
+    border: '#7f5db3',
+    cliffTint: '#a682de',
+    canopyTint: '#be80ff',
+  },
+  aurora_warden_bridge: {
+    bg: '#2c576e',
+    fog: '#3a6f8a',
+    hemiSky: '#b8ffef',
+    hemiGround: '#1c394a',
+    sunColor: '#d9fff8',
+    sunIntensity: 1.56,
+    border: '#59a6b8',
+    cliffTint: '#7ed1db',
+    canopyTint: '#59f2c8',
+  },
+  eternal_oak_sanctum: {
+    bg: '#3f4722',
+    fog: '#545e2e',
+    hemiSky: '#ffefb8',
+    hemiGround: '#242b13',
+    sunColor: '#ffea99',
+    sunIntensity: 1.62,
+    border: '#d6a438',
+    cliffTint: '#f0c869',
+    canopyTint: '#5ce07f',
+  },
 };
 
 function collectRoadSamples(curves: THREE.CatmullRomCurve3[]): Array<{ x: number; z: number; tx: number; tz: number }> {
@@ -1488,6 +1623,279 @@ export function buildStageConcept(level: LevelSpec, curves: THREE.CatmullRomCurv
       group.add(spire.root);
       animatedProps.push({ obj: spire.ringA, axis: 'y', speed: 3.2 });
       animatedProps.push({ obj: spire.ringB, axis: 'y', speed: -2.6 });
+    }
+  } else if (c === 'skyridge_wind_bridge') {
+    const cloudMat = new THREE.MeshStandardMaterial({
+      color: '#bfe8ff',
+      emissive: '#4fa3e3',
+      emissiveIntensity: 0.45,
+      roughness: 0.35,
+    });
+    const bankMat = new THREE.MeshStandardMaterial({ color: '#e6f4ff', roughness: 0.65 });
+    const chasmPts: Array<[number, number]> = [[-11.5, 1.2], [0, -0.4], [11.5, 1.2]];
+    group.add(buildWaterwayRibbon(chasmPts, 1.55, 0.014, cloudMat, bankMat, 0.42));
+    placeBridgesOverCurve(chasmPts, curves, '#87b4db', '#f0f8ff', group);
+
+    for (const [wx, wz] of [[-4.3, -4.4], [4.3, -4.4]] as Array<[number, number]>) {
+      if (!isClearPropPos(wx, wz, level, roadSamples, 1.15, 1.0)) continue;
+      const mill = buildWindmill('#e8f7ff');
+      mill.root.position.set(wx, 0, wz);
+      mill.root.scale.setScalar(0.86);
+      group.add(mill.root);
+      animatedProps.push({ obj: mill.hub, axis: 'z', speed: 2.3 });
+    }
+  } else if (c === 'amber_cloud_aqueduct') {
+    const canalMat = new THREE.MeshStandardMaterial({
+      color: '#ffbe59',
+      emissive: '#d97a16',
+      emissiveIntensity: 0.55,
+      roughness: 0.25,
+    });
+    const rimMat = new THREE.MeshStandardMaterial({ color: '#b57b45', roughness: 0.8 });
+    const chanPts: Array<[number, number]> = [[-11.5, -1.5], [0, 0.2], [11.5, -1.5]];
+    group.add(buildWaterwayRibbon(chanPts, 1.45, 0.015, canalMat, rimMat, 0.4));
+    placeBridgesOverCurve(chanPts, curves, '#945d31', '#ffe2a6', group);
+
+    for (const [ax, az] of [[-4.1, 4.4], [4.1, 4.4]] as Array<[number, number]>) {
+      if (!isClearPropPos(ax, az, level, roadSamples, 1.15, 1.0)) continue;
+      const arch = buildSandstoneArch(1.4, 1.35, '#d19256');
+      arch.position.set(ax, 0, az);
+      group.add(arch);
+    }
+  } else if (c === 'jade_monsoon_spires') {
+    const streamMat = new THREE.MeshStandardMaterial({
+      color: '#4de3b1',
+      emissive: '#14996e',
+      emissiveIntensity: 0.65,
+      roughness: 0.2,
+    });
+    const bankMat = new THREE.MeshStandardMaterial({ color: '#2b6150', roughness: 0.78 });
+    pulseMats.push({ mat: streamMat, base: 0.65, amp: 0.18, speed: 2.3 });
+    const jadePts: Array<[number, number]> = [[-11.5, 2.2], [0, 0.9], [11.5, 2.2]];
+    group.add(buildWaterwayRibbon(jadePts, 1.5, 0.014, streamMat, bankMat, 0.44));
+    placeBridgesOverCurve(jadePts, curves, '#347360', '#a8ffe0', group);
+
+    const gemMat = new THREE.MeshStandardMaterial({ color: '#8cfce0', emissive: '#1ed99d', emissiveIntensity: 0.85, roughness: 0.2 });
+    for (const [sx, sz] of [[-4.2, -3.5], [4.2, -3.5], [-4.2, 4.6], [4.2, 4.6]] as Array<[number, number]>) {
+      if (!isClearPropPos(sx, sz, level, roadSamples, 1.1, 1.0)) continue;
+      const spire = new THREE.Mesh(new THREE.OctahedronGeometry(0.3, 0), gemMat);
+      spire.scale.set(1, 2.1, 1);
+      spire.position.set(sx, 0.72, sz);
+      group.add(spire);
+      animatedProps.push({ obj: spire, axis: 'y', speed: 1.8 });
+    }
+  } else if (c === 'emerald_sky_citadel') {
+    const moatMat = new THREE.MeshStandardMaterial({
+      color: '#5cf2c2',
+      emissive: '#16a37c',
+      emissiveIntensity: 0.88,
+      roughness: 0.2,
+    });
+    pulseMats.push({ mat: moatMat, base: 0.88, amp: 0.24, speed: 2.9 });
+    const moat = new THREE.Mesh(new THREE.PlaneGeometry(14, 1.45), moatMat);
+    moat.rotation.x = -Math.PI / 2;
+    moat.position.set(0, 0.014, -7.1);
+    group.add(moat);
+    group.add(buildBridgeAt(0, -7.1, 0, '#2e5e69', '#99ffe3', 1.9));
+
+    for (const [tx, tz] of [[-4.2, 4.8], [4.2, 4.8], [-4.2, -4.4], [4.2, -4.4]] as Array<[number, number]>) {
+      if (!isClearPropPos(tx, tz, level, roadSamples, 1.1, 1.0)) continue;
+      const spire = buildTeslaSpire();
+      spire.root.position.set(tx, 0, tz);
+      group.add(spire.root);
+      animatedProps.push({ obj: spire.ringA, axis: 'y', speed: 2.9 });
+      animatedProps.push({ obj: spire.ringB, axis: 'y', speed: -2.4 });
+    }
+  } else if (c === 'obsidian_slag_rift') {
+    const lavaMat = new THREE.MeshStandardMaterial({
+      color: '#ff6e38',
+      emissive: '#e03112',
+      emissiveIntensity: 1.02,
+      roughness: 0.26,
+    });
+    const bankMat = new THREE.MeshStandardMaterial({ color: '#332226', roughness: 0.85 });
+    pulseMats.push({ mat: lavaMat, base: 1.02, amp: 0.28, speed: 3.1 });
+    const riftPts: Array<[number, number]> = [[-11.5, -1.2], [0, 1.0], [11.5, -1.2]];
+    group.add(buildWaterwayRibbon(riftPts, 1.48, 0.015, lavaMat, bankMat, 0.45));
+    placeBridgesOverCurve(riftPts, curves, '#4a3136', '#ff9e66', group);
+
+    for (const [dx, dz] of [[-4.1, 4.4], [4.1, -4.2]] as Array<[number, number]>) {
+      if (!isClearPropPos(dx, dz, level, roadSamples, 1.1, 1.0)) continue;
+      const rig = buildDrillRig();
+      rig.root.position.set(dx, 0, dz);
+      rig.root.scale.setScalar(0.84);
+      group.add(rig.root);
+      animatedProps.push({ obj: rig.bit, axis: 'y', speed: 2.7 });
+    }
+  } else if (c === 'basalt_anvil_crossing') {
+    const basaltMat = new THREE.MeshStandardMaterial({ color: '#593e36', roughness: 0.78 });
+    const emberMat = new THREE.MeshStandardMaterial({ color: '#ff9642', emissive: '#e05314', emissiveIntensity: 0.85 });
+    pulseMats.push({ mat: emberMat, base: 0.85, amp: 0.22, speed: 2.6 });
+    placeBridgesOverLine(0.3, curves, '#6b473b', '#ffbc80', group, 0);
+    const seam = new THREE.Mesh(new THREE.PlaneGeometry(22, 1.3), emberMat);
+    seam.rotation.x = -Math.PI / 2;
+    seam.position.set(0, 0.012, 0.3);
+    group.add(seam);
+
+    for (const [ax, az] of [[-4.2, -3.9], [4.2, -3.9], [-4.2, 4.3], [4.2, 4.3]] as Array<[number, number]>) {
+      if (!isClearPropPos(ax, az, level, roadSamples, 1.1, 1.0)) continue;
+      const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.38, 1.15, 6), basaltMat);
+      pillar.position.set(ax, 0.58, az);
+      pillar.castShadow = true;
+      group.add(pillar);
+      const brazier = new THREE.Mesh(new THREE.OctahedronGeometry(0.22, 0), emberMat);
+      brazier.position.set(ax, 1.28, az);
+      group.add(brazier);
+      animatedProps.push({ obj: brazier, axis: 'y', speed: 2.0 });
+    }
+  } else if (c === 'molten_rune_crucible') {
+    const moltenMat = new THREE.MeshStandardMaterial({
+      color: '#ffb038',
+      emissive: '#ff4800',
+      emissiveIntensity: 1.08,
+      roughness: 0.2,
+    });
+    const steelMat = new THREE.MeshStandardMaterial({ color: '#422926', metalness: 0.65, roughness: 0.35 });
+    pulseMats.push({ mat: moltenMat, base: 1.08, amp: 0.28, speed: 3.3 });
+    const chanPts: Array<[number, number]> = [[-11.5, 1.8], [0, -0.8], [11.5, 1.8]];
+    group.add(buildWaterwayRibbon(chanPts, 1.4, 0.015, moltenMat, steelMat, 0.42));
+    placeBridgesOverCurve(chanPts, curves, '#54332d', '#ffc066', group);
+
+    const gearA = buildGearMesh(0.82, 10, 0.16, '#c96f38');
+    gearA.position.set(-4.1, 0.12, -3.8);
+    if (isClearPropPos(-4.1, -3.8, level, roadSamples, 1.1, 1.0)) {
+      group.add(gearA);
+      animatedProps.push({ obj: gearA, axis: 'y', speed: 1.25 });
+    }
+    const gearB = buildGearMesh(0.82, 10, 0.16, '#c96f38');
+    gearB.position.set(4.1, 0.12, -3.8);
+    if (isClearPropPos(4.1, -3.8, level, roadSamples, 1.1, 1.0)) {
+      group.add(gearB);
+      animatedProps.push({ obj: gearB, axis: 'y', speed: -1.25 });
+    }
+  } else if (c === 'caldera_titan_gate') {
+    const lavaMat = new THREE.MeshStandardMaterial({
+      color: '#ff662e',
+      emissive: '#e6350e',
+      emissiveIntensity: 1.12,
+      roughness: 0.22,
+    });
+    const gateMat = new THREE.MeshStandardMaterial({ color: '#331e21', metalness: 0.68, roughness: 0.32 });
+    pulseMats.push({ mat: lavaMat, base: 1.12, amp: 0.32, speed: 3.4 });
+
+    const moat = new THREE.Mesh(new THREE.PlaneGeometry(14, 1.5), lavaMat);
+    moat.rotation.x = -Math.PI / 2;
+    moat.position.set(0, 0.014, -7.3);
+    group.add(moat);
+    const rim = new THREE.Mesh(new THREE.BoxGeometry(14, 0.14, 0.24), gateMat);
+    rim.position.set(0, 0.07, -6.55);
+    group.add(rim);
+    group.add(buildBridgeAt(0, -7.3, 0, '#472a2e', '#ffa259', 1.9));
+
+    for (const [tx, tz] of [[-4.2, 5.0], [4.2, 5.0], [-4.2, -4.6], [4.2, -4.6]] as Array<[number, number]>) {
+      if (!isClearPropPos(tx, tz, level, roadSamples, 1.15, 1.0)) continue;
+      const spire = buildTeslaSpire();
+      spire.root.position.set(tx, 0, tz);
+      group.add(spire.root);
+      animatedProps.push({ obj: spire.ringA, axis: 'y', speed: 3.1 });
+      animatedProps.push({ obj: spire.ringB, axis: 'y', speed: -2.8 });
+    }
+  } else if (c === 'golden_canopy_causeway') {
+    const amberMat = new THREE.MeshStandardMaterial({
+      color: '#ffcf5c',
+      emissive: '#cc8b18',
+      emissiveIntensity: 0.62,
+      roughness: 0.24,
+    });
+    const bankMat = new THREE.MeshStandardMaterial({ color: '#5e5022', roughness: 0.78 });
+    pulseMats.push({ mat: amberMat, base: 0.62, amp: 0.18, speed: 2.1 });
+    const chanPts: Array<[number, number]> = [[-11.5, 0.4], [0, -0.5], [11.5, 0.4]];
+    group.add(buildWaterwayRibbon(chanPts, 1.48, 0.014, amberMat, bankMat, 0.4));
+    placeBridgesOverCurve(chanPts, curves, '#735822', '#ffeb99', group);
+
+    const haloMat = new THREE.MeshStandardMaterial({ color: '#ffe375', emissive: '#d49a1c', emissiveIntensity: 0.75 });
+    for (const [hx, hz] of [[-4.1, 4.2], [4.1, -4.0]] as Array<[number, number]>) {
+      if (!isClearPropPos(hx, hz, level, roadSamples, 1.1, 1.0)) continue;
+      const halo = new THREE.Mesh(new THREE.TorusGeometry(0.45, 0.06, 8, 20), haloMat);
+      halo.position.set(hx, 1.05, hz);
+      group.add(halo);
+      animatedProps.push({ obj: halo, axis: 'y', speed: 1.9 });
+    }
+  } else if (c === 'crystal_crown_labyrinth') {
+    const leyMat = new THREE.MeshStandardMaterial({
+      color: '#c78aff',
+      emissive: '#7e3be6',
+      emissiveIntensity: 0.88,
+      roughness: 0.2,
+    });
+    const rimMat = new THREE.MeshStandardMaterial({ color: '#3b2b59', roughness: 0.62 });
+    pulseMats.push({ mat: leyMat, base: 0.88, amp: 0.24, speed: 2.7 });
+    const chanPts: Array<[number, number]> = [[-11.5, -1.4], [0, 1.4], [11.5, -1.4]];
+    group.add(buildWaterwayRibbon(chanPts, 1.38, 0.014, leyMat, rimMat, 0.38));
+    placeBridgesOverCurve(chanPts, curves, '#4d3a75', '#e4bdff', group);
+
+    for (const [cx, cz] of [[-4.2, 3.8], [4.2, 3.8], [-4.2, -4.0], [4.2, -4.0]] as Array<[number, number]>) {
+      if (!isClearPropPos(cx, cz, level, roadSamples, 1.1, 1.0)) continue;
+      const crown = new THREE.Mesh(new THREE.OctahedronGeometry(0.32, 0), leyMat);
+      crown.scale.set(1, 2.0, 1);
+      crown.position.set(cx, 0.78, cz);
+      group.add(crown);
+      animatedProps.push({ obj: crown, axis: 'y', speed: 2.2 });
+    }
+  } else if (c === 'aurora_warden_bridge') {
+    const auroraMat = new THREE.MeshStandardMaterial({
+      color: '#5cf5d4',
+      emissive: '#17b59a',
+      emissiveIntensity: 0.85,
+      roughness: 0.18,
+    });
+    const bankMat = new THREE.MeshStandardMaterial({ color: '#2b5769', roughness: 0.55 });
+    pulseMats.push({ mat: auroraMat, base: 0.85, amp: 0.24, speed: 2.6 });
+    const chanPts: Array<[number, number]> = [[-11.5, 2.0], [0, 0.4], [11.5, 2.0]];
+    group.add(buildWaterwayRibbon(chanPts, 1.45, 0.014, auroraMat, bankMat, 0.42));
+    placeBridgesOverCurve(chanPts, curves, '#336b7a', '#b8fff0', group);
+
+    for (const [tx, tz] of [[-4.1, -4.0], [4.1, -4.0]] as Array<[number, number]>) {
+      if (!isClearPropPos(tx, tz, level, roadSamples, 1.1, 1.0)) continue;
+      const spire = buildTeslaSpire();
+      spire.root.position.set(tx, 0, tz);
+      group.add(spire.root);
+      animatedProps.push({ obj: spire.ringA, axis: 'y', speed: 2.7 });
+      animatedProps.push({ obj: spire.ringB, axis: 'y', speed: -2.2 });
+    }
+  } else if (c === 'eternal_oak_sanctum') {
+    const sacredMat = new THREE.MeshStandardMaterial({
+      color: '#ffdf6b',
+      emissive: '#e09f1f',
+      emissiveIntensity: 1.0,
+      roughness: 0.18,
+      metalness: 0.35,
+    });
+    const goldMat = new THREE.MeshStandardMaterial({ color: '#e8b948', metalness: 0.76, roughness: 0.24 });
+    pulseMats.push({ mat: sacredMat, base: 1.0, amp: 0.28, speed: 2.8 });
+
+    const moat = new THREE.Mesh(new THREE.PlaneGeometry(14, 1.5), sacredMat);
+    moat.rotation.x = -Math.PI / 2;
+    moat.position.set(0, 0.014, -7.4);
+    group.add(moat);
+    const rim = new THREE.Mesh(new THREE.BoxGeometry(14, 0.14, 0.24), goldMat);
+    rim.position.set(0, 0.07, -6.65);
+    group.add(rim);
+    group.add(buildBridgeAt(0, -7.4, 0, '#594218', '#ffeb99', 1.9));
+
+    const sanctumRingOuter = new THREE.Mesh(new THREE.TorusGeometry(2.4, 0.065, 8, 36), goldMat);
+    sanctumRingOuter.rotation.x = Math.PI / 2;
+    sanctumRingOuter.position.set(0, 0.06, 0.6);
+    group.add(sanctumRingOuter);
+    animatedProps.push({ obj: sanctumRingOuter, axis: 'z', speed: 0.45 });
+
+    for (const [tx, tz] of [[-4.25, 5.2], [4.25, 5.2], [-4.25, -4.6], [4.25, -4.6]] as Array<[number, number]>) {
+      if (!isClearPropPos(tx, tz, level, roadSamples, 1.15, 1.0)) continue;
+      const spire = buildTeslaSpire();
+      spire.root.position.set(tx, 0, tz);
+      group.add(spire.root);
+      animatedProps.push({ obj: spire.ringA, axis: 'y', speed: 3.3 });
+      animatedProps.push({ obj: spire.ringB, axis: 'y', speed: -2.7 });
     }
   }
 

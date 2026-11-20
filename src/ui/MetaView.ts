@@ -1,3 +1,4 @@
+import { APP_VERSION, ONLINE_ARENA_ENABLED } from '../config/features.ts';
 import {
   AURA_SPECS,
   BANNER_SPECS,
@@ -110,6 +111,19 @@ export type CardsSubTab = 'towers' | 'heroes' | 'accessories' | 'talents';
 export type JournalSubTab = 'quests' | 'achievements' | 'codex';
 export type CodexFilter = 'all' | 'tower' | 'hero' | 'enemy';
 
+export const MAP_REGIONS = [
+  { firstStage: 1, lastStage: 3, range: '1–3', biome: 'forest' as const, labelKey: 'map.biome.forest', xPct: 5.87 },
+  { firstStage: 4, lastStage: 6, range: '4–6', biome: 'canyon' as const, labelKey: 'map.biome.canyon', xPct: 13.90 },
+  { firstStage: 7, lastStage: 9, range: '7–9', biome: 'cavern' as const, labelKey: 'map.biome.cavern', xPct: 21.92 },
+  { firstStage: 10, lastStage: 12, range: '10–12', biome: 'snow' as const, labelKey: 'map.biome.snow', xPct: 29.94 },
+  { firstStage: 13, lastStage: 16, range: '13–16', biome: 'foundry' as const, labelKey: 'map.biome.foundry', xPct: 39.30 },
+  { firstStage: 17, lastStage: 20, range: '17–20', biome: 'forest' as const, labelKey: 'map.region.shadowfen', xPct: 50.00 },
+  { firstStage: 21, lastStage: 24, range: '21–24', biome: 'cavern' as const, labelKey: 'map.region.astral', xPct: 60.70 },
+  { firstStage: 25, lastStage: 28, range: '25–28', biome: 'snow' as const, labelKey: 'map.region.skyridge', xPct: 71.39 },
+  { firstStage: 29, lastStage: 32, range: '29–32', biome: 'foundry' as const, labelKey: 'map.region.caldera', xPct: 82.09 },
+  { firstStage: 33, lastStage: 36, range: '33–36', biome: 'forest' as const, labelKey: 'map.region.eternal_oak', xPct: 92.79 },
+] as const;
+
 interface NavBadges {
   map: string;
   multi: string;
@@ -164,6 +178,7 @@ export class MetaView {
   private suppressNextMapClick = false;
   private lastSlideDir: 'left' | 'right' | null = null;
   private pillStripScrollLeft = 0;
+  private regionStripScrollLeft = 0;
 
   constructor(
     saveManager: SaveManager,
@@ -196,7 +211,7 @@ export class MetaView {
         save.trophies >= tier.minTrophies &&
         !save.claimedLeagueTiers.includes(tier.id),
     );
-    const multi = hasLeagueClaim ? '!' : '';
+    const multi = ONLINE_ARENA_ENABLED && hasLeagueClaim ? '!' : '';
 
     let towersSub = 0;
     for (const tw of TOWER_LIST) {
@@ -306,7 +321,7 @@ export class MetaView {
             <span class="nav-label">${t(loc, 'nav.map')}</span>
           </button>
           <button class="nav-tab ${this.activeTab === 'multi' ? 'active' : ''}" data-tab="multi">
-            ${navBadgeHtml(badges.multi, 'red')}
+            ${ONLINE_ARENA_ENABLED ? navBadgeHtml(badges.multi, 'red') : `<span class="nav-soon-tag" aria-hidden="true">${t(loc, 'multi.soonShort')}</span>`}
             <img class="nav-art-ico" src="${OAK_UI_URLS.navArena}" alt="" />
             <span class="nav-label">${t(loc, 'nav.arena')}</span>
           </button>
@@ -377,8 +392,8 @@ export class MetaView {
   }
 
   private computeMapPanPct(xPct: number): number {
-    // Track width is 520% of viewport: center target xPct at 50% viewport, clamped to [0, -80.7692]%.
-    return Math.max(-80.7692, Math.min(0, 9.6154 - xPct));
+    // Track width is 780% of viewport: center target xPct at 50% viewport (6.4103%), clamped to [0, -87.1795]%.
+    return Math.max(-87.1795, Math.min(0, 6.4103 - xPct));
   }
 
   private getStageUniqueEnemies(level: LevelSpec): EnemyId[] {
@@ -483,32 +498,15 @@ export class MetaView {
       if (isLevelUnlocked(n.id, save.levelStars)) maxUnlockedIdx = idx;
     });
 
-    const OAK_HORIZ_TRAIL: ReadonlyArray<{ xPct: number; yPct: number }> = [
-      { xPct: 4.60, yPct: 48.0 },
-      { xPct: 8.55, yPct: 42.5 },
-      { xPct: 12.50, yPct: 50.5 },
-      { xPct: 16.44, yPct: 43.5 },
-      { xPct: 20.39, yPct: 50.0 },
-      { xPct: 24.34, yPct: 42.5 },
-      { xPct: 28.29, yPct: 50.5 },
-      { xPct: 32.23, yPct: 42.0 },
-      { xPct: 36.18, yPct: 49.5 },
-      { xPct: 40.13, yPct: 43.5 },
-      { xPct: 44.08, yPct: 50.5 },
-      { xPct: 48.02, yPct: 42.0 },
-      { xPct: 51.97, yPct: 50.0 },
-      { xPct: 55.92, yPct: 43.0 },
-      { xPct: 59.87, yPct: 49.5 },
-      { xPct: 63.82, yPct: 43.5 },
-      { xPct: 67.76, yPct: 50.0 },
-      { xPct: 71.71, yPct: 42.5 },
-      { xPct: 75.66, yPct: 50.5 },
-      { xPct: 79.61, yPct: 42.0 },
-      { xPct: 83.56, yPct: 49.5 },
-      { xPct: 87.50, yPct: 43.0 },
-      { xPct: 91.45, yPct: 50.0 },
-      { xPct: 95.40, yPct: 43.5 },
+    const Y_WAVE = [
+      36.5, 32.0, 38.0, 32.5, 37.5, 31.5, 38.0, 32.5, 37.0, 32.0, 37.5, 31.5,
+      37.5, 32.5, 38.0, 32.0, 37.0, 31.5, 38.0, 32.5, 37.5, 32.0, 37.5, 32.5,
+      37.0, 32.0, 38.0, 31.5, 37.5, 32.5, 38.0, 32.0, 37.0, 32.0, 37.5, 32.5,
     ];
+    const OAK_HORIZ_TRAIL: ReadonlyArray<{ xPct: number; yPct: number }> = Y_WAVE.map((yPct, idx) => ({
+      xPct: Number((3.2 + idx * 2.6743).toFixed(2)),
+      yPct,
+    }));
 
     const displayNodes = WORLD_MAP_NODES.map((n, idx) => ({
       ...n,
@@ -543,24 +541,30 @@ export class MetaView {
       `;
     }).join('');
 
-    const regionBannersHtml = [
-      { xPct: 7.82, biome: 'forest' as const, labelKey: 'map.biome.forest', range: '1–3' },
-      { xPct: 19.87, biome: 'canyon' as const, labelKey: 'map.biome.canyon', range: '4–6' },
-      { xPct: 31.92, biome: 'cavern' as const, labelKey: 'map.biome.cavern', range: '7–9' },
-      { xPct: 43.97, biome: 'snow' as const, labelKey: 'map.biome.snow', range: '10–12' },
-      { xPct: 58.04, biome: 'foundry' as const, labelKey: 'map.biome.foundry', range: '13–16' },
-      { xPct: 74.10, biome: 'forest' as const, labelKey: 'map.region.shadowfen', range: '17–20' },
-      { xPct: 90.18, biome: 'cavern' as const, labelKey: 'map.region.astral', range: '21–24' },
-    ]
-      .map(
-        (r) => `
+    const regionBannersHtml = MAP_REGIONS.map(
+      (r) => `
         <div class="biome-region-banner biome-${r.biome}" style="left: ${r.xPct}%;">
           <span>${t(loc, r.labelKey)}</span>
           <span class="biome-region-range">${r.range}</span>
         </div>
       `,
-      )
-      .join('');
+    ).join('');
+
+    const regionJumpHtml = MAP_REGIONS.map((r) => {
+      const active = selLevel.id >= r.firstStage && selLevel.id <= r.lastStage;
+      const unlocked = isLevelUnlocked(r.firstStage, save.levelStars);
+      return `
+        <button
+          type="button"
+          class="region-jump-chip biome-${r.biome} ${active ? 'active' : ''} ${unlocked ? '' : 'locked'}"
+          data-jump-region="${r.firstStage}"
+          aria-pressed="${active ? 'true' : 'false'}"
+        >
+          <span>${t(loc, r.labelKey)}</span>
+          <small>${r.range}</small>
+        </button>
+      `;
+    }).join('');
 
     const stagePillsHtml = LEVELS.map((lvl) => {
       const unlocked = isLevelUnlocked(lvl.id, save.levelStars);
@@ -631,6 +635,9 @@ export class MetaView {
             <div class="map-horiz-bg-tile mirrored" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
             <div class="map-horiz-bg-tile" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
             <div class="map-horiz-bg-tile mirrored" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
+            <div class="map-horiz-bg-tile" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
+            <div class="map-horiz-bg-tile mirrored" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
+            <div class="map-horiz-bg-tile" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
             <div class="map-biome-wash"></div>
           </div>
 
@@ -684,6 +691,10 @@ export class MetaView {
         <span class="brass-corner tr" aria-hidden="true"></span>
         <span class="brass-corner bl" aria-hidden="true"></span>
         <span class="brass-corner br" aria-hidden="true"></span>
+
+        <div class="region-jump-strip" id="region-jump-strip" role="navigation" aria-label="${t(loc, 'nav.map')}">
+          ${regionJumpHtml}
+        </div>
 
         <div class="stage-pill-strip" id="stage-pill-strip" role="navigation" aria-label="${t(loc, 'nav.map')}">
           ${stagePillsHtml}
@@ -1094,6 +1105,61 @@ export class MetaView {
   }
 
   private renderMultiTab(loc: Locale): string {
+    return ONLINE_ARENA_ENABLED ? this.renderLiveMultiTab(loc) : this.renderComingSoonMultiTab(loc);
+  }
+
+  private renderComingSoonMultiTab(loc: Locale): string {
+    const tiersPreviewHtml = LEAGUE_TIERS.filter((tier) => tier.id !== 'oak')
+      .map(
+        (tier) => `
+          <span class="arena-soon-tier-chip">
+            ${t(loc, `league.tier.${tier.id}`)} · ${tier.minTrophies}🏆
+          </span>
+        `,
+      )
+      .join('');
+
+    return `
+      <div class="card-panel arena-soon-hero" id="arena-coming-soon">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+          <div style="font-size:16px; font-weight:900; color:#ffe17a;">${t(loc, 'multi.title')}</div>
+          <span class="pill-badge gold">${t(loc, 'multi.comingSoonBadge')}</span>
+        </div>
+        <div style="font-size:15px; font-weight:900; color:#fff7e6;">${t(loc, 'multi.comingSoonTitle')}</div>
+        <div style="font-size:12px; color:#dfd4be; line-height:1.45;">${t(loc, 'multi.comingSoonDesc')}</div>
+
+        <div class="arena-soon-modes">
+          <div class="arena-soon-mode-card">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
+              <strong style="color:#8cf7b0; font-size:12.5px;">${t(loc, 'multi.coopName')}</strong>
+              <span class="pill-badge" style="font-size:9.5px;">${t(loc, 'multi.soonShort')}</span>
+            </div>
+            <div style="font-size:11px; color:var(--text-muted); line-height:1.35;">${t(loc, 'multi.coopDesc')}</div>
+          </div>
+          <div class="arena-soon-mode-card">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
+              <strong style="color:#ffd564; font-size:12.5px;">${t(loc, 'multi.pvpName')}</strong>
+              <span class="pill-badge" style="font-size:9.5px;">${t(loc, 'multi.soonShort')}</span>
+            </div>
+            <div style="font-size:11px; color:var(--text-muted); line-height:1.35;">${t(loc, 'multi.pvpDesc')}</div>
+          </div>
+        </div>
+
+        <button type="button" class="btn btn-primary" id="btn-arena-goto-map">${t(loc, 'multi.backToCampaign')}</button>
+      </div>
+
+      <div class="card-panel arena-soon-league" id="league-panel">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+          <div style="font-size:14.5px; font-weight:900; color:#ffe17a;">${t(loc, 'league.title')}</div>
+          <span class="pill-badge">${t(loc, 'multi.comingSoonBadge')}</span>
+        </div>
+        <div style="font-size:11.5px; color:var(--text-muted); line-height:1.4;">${t(loc, 'multi.comingSoonLeagueNote')}</div>
+        <div class="arena-soon-tier-list">${tiersPreviewHtml}</div>
+      </div>
+    `;
+  }
+
+  private renderLiveMultiTab(loc: Locale): string {
     const wsOnline = this.network.connected;
     const isCoop = this.multiMode === 'coop';
     const liveHint =
@@ -1862,8 +1928,11 @@ export class MetaView {
     return `
       <div class="modal-backdrop" data-modal-backdrop="settings">
         <div class="modal-card oak-modal-dark" role="dialog" aria-modal="true">
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <span style="font-size:17px; font-weight:800;">${t(loc, 'settings.title')}</span>
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:17px; font-weight:800;">${t(loc, 'settings.title')}</span>
+              <span class="settings-ver-badge">${t(loc, 'settings.version')} v${APP_VERSION}</span>
+            </div>
             <button class="btn btn-sm btn-primary" id="btn-close-settings" type="button">${t(loc, 'map.close')}</button>
           </div>
           <div style="display:flex; justify-content:space-between; align-items:center; font-size:13px; font-weight:700;">
@@ -1898,6 +1967,10 @@ export class MetaView {
             <span>${t(loc, 'settings.shake')}: ${s.shakeStrength}%</span>
             <input type="range" id="rng-shake" min="0" max="100" value="${s.shakeStrength}" />
           </label>
+          <div class="settings-privacy-box">
+            <strong>${t(loc, 'settings.privacyTitle')}</strong>
+            <span>${t(loc, 'settings.privacyBody')}</span>
+          </div>
           ${
             this.callbacks.onDevUnlock
               ? `<button class="btn btn-sm btn-gold" id="btn-dev-unlock" type="button">${t(loc, 'settings.devUnlock')}</button>`
@@ -1926,7 +1999,7 @@ export class MetaView {
         this.showHeroQuickModal = false;
         this.unitPreview3D.dispose();
         this.statusNotice = '';
-        if (this.activeTab === 'multi' && !this.network.connected) {
+        if (ONLINE_ARENA_ENABLED && this.activeTab === 'multi' && !this.network.connected) {
           void this.network.connect();
         }
         this.callbacks.onRefresh();
@@ -2020,6 +2093,20 @@ export class MetaView {
       };
     });
 
+    container.querySelectorAll<HTMLElement>('[data-jump-region]').forEach((btn) => {
+      btn.onclick = () => {
+        this.selectStageById(Number(btn.dataset.jumpRegion));
+      };
+    });
+
+    const gotoMapBtn = container.querySelector<HTMLButtonElement>('#btn-arena-goto-map');
+    if (gotoMapBtn) {
+      gotoMapBtn.onclick = () => {
+        this.activeTab = 'map';
+        this.callbacks.onRefresh();
+      };
+    }
+
     const prevMapBtn = container.querySelector<HTMLButtonElement>('#btn-map-prev');
     const nextMapBtn = container.querySelector<HTMLButtonElement>('#btn-map-next');
     const prevDrawerBtn = container.querySelector<HTMLButtonElement>('#btn-drawer-prev');
@@ -2040,6 +2127,28 @@ export class MetaView {
         requestAnimationFrame(() => requestAnimationFrame(applyPan));
       } else {
         applyPan();
+      }
+    }
+
+    const regionStrip = container.querySelector<HTMLElement>('#region-jump-strip');
+    if (regionStrip) {
+      regionStrip.scrollLeft = this.regionStripScrollLeft;
+      regionStrip.onscroll = () => {
+        this.regionStripScrollLeft = regionStrip.scrollLeft;
+      };
+    }
+
+    const activeRegionChip = container.querySelector<HTMLElement>('.region-jump-chip.active');
+    if (activeRegionChip && regionStrip && typeof activeRegionChip.scrollIntoView === 'function') {
+      const stripRect = regionStrip.getBoundingClientRect?.();
+      const chipRect = activeRegionChip.getBoundingClientRect?.();
+      if (
+        !stripRect ||
+        !chipRect ||
+        chipRect.left < stripRect.left + 8 ||
+        chipRect.right > stripRect.right - 8
+      ) {
+        activeRegionChip.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
       }
     }
 
@@ -2074,7 +2183,7 @@ export class MetaView {
       let dragging = false;
       let moved = false;
 
-      const clampPan = (val: number): number => Math.max(-80.7692, Math.min(0, val));
+      const clampPan = (val: number): number => Math.max(-87.1795, Math.min(0, val));
 
       mapViewport.onpointerdown = (ev: PointerEvent) => {
         const tgt = ev.target as HTMLElement | null;
@@ -2098,7 +2207,7 @@ export class MetaView {
           this.suppressNextMapClick = true;
           track.classList.add('is-dragging');
         }
-        const trackW = track.getBoundingClientRect?.().width || (mapViewport.clientWidth * 5.2) || 2236;
+        const trackW = track.getBoundingClientRect?.().width || (mapViewport.clientWidth * 7.8) || 3042;
         const nextPan = clampPan(startPan + (dx / trackW) * 100);
         track.style.transform = `translate3d(${nextPan.toFixed(4)}%, 0, 0)`;
         this.prevMapPanPct = nextPan;
@@ -2137,7 +2246,7 @@ export class MetaView {
       let tracking = false;
       el.onpointerdown = (ev: PointerEvent) => {
         const tgt = ev.target as HTMLElement | null;
-        if (tgt?.closest?.('#stage-pill-strip')) {
+        if (tgt?.closest?.('#stage-pill-strip, #region-jump-strip, .drawer-threats')) {
           tracking = false;
           return;
         }

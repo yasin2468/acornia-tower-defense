@@ -206,7 +206,7 @@ describe('UI-1 — Ulu Mese Parsomeni menu ve Kenney CC0 + boyama ozel varliklar
       );
 
       const pinMatches = [...container.innerHTML.matchAll(/class="stage-pin[^"]*"\s+style="left:\s*([\d.]+)%;\s*top:\s*([\d.]+)%;"/g)];
-      assert.equal(pinMatches.length, 24, '24 yatay kalkan pini render edilmeli');
+      assert.equal(pinMatches.length, 36, '36 yatay kalkan pini render edilmeli');
       let prevX = -1;
       for (const m of pinMatches) {
         const xPct = Number(m[1]);
@@ -215,6 +215,11 @@ describe('UI-1 — Ulu Mese Parsomeni menu ve Kenney CC0 + boyama ozel varliklar
         assert.ok(yPct >= 28 && yPct <= 52, `pin yPct (${yPct}%) engelsiz yatay orta bantta (28-52%) kalmalı`);
         prevX = xPct;
       }
+
+      const jumpChips = [...container.innerHTML.matchAll(/data-jump-region="(\d+)"/g)].map((m) => Number(m[1]));
+      assert.deepEqual(jumpChips, [1, 4, 7, 10, 13, 17, 21, 25, 29, 33], '10 bölge hızlı atlama çipi render edilmeli');
+      const bannerMatches = [...container.innerHTML.matchAll(/class="biome-region-banner/g)];
+      assert.equal(bannerMatches.length, 10, '10 bölge afişi render edilmeli');
 
       view.showPatrolModal = true;
       renderInto();
@@ -242,6 +247,13 @@ describe('UI-1 — Ulu Mese Parsomeni menu ve Kenney CC0 + boyama ozel varliklar
       view.activeTab = 'multi';
       renderInto();
       assert.ok(container.innerHTML.includes('id="league-panel"'), 'Arena sekmesi eksik');
+      assert.ok(container.innerHTML.includes('id="arena-coming-soon"'), 'Arena Yakinda ekrani render edilmeli');
+      assert.ok(container.innerHTML.includes('id="btn-arena-goto-map"'), 'Arena haritaya don butonu olmali');
+      assert.ok(container.innerHTML.includes('class="nav-soon-tag"'), 'Alt menude v1.1 rozeti olmali');
+      assert.ok(!container.innerHTML.includes('id="input-room"'), 'v1.0 surumunde canli oda girisi gizli olmali');
+      const multiBtnMatch = container.innerHTML.match(/<button class="nav-tab[^"]*" data-tab="multi">[\s\S]*?<\/button>/);
+      assert.ok(multiBtnMatch, 'Arena alt sekme butonu olmali');
+      assert.ok(!multiBtnMatch[0].includes('nav-pip red'), 'v1.0 Arena sekmesinde kirmizi bildirim noktasi olmamali');
 
       view.activeTab = 'journal';
       for (const jsub of ['quests', 'achievements', 'codex'] as const) {
@@ -264,9 +276,12 @@ describe('UI-1 — Ulu Mese Parsomeni menu ve Kenney CC0 + boyama ozel varliklar
       assert.ok(container.innerHTML.includes('role="dialog" aria-modal="true"'), 'Ayarlar modali dialog role içermeli');
       assert.ok(!container.innerHTML.includes('>OK</button>'), 'Ayarlar kapatma butonu yerelleştirilmiş olmalı');
       assert.ok(container.innerHTML.includes('>Kapat</button>'), 'TR Ayarlar kapatma butonu Kapat olmalı');
+      assert.ok(container.innerHTML.includes('v1.0.0'), 'Ayarlar modalinda v1.0.0 surum etiketi olmali');
+      assert.ok(container.innerHTML.includes('settings-privacy-box'), 'Ayarlar modalinda yerel kayit/gizlilik bilgisi olmali');
       saveManager.update((s) => { s.settings.locale = 'en'; });
       renderInto();
       assert.ok(container.innerHTML.includes('>Close</button>'), 'EN Ayarlar kapatma butonu Close olmalı');
+      assert.ok(container.innerHTML.includes('Privacy & Local Save'), 'EN gizlilik basligi render edilmeli');
       view.showSettings = false;
     } finally {
       if (hadStorage) g.localStorage = prevStorage;

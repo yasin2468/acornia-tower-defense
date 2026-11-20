@@ -1,4 +1,5 @@
 import './styles.css';
+import { ONLINE_ARENA_ENABLED } from './config/features.ts';
 import { JuiceController } from './core/JuiceController.ts';
 import {
   FIXED_DT,
@@ -932,7 +933,7 @@ async function boot(): Promise<void> {
     const roomParam = urlParams.get('room');
     if (isPromoMode) {
       await startLevel(1, false);
-    } else if (roomParam && /^\d{4}$/.test(roomParam)) {
+    } else if (ONLINE_ARENA_ENABLED && roomParam && /^\d{4}$/.test(roomParam)) {
       metaView.activeTab = 'multi';
       metaView.roomCode = roomParam;
       renderMeta();

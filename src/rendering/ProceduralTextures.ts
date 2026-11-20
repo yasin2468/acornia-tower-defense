@@ -348,6 +348,138 @@ const MEADOW_PALETTES: Record<TextureKey, MeadowPalette> = {
     fleckLight: 'rgba(182, 244, 255, 0.28)',
     fleckDark: 'rgba(12, 12, 28, 0.30)',
   },
+  // 25. Skyridge Wind Bridge
+  skyridge_wind_bridge: {
+    gradInner: '#9ec4e8',
+    gradMid: '#7fa8d4',
+    gradOuter: '#5d84b2',
+    patchA: 'rgba(218, 240, 255, 0.32)',
+    patchB: 'rgba(130, 178, 228, 0.26)',
+    patchC: 'rgba(66, 98, 140, 0.24)',
+    fleckLight: 'rgba(255, 255, 255, 0.36)',
+    fleckDark: 'rgba(54, 82, 120, 0.22)',
+  },
+  // 26. Amber Cloud Aqueduct
+  amber_cloud_aqueduct: {
+    gradInner: '#cc8f52',
+    gradMid: '#ad723a',
+    gradOuter: '#824f24',
+    patchA: 'rgba(255, 214, 138, 0.28)',
+    patchB: 'rgba(204, 122, 54, 0.26)',
+    patchC: 'rgba(72, 40, 18, 0.28)',
+    fleckLight: 'rgba(255, 232, 176, 0.30)',
+    fleckDark: 'rgba(66, 36, 16, 0.24)',
+  },
+  // 27. Jade Monsoon Spires
+  jade_monsoon_spires: {
+    gradInner: '#3e8a74',
+    gradMid: '#2d6e5c',
+    gradOuter: '#1d4d40',
+    patchA: 'rgba(104, 235, 192, 0.24)',
+    patchB: 'rgba(42, 122, 98, 0.28)',
+    patchC: 'rgba(18, 52, 44, 0.32)',
+    fleckLight: 'rgba(176, 255, 226, 0.28)',
+    fleckDark: 'rgba(14, 42, 36, 0.28)',
+  },
+  // 28. Emerald Sky Citadel
+  emerald_sky_citadel: {
+    gradInner: '#4c8ca3',
+    gradMid: '#376f85',
+    gradOuter: '#224e61',
+    patchA: 'rgba(116, 245, 212, 0.26)',
+    patchB: 'rgba(140, 214, 255, 0.24)',
+    patchC: 'rgba(22, 48, 66, 0.30)',
+    fleckLight: 'rgba(206, 255, 246, 0.30)',
+    fleckDark: 'rgba(18, 40, 54, 0.26)',
+  },
+  // 29. Obsidian Slag Rift
+  obsidian_slag_rift: {
+    gradInner: '#472a2e',
+    gradMid: '#331c20',
+    gradOuter: '#1f1013',
+    patchA: 'rgba(255, 114, 58, 0.26)',
+    patchB: 'rgba(130, 54, 52, 0.28)',
+    patchC: 'rgba(20, 10, 14, 0.38)',
+    fleckLight: 'rgba(255, 166, 110, 0.26)',
+    fleckDark: 'rgba(16, 8, 10, 0.34)',
+  },
+  // 30. Basalt Anvil Crossing
+  basalt_anvil_crossing: {
+    gradInner: '#784e3d',
+    gradMid: '#5c392b',
+    gradOuter: '#3d241b',
+    patchA: 'rgba(245, 152, 82, 0.26)',
+    patchB: 'rgba(138, 86, 68, 0.26)',
+    patchC: 'rgba(34, 18, 14, 0.34)',
+    fleckLight: 'rgba(255, 194, 128, 0.28)',
+    fleckDark: 'rgba(26, 14, 12, 0.30)',
+  },
+  // 31. Molten Rune Crucible
+  molten_rune_crucible: {
+    gradInner: '#692d1f',
+    gradMid: '#4f1e14',
+    gradOuter: '#30100a',
+    patchA: 'rgba(255, 174, 54, 0.28)',
+    patchB: 'rgba(255, 92, 34, 0.26)',
+    patchC: 'rgba(28, 10, 8, 0.36)',
+    fleckLight: 'rgba(255, 212, 104, 0.30)',
+    fleckDark: 'rgba(24, 8, 6, 0.32)',
+  },
+  // 32. Caldera Titan Gate
+  caldera_titan_gate: {
+    gradInner: '#422226',
+    gradMid: '#2e1619',
+    gradOuter: '#1a0b0e',
+    patchA: 'rgba(255, 118, 52, 0.28)',
+    patchB: 'rgba(196, 66, 48, 0.26)',
+    patchC: 'rgba(18, 8, 10, 0.38)',
+    fleckLight: 'rgba(255, 184, 112, 0.28)',
+    fleckDark: 'rgba(14, 6, 8, 0.34)',
+  },
+  // 33. Golden Canopy Causeway
+  golden_canopy_causeway: {
+    gradInner: '#8a7836',
+    gradMid: '#6e5e25',
+    gradOuter: '#4a3e16',
+    patchA: 'rgba(255, 224, 104, 0.28)',
+    patchB: 'rgba(166, 134, 52, 0.26)',
+    patchC: 'rgba(46, 38, 14, 0.30)',
+    fleckLight: 'rgba(255, 240, 156, 0.32)',
+    fleckDark: 'rgba(38, 30, 10, 0.26)',
+  },
+  // 34. Crystal Crown Labyrinth
+  crystal_crown_labyrinth: {
+    gradInner: '#4c3875',
+    gradMid: '#372657',
+    gradOuter: '#221738',
+    patchA: 'rgba(208, 148, 255, 0.26)',
+    patchB: 'rgba(128, 102, 214, 0.26)',
+    patchC: 'rgba(20, 12, 38, 0.34)',
+    fleckLight: 'rgba(232, 196, 255, 0.30)',
+    fleckDark: 'rgba(16, 10, 30, 0.30)',
+  },
+  // 35. Aurora Warden Bridge
+  aurora_warden_bridge: {
+    gradInner: '#3f758a',
+    gradMid: '#2e596b',
+    gradOuter: '#1e3c4a',
+    patchA: 'rgba(116, 255, 218, 0.26)',
+    patchB: 'rgba(104, 196, 242, 0.24)',
+    patchC: 'rgba(18, 38, 48, 0.30)',
+    fleckLight: 'rgba(196, 255, 242, 0.32)',
+    fleckDark: 'rgba(16, 32, 42, 0.26)',
+  },
+  // 36. Eternal Oak Sanctum
+  eternal_oak_sanctum: {
+    gradInner: '#59632e',
+    gradMid: '#434a20',
+    gradOuter: '#292e12',
+    patchA: 'rgba(255, 226, 104, 0.28)',
+    patchB: 'rgba(114, 232, 142, 0.24)',
+    patchC: 'rgba(28, 32, 14, 0.30)',
+    fleckLight: 'rgba(255, 244, 176, 0.34)',
+    fleckDark: 'rgba(22, 26, 10, 0.26)',
+  },
 };
 
 const ROAD_PALETTES: Record<TextureKey, RoadPalette> = {
@@ -380,6 +512,18 @@ const ROAD_PALETTES: Record<TextureKey, RoadPalette> = {
   chrono_prism_vault: { mortar: '#3d3c73', stones: ['#999be0', '#8789d0', '#abadeb', '#7577bf'] },
   solar_plasma_reactor: { mortar: '#6b381e', stones: ['#c4885a', '#b3774a', '#d4996a', '#a1663c'] },
   astral_nexus_throne: { mortar: '#2c3563', stones: ['#839ce0', '#728bd0', '#96aff0', '#627abf'] },
+  skyridge_wind_bridge: { mortar: '#668eb8', stones: ['#dceeff', '#cce2f8', '#eaf5ff', '#b9d4ee'] },
+  amber_cloud_aqueduct: { mortar: '#996432', stones: ['#f0c688', '#e3b472', '#f7d4a0', '#d4a25d'] },
+  jade_monsoon_spires: { mortar: '#296352', stones: ['#84ccb4', '#70bca2', '#99dcc6', '#5ea890'] },
+  emerald_sky_citadel: { mortar: '#356a78', stones: ['#9fe0dc', '#8ad0cc', '#b8ece8', '#78bdb9'] },
+  obsidian_slag_rift: { mortar: '#4a2424', stones: ['#8c6363', '#7a5252', '#9e7575', '#694343'] },
+  basalt_anvil_crossing: { mortar: '#693c28', stones: ['#bd8f75', '#ab7d64', '#cfa289', '#996c54'] },
+  molten_rune_crucible: { mortar: '#662818', stones: ['#ba765c', '#a8644c', '#cc886e', '#96543e'] },
+  caldera_titan_gate: { mortar: '#4d1e20', stones: ['#9e6563', '#8c5553', '#b07775', '#7a4544'] },
+  golden_canopy_causeway: { mortar: '#756021', stones: ['#ebd282', '#dec26f', '#f5df98', '#cfb25d'] },
+  crystal_crown_labyrinth: { mortar: '#4f3a7a', stones: ['#bfa6eb', '#ad92db', '#cfb8f5', '#9b80cc'] },
+  aurora_warden_bridge: { mortar: '#326378', stones: ['#9cdbe6', '#88cad6', '#b0eaf4', '#74b8c4'] },
+  eternal_oak_sanctum: { mortar: '#595e22', stones: ['#e8de94', '#d9ce80', '#f5eca6', '#c9be6e'] },
 };
 
 /** Stage-concept-themed valley ground texture so every stage looks immediately distinct. */
@@ -1078,7 +1222,19 @@ export function createStageRoadTextures(concept: StageConceptId): StageRoadTextu
     concept === 'starfall_glacier_bridge' ||
     concept === 'chrono_prism_vault' ||
     concept === 'solar_plasma_reactor' ||
-    concept === 'astral_nexus_throne'
+    concept === 'astral_nexus_throne' ||
+    concept === 'skyridge_wind_bridge' ||
+    concept === 'amber_cloud_aqueduct' ||
+    concept === 'jade_monsoon_spires' ||
+    concept === 'emerald_sky_citadel' ||
+    concept === 'obsidian_slag_rift' ||
+    concept === 'basalt_anvil_crossing' ||
+    concept === 'molten_rune_crucible' ||
+    concept === 'caldera_titan_gate' ||
+    concept === 'golden_canopy_causeway' ||
+    concept === 'crystal_crown_labyrinth' ||
+    concept === 'aurora_warden_bridge' ||
+    concept === 'eternal_oak_sanctum'
   ) {
     const rp = ROAD_PALETTES[concept];
     ctx.fillStyle = rp.mortar;
@@ -1092,13 +1248,26 @@ export function createStageRoadTextures(concept: StageConceptId): StageRoadTextu
       ctx.fill();
     }
     const glowHex =
-      concept === 'shadowfen_lantern_bog' || concept === 'venom_alchemist_marsh'
+      concept === 'shadowfen_lantern_bog' ||
+      concept === 'venom_alchemist_marsh' ||
+      concept === 'jade_monsoon_spires' ||
+      concept === 'emerald_sky_citadel'
         ? '#54f097'
-        : concept === 'sunken_totem_ruins' || concept === 'solar_plasma_reactor'
+        : concept === 'sunken_totem_ruins' ||
+            concept === 'solar_plasma_reactor' ||
+            concept === 'amber_cloud_aqueduct' ||
+            concept === 'golden_canopy_causeway' ||
+            concept === 'eternal_oak_sanctum'
           ? '#ffb338'
-          : concept === 'eclipse_oak_bastion'
+          : concept === 'eclipse_oak_bastion' ||
+              concept === 'obsidian_slag_rift' ||
+              concept === 'basalt_anvil_crossing' ||
+              concept === 'molten_rune_crucible' ||
+              concept === 'caldera_titan_gate'
             ? '#ff6b52'
-            : '#72e3ff';
+            : concept === 'crystal_crown_labyrinth'
+              ? '#cf8cff'
+              : '#72e3ff';
     ectx.fillStyle = '#000000';
     ectx.fillRect(0, 0, size, size);
     for (const targetCtx of [ctx, ectx]) {

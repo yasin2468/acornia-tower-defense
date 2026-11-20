@@ -343,8 +343,8 @@ describe('Path-aware stagger & SimulationEngine impact events (GF-2)', () => {
   });
 });
 
-describe('24-stage obstacle clearances, hero collinear navigation & all unit rigs', () => {
-  it('ensures all 24 levels have clean slot, barrel shoulder, and lantern clearances', () => {
+describe('36-stage obstacle clearances, hero collinear navigation & all unit rigs', () => {
+  it('ensures all 36 levels have clean slot, barrel shoulder, and lantern clearances', () => {
     const distSeg = (px: number, pz: number, ax: number, az: number, bx: number, bz: number) => {
       const vx = bx - ax;
       const vz = bz - az;
@@ -362,7 +362,7 @@ describe('24-stage obstacle clearances, hero collinear navigation & all unit rig
       return best;
     };
 
-    assert.equal(LEVELS.length, 24);
+    assert.equal(LEVELS.length, 36);
     for (const lv of LEVELS) {
       for (const s of lv.slots) {
         const rd = roadDist(s.x, s.z, lv);

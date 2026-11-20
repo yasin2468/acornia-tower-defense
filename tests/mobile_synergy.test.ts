@@ -2,7 +2,8 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { SoundEngine } from '../src/audio/SoundEngine.ts';
-import { FIXED_DT, SimulationEngine } from '../src/core/SimulationEngine.ts';
+import { ONLINE_ARENA_ENABLED } from '../src/config/features.ts';
+import { FIXED_DT, SimulationEngine, computeVictoryRewards } from '../src/core/SimulationEngine.ts';
 import { LEVELS } from '../src/data/levels.ts';
 import {
   SYNERGY_COMBO_LIST,
@@ -327,6 +328,73 @@ describe('Mobil Menü Detay Çekmecesi & 2×4 Savaş Tepsisi', () => {
 
       // Camera rest sanity check via THREE import
       assert.ok(new THREE.Vector3().lengthSq() === 0);
+    } finally {
+      if (hadStorage) g.localStorage = prevStorage;
+      else delete g.localStorage;
+    }
+  });
+
+  it('v1.0 lansman kapısı: bölge hızlı atlama 33. bölüme zıplar, Arena WS bağlamaz ve L28/L32/L36 boss ödülleri artar', () => {
+    const g = globalThis as Record<string, unknown>;
+    const hadStorage = 'localStorage' in g;
+    const prevStorage = g.localStorage;
+    g.localStorage = makeMockStorage();
+
+    try {
+      const sm = new SaveManager();
+      let connectCalls = 0;
+      const fakeNetwork = {
+        connected: false,
+        state: 'idle',
+        roomCode: '',
+        connect: async () => {
+          connectCalls += 1;
+          return true;
+        },
+      } as unknown as NetworkService;
+
+      let refreshCount = 0;
+      const jumpBtn = { dataset: { jumpRegion: '33' }, onclick: null as null | (() => void) };
+      const multiTabBtn = { dataset: { tab: 'multi' }, onclick: null as null | (() => void) };
+
+      const view = new MetaView(sm, new AdService(sm), new BillingService(sm), fakeNetwork, {
+        onStartLevel: () => {},
+        onStartExpedition: () => {},
+        onRefresh: () => {
+          refreshCount += 1;
+        },
+      });
+      const container = {
+        innerHTML: '',
+        querySelectorAll: (sel: string) => {
+          if (sel === '[data-jump-region]') return [jumpBtn];
+          if (sel === '[data-tab]') return [multiTabBtn];
+          return [];
+        },
+        querySelector: () => null,
+      } as unknown as HTMLElement;
+
+      view.render(container);
+      jumpBtn.onclick?.();
+      assert.equal(view.selectedLevelId, 33, '10. bölge çipine dokunmak 33. bölüme atlamalı');
+      assert.equal(refreshCount, 1);
+
+      multiTabBtn.onclick?.();
+      assert.equal(view.activeTab, 'multi');
+      assert.equal(ONLINE_ARENA_ENABLED, false);
+      assert.equal(connectCalls, 0, 'ONLINE_ARENA_ENABLED false iken Arena sekmesi WS bağlantısı başlatmamalı');
+
+      const r24 = computeVictoryRewards(24, 3, false);
+      const r27 = computeVictoryRewards(27, 3, false);
+      const r28 = computeVictoryRewards(28, 3, false);
+      const r31 = computeVictoryRewards(31, 3, false);
+      const r32 = computeVictoryRewards(32, 3, false);
+      const r35 = computeVictoryRewards(35, 3, false);
+      const r36 = computeVictoryRewards(36, 3, false);
+      assert.ok(r36.oak > r24.oak && r36.gems > r24.gems, '36. bölüm ödülü 24. bölümden yüksek olmalı');
+      assert.ok(r28.oak - r27.oak >= 40, '28. bölüm boss bonusu almalı');
+      assert.ok(r32.oak - r31.oak >= 40, '32. bölüm boss bonusu almalı');
+      assert.ok(r36.oak - r35.oak >= 40, '36. bölüm boss bonusu almalı');
     } finally {
       if (hadStorage) g.localStorage = prevStorage;
       else delete g.localStorage;
