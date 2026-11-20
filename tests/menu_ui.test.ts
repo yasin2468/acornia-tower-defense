@@ -257,6 +257,17 @@ describe('UI-1 — Ulu Mese Parsomeni menu ve Kenney CC0 + boyama ozel varliklar
       view.activeTab = 'shop';
       renderInto();
       assert.ok(container.innerHTML.includes('id="season-pass-panel"'), 'Dukkan sekmesi eksik');
+
+      view.showSettings = true;
+      saveManager.update((s) => { s.settings.locale = 'tr'; });
+      renderInto();
+      assert.ok(container.innerHTML.includes('role="dialog" aria-modal="true"'), 'Ayarlar modali dialog role içermeli');
+      assert.ok(!container.innerHTML.includes('>OK</button>'), 'Ayarlar kapatma butonu yerelleştirilmiş olmalı');
+      assert.ok(container.innerHTML.includes('>Kapat</button>'), 'TR Ayarlar kapatma butonu Kapat olmalı');
+      saveManager.update((s) => { s.settings.locale = 'en'; });
+      renderInto();
+      assert.ok(container.innerHTML.includes('>Close</button>'), 'EN Ayarlar kapatma butonu Close olmalı');
+      view.showSettings = false;
     } finally {
       if (hadStorage) g.localStorage = prevStorage;
       else delete g.localStorage;

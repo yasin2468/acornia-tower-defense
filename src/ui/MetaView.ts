@@ -715,7 +715,7 @@ export class MetaView {
     const afk = calculateAfkAccumulation(save);
     return `
       <div class="modal-backdrop" data-modal-backdrop="patrol">
-        <div class="modal-card oak-parchment-modal">
+        <div class="modal-card oak-parchment-modal" role="dialog" aria-modal="true">
           <span class="brass-corner tl" aria-hidden="true"></span>
           <span class="brass-corner tr" aria-hidden="true"></span>
           <span class="brass-corner bl" aria-hidden="true"></span>
@@ -744,7 +744,7 @@ export class MetaView {
   private renderExpeditionModal(loc: Locale): string {
     return `
       <div class="modal-backdrop" data-modal-backdrop="expedition">
-        <div class="modal-card oak-modal-dark">
+        <div class="modal-card oak-modal-dark" role="dialog" aria-modal="true">
           <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
             <div style="font-size:16px; font-weight:900; color:#ffe17a;">${t(loc, 'rogue.title')}</div>
             <button class="btn btn-sm" id="btn-close-expedition" type="button">${t(loc, 'map.close')}</button>
@@ -852,7 +852,7 @@ export class MetaView {
 
     return `
       <div class="modal-backdrop" data-modal-backdrop="bestiary">
-        <div class="modal-card bestiary-modal oak-parchment-modal">
+        <div class="modal-card bestiary-modal oak-parchment-modal" role="dialog" aria-modal="true">
           <span class="brass-corner tl" aria-hidden="true"></span>
           <span class="brass-corner tr" aria-hidden="true"></span>
           <span class="brass-corner bl" aria-hidden="true"></span>
@@ -1638,10 +1638,10 @@ export class MetaView {
     const s = this.saveManager.get().settings;
     return `
       <div class="modal-backdrop" data-modal-backdrop="settings">
-        <div class="modal-card oak-modal-dark">
+        <div class="modal-card oak-modal-dark" role="dialog" aria-modal="true">
           <div style="display:flex; justify-content:space-between; align-items:center;">
             <span style="font-size:17px; font-weight:800;">${t(loc, 'settings.title')}</span>
-            <button class="btn btn-sm btn-primary" id="btn-close-settings">OK</button>
+            <button class="btn btn-sm btn-primary" id="btn-close-settings" type="button">${t(loc, 'map.close')}</button>
           </div>
           <div style="display:flex; justify-content:space-between; align-items:center; font-size:13px; font-weight:700;">
             <span>${t(loc, 'settings.language')}</span>
