@@ -21,7 +21,7 @@ import {
 } from '../services/CommercialServices.ts';
 import type { NetworkService, SocialEmoteId } from '../services/NetworkService.ts';
 import type { SaveManager } from '../services/SaveManager.ts';
-import { ICONS, PORTRAIT_URLS, UI_ICON_URLS, getEnemyBadgeUrl } from './icons.ts';
+import { ICONS, PORTRAIT_URLS, UI_ICON_URLS, getEnemyBadgeUrl, uiIcon } from './icons.ts';
 
 export type FloatingDamageKind = 'normal' | 'heavy' | 'resisted' | 'crit' | 'gold' | 'base' | 'skill' | 'combo';
 
@@ -575,11 +575,11 @@ export class BattleView {
               const spec = ENEMIES[g.enemyId];
               const thumbUrl = getEnemyBadgeUrl(g.enemyId, spec.isBoss);
               const roleIcon = spec.isBoss
-                ? `<span class="wp-badge boss">💀 ${t(loc, 'hud.tagBoss')}</span>`
+                ? `<span class="wp-badge boss">${uiIcon('skull')} ${t(loc, 'hud.tagBoss')}</span>`
                 : spec.isFlying
-                  ? `<span class="wp-badge flying">✈ ${t(loc, 'hud.tagFlying')}</span>`
+                  ? `<span class="wp-badge flying">${uiIcon('wing')} ${t(loc, 'hud.tagFlying')}</span>`
                   : spec.armor >= 0.25
-                    ? `<span class="wp-badge armor">🛡 ${t(loc, 'hud.tagArmor')}</span>`
+                    ? `<span class="wp-badge armor">${uiIcon('shield')} ${t(loc, 'hud.tagArmor')}</span>`
                     : '';
               return `
                 <span class="wp-group-chip ${spec.isBoss ? 'is-boss' : ''}" title="${t(loc, spec.nameKey)}">
@@ -609,11 +609,11 @@ export class BattleView {
           this.lastMultiKey = mKey;
           const socialHtml = `
             <div class="social-emote-row">
-              <button class="social-emote-btn" data-social-emote="pin_build" title="${t(loc, 'social.pin_build')}">📍</button>
-              <button class="social-emote-btn" data-social-emote="pin_help" title="${t(loc, 'social.pin_help')}">🆘</button>
-              <button class="social-emote-btn" data-social-emote="cool_squirrel" title="${t(loc, 'social.cool_squirrel')}">😎</button>
-              <button class="social-emote-btn" data-social-emote="laugh_beaver" title="${t(loc, 'social.laugh_beaver')}">😂</button>
-              <button class="social-emote-btn" data-social-emote="cry_dozer" title="${t(loc, 'social.cry_dozer')}">😭</button>
+              <button class="social-emote-btn" data-social-emote="pin_build" title="${t(loc, 'social.pin_build')}">${uiIcon('pin', 'emote-ico')}</button>
+              <button class="social-emote-btn" data-social-emote="pin_help" title="${t(loc, 'social.pin_help')}">${uiIcon('sos', 'emote-ico')}</button>
+              <button class="social-emote-btn" data-social-emote="cool_squirrel" title="${t(loc, 'social.cool_squirrel')}">${uiIcon('emoteCool', 'emote-ico')}</button>
+              <button class="social-emote-btn" data-social-emote="laugh_beaver" title="${t(loc, 'social.laugh_beaver')}">${uiIcon('emoteLaugh', 'emote-ico')}</button>
+              <button class="social-emote-btn" data-social-emote="cry_dozer" title="${t(loc, 'social.cry_dozer')}">${uiIcon('emoteCry', 'emote-ico')}</button>
             </div>
           `;
           if (net.mode === 'coop') {
@@ -1000,16 +1000,16 @@ export class BattleView {
             <div class="preview-meta">
               <div class="preview-title-row">
                 <span class="preview-name">${t(loc, previewSpec.nameKey)}</span>
-                <span class="preview-target-pill ${previewSpec.canHitAir ? 'air' : ''}">${previewSpec.canHitAir ? `✈ ${t(loc, 'hud.targetAirGround')}` : `🛡 ${t(loc, 'hud.targetGround')}`}</span>
+                <span class="preview-target-pill ${previewSpec.canHitAir ? 'air' : ''}">${previewSpec.canHitAir ? `${uiIcon('wing')} ${t(loc, 'hud.targetAirGround')}` : `${uiIcon('shield')} ${t(loc, 'hud.targetGround')}`}</span>
               </div>
               <div class="preview-role">${t(loc, previewSpec.roleKey)}</div>
               <div class="preview-stats-row">
-                <span>⚔ ${previewSpec.tier1.damage}</span>
-                <span>⚡ ${previewSpec.tier1.fireRate}/s</span>
+                <span class="stat-ico-pair">${uiIcon('sword')} ${previewSpec.tier1.damage}</span>
+                <span class="stat-ico-pair">${uiIcon('bolt')} ${previewSpec.tier1.fireRate}/s</span>
                 <span>◎ ${previewSpec.tier1.range}</span>
                 ${
                   previewPartners.length > 0
-                    ? `<span class="preview-syn-pill">⚡ ${t(loc, 'hud.synergyReady')}: ${previewPartners.map((cid) => t(loc, SYNERGY_COMBOS[cid].nameKey)).join(' · ')}</span>`
+                    ? `<span class="preview-syn-pill">${uiIcon('bolt')} ${t(loc, 'hud.synergyReady')}: ${previewPartners.map((cid) => t(loc, SYNERGY_COMBOS[cid].nameKey)).join(' · ')}</span>`
                     : ''
                 }
               </div>
@@ -1040,11 +1040,11 @@ export class BattleView {
             data-build-tower="${tw.id}"
             title="${t(loc, tw.nameKey)}"
           >
-            ${tw.canHitAir ? '<span class="deck-air-tag" aria-hidden="true">✈</span>' : ''}
-            ${partners.length > 0 ? `<span class="deck-syn-spark" data-synergy-spark="1" title="${t(loc, 'hud.synergyReady')}">⚡</span>` : ''}
+            ${tw.canHitAir ? `<span class="deck-air-tag" aria-hidden="true">${uiIcon('wing')}</span>` : ''}
+            ${partners.length > 0 ? `<span class="deck-syn-spark" data-synergy-spark="1" title="${t(loc, 'hud.synergyReady')}">${uiIcon('bolt')}</span>` : ''}
             <img src="${PORTRAIT_URLS[tw.id]}" alt="${t(loc, tw.nameKey)}" />
             <span class="deck-card-name">${t(loc, tw.nameKey)}</span>
-            <span class="deck-cost-pill ${canAfford && allowed ? '' : 'unaffordable'}">${allowed ? tw.tier1.cost : '🔒'}</span>
+            <span class="deck-cost-pill ${canAfford && allowed ? '' : 'unaffordable'}">${allowed ? tw.tier1.cost : uiIcon('lock')}</span>
           </button>
         `;
       }).join('');
@@ -1105,7 +1105,7 @@ export class BattleView {
       `;
     } else {
       const synPills = getTowerSynergies(tw.towerId)
-        .map((sy) => `<span class="preview-syn-pill">⚡ ${t(loc, sy.nameKey)}</span>`)
+        .map((sy) => `<span class="preview-syn-pill">${uiIcon('bolt')} ${t(loc, sy.nameKey)}</span>`)
         .join('');
       bodyActionsHtml = `
         <div class="dock-actions-row">
@@ -1124,7 +1124,7 @@ export class BattleView {
           <div class="tower-top-meta">
             <div class="dock-title-line">
               <span class="dock-title">${t(loc, spec.nameKey)} <span style="color:var(--accent-gold);">${starsTxt}</span></span>
-              <span class="preview-target-pill ${spec.canHitAir ? 'air' : ''}">${spec.canHitAir ? `✈ ${t(loc, 'hud.targetAirGround')}` : `🛡 ${t(loc, 'hud.targetGround')}`}</span>
+              <span class="preview-target-pill ${spec.canHitAir ? 'air' : ''}">${spec.canHitAir ? `${uiIcon('wing')} ${t(loc, 'hud.targetAirGround')}` : `${uiIcon('shield')} ${t(loc, 'hud.targetGround')}`}</span>
             </div>
             <div style="font-size:11px; font-weight:800; color:var(--accent-green);">${statLine}</div>
             ${slot.runeSlot ? `<div class="rune-slot-inline">${t(loc, 'hud.runeSlotBadge')}</div>` : ''}
@@ -1288,13 +1288,13 @@ export class BattleView {
               <div class="pause-audio-title">${t(loc, 'hud.pauseAudio')}</div>
               <div class="pause-audio-row">
                 <button type="button" class="btn btn-sm ${s.soundEnabled ? 'btn-primary' : ''}" id="btn-pause-sound">
-                  ${t(loc, 'settings.sound')}: ${s.soundEnabled ? 'ON' : 'OFF'}
+                  ${t(loc, 'settings.sound')}: ${t(loc, s.soundEnabled ? 'hud.on' : 'hud.off')}
                 </button>
                 <button type="button" class="btn btn-sm ${s.musicEnabled ? 'btn-primary' : ''}" id="btn-pause-music">
-                  ${t(loc, 'settings.music')}: ${s.musicEnabled ? 'ON' : 'OFF'}
+                  ${t(loc, 'settings.music')}: ${t(loc, s.musicEnabled ? 'hud.on' : 'hud.off')}
                 </button>
                 <button type="button" class="btn btn-sm ${s.hapticsEnabled ? 'btn-primary' : ''}" id="btn-pause-haptics">
-                  ${t(loc, 'settings.haptics')}: ${s.hapticsEnabled ? 'ON' : 'OFF'}
+                  ${t(loc, 'settings.haptics')}: ${t(loc, s.hapticsEnabled ? 'hud.on' : 'hud.off')}
                 </button>
               </div>
             </div>

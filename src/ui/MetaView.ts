@@ -104,6 +104,7 @@ import {
   UI_ICON_URLS,
   getEnemyBadgeUrl,
   getJournalEntryPortraitUrl,
+  uiIcon,
 } from './icons.ts';
 
 export type MetaTab = 'map' | 'multi' | 'cards' | 'journal' | 'shop';
@@ -281,7 +282,7 @@ export class MetaView {
       text ? `<span class="nav-pip ${variant}" aria-hidden="true">${text}</span>` : '';
 
     container.innerHTML = `
-      <div class="meta-screen ${this.activeTab === 'map' ? 'is-map-tab' : ''}" data-kenney-skin="oak-parchment">
+      <div class="meta-screen ${this.activeTab === 'map' ? 'is-map-tab' : ''}" data-theme="oak-parchment">
         <header class="meta-header">
           <div class="oak-brand-plaque">
             <span class="brass-rivet tl" aria-hidden="true"></span>
@@ -630,16 +631,17 @@ export class MetaView {
       <div class="world-map-box map-full" id="world-map-viewport" style="background-image: url('${OAK_UI_URLS.worldMap}');">
         <div class="map-horiz-track" id="map-horiz-track" data-target-pan="${targetPanPct.toFixed(4)}" style="transform: translate3d(${initialPanPct.toFixed(4)}%, 0, 0);">
           <div class="map-horiz-bg-strip" aria-hidden="true">
-            <div class="map-horiz-bg-tile" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
-            <div class="map-horiz-bg-tile mirrored" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
-            <div class="map-horiz-bg-tile" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
-            <div class="map-horiz-bg-tile mirrored" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
-            <div class="map-horiz-bg-tile" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
-            <div class="map-horiz-bg-tile mirrored" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
-            <div class="map-horiz-bg-tile" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
-            <div class="map-horiz-bg-tile mirrored" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
-            <div class="map-horiz-bg-tile" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
+            <div class="map-horiz-bg-tile tile-v0" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
+            <div class="map-horiz-bg-tile tile-v1" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
+            <div class="map-horiz-bg-tile tile-v2" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
+            <div class="map-horiz-bg-tile tile-v3" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
+            <div class="map-horiz-bg-tile tile-v4" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
+            <div class="map-horiz-bg-tile tile-v5" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
+            <div class="map-horiz-bg-tile tile-v6" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
+            <div class="map-horiz-bg-tile tile-v7" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
+            <div class="map-horiz-bg-tile tile-v8" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
             <div class="map-biome-wash"></div>
+            <div class="map-seam-mist"></div>
           </div>
 
           <svg class="world-map-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
@@ -862,7 +864,7 @@ export class MetaView {
             <div class="synergy-detail-item">
               <div style="display:flex; align-items:center; gap:6px;">
                 <span class="synergy-dot" style="background:${sy.color};"></span>
-                <strong style="font-size:12px; color:#fff7e6;">⚡ ${t(loc, sy.nameKey)}</strong>
+                <strong style="font-size:12px; color:#fff7e6;">${uiIcon('bolt')} ${t(loc, sy.nameKey)}</strong>
               </div>
               <div style="font-size:10.5px; color:#edd2a8; line-height:1.35;">${t(loc, sy.descKey)}</div>
             </div>
@@ -1114,7 +1116,7 @@ export class MetaView {
       .map(
         (tier) => `
           <span class="arena-soon-tier-chip">
-            ${t(loc, `league.tier.${tier.id}`)} · ${tier.minTrophies}🏆
+            ${t(loc, `league.tier.${tier.id}`)} · ${tier.minTrophies} ${uiIcon('trophy')}
           </span>
         `,
       )
@@ -1185,7 +1187,7 @@ export class MetaView {
         return `
           <div class="league-tier-row ${unlocked ? 'unlocked' : ''}">
             <div style="min-width:0;">
-              <div style="font-size:12px; font-weight:900; color:#ffffff;">${t(loc, `league.tier.${tier.id}`)} · ${tier.minTrophies}🏆</div>
+              <div style="font-size:12px; font-weight:900; color:#ffffff;">${t(loc, `league.tier.${tier.id}`)} · ${tier.minTrophies} ${uiIcon('trophy')}</div>
               <div style="font-size:10.5px; color:var(--accent-gold);">${rewardParts.join(' · ')}</div>
             </div>
             <button class="btn btn-sm ${unlocked && !claimed ? 'btn-gold' : ''}" data-claim-league="${tier.id}" ${unlocked && !claimed ? '' : 'disabled'}>
@@ -1201,7 +1203,7 @@ export class MetaView {
         (entry, idx) => `
           <div class="league-ladder-row ${entry.isPlayer ? 'you' : ''}">
             <span>#${idx + 1} ${t(loc, entry.nameKey)}</span>
-            <span style="color:var(--accent-gold); font-weight:900;">${entry.trophies} 🏆</span>
+            <span style="color:var(--accent-gold); font-weight:900;">${entry.trophies} ${uiIcon('trophy')}</span>
           </div>
         `,
       )
@@ -1723,7 +1725,7 @@ export class MetaView {
       }).join('');
       panelHtml = `<div id="journal-achievements-panel" style="display:flex; flex-direction:column; gap:8px;">${achsHtml}</div>`;
     } else {
-      const catalog = getJournalCatalog();
+      const catalog = getJournalCatalog(loc);
       const filtered =
         this.codexFilter === 'all' ? catalog : catalog.filter((e) => e.category === this.codexFilter);
       const active = filtered.find((e) => e.id === this.selectedJournalId) ?? filtered[0] ?? catalog[0];
@@ -1807,7 +1809,7 @@ export class MetaView {
           : HEROES[spec.shardUnit as HeroId].nameKey;
       parts.push(`+${spec.shardCount} ${t(loc, unitKey)}`);
     }
-    if (spec.skipTickets) parts.push(`+${spec.skipTickets} 🎟`);
+    if (spec.skipTickets) parts.push(`+${spec.skipTickets} ${uiIcon('ticket')}`);
     if (spec.hatUnlock) parts.push(t(loc, `hat.${spec.hatUnlock}`));
     return parts.join(' · ');
   }
@@ -2543,8 +2545,8 @@ export class MetaView {
 
     const vipMonthly = container.querySelector<HTMLButtonElement>('#btn-vip-monthly');
     const vipLifetime = container.querySelector<HTMLButtonElement>('#btn-vip-lifetime');
-    if (vipMonthly) vipMonthly.onclick = () => { this.billingService.purchaseVip('monthly'); this.statusNotice = `${t(loc, 'shop.vipActive')} (Monthly)`; this.callbacks.onRefresh(); };
-    if (vipLifetime) vipLifetime.onclick = () => { this.billingService.purchaseVip('lifetime'); this.statusNotice = `${t(loc, 'shop.vipActive')} (Lifetime)`; this.callbacks.onRefresh(); };
+    if (vipMonthly) vipMonthly.onclick = () => { this.billingService.purchaseVip('monthly'); this.statusNotice = `${t(loc, 'shop.vipActive')} (${t(loc, 'shop.vipMonthlyShort')})`; this.callbacks.onRefresh(); };
+    if (vipLifetime) vipLifetime.onclick = () => { this.billingService.purchaseVip('lifetime'); this.statusNotice = `${t(loc, 'shop.vipActive')} (${t(loc, 'shop.vipLifetimeShort')})`; this.callbacks.onRefresh(); };
 
     const buySeasonGold = container.querySelector<HTMLButtonElement>('#btn-buy-season-gold');
     if (buySeasonGold) {

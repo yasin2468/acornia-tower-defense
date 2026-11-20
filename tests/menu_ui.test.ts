@@ -56,29 +56,10 @@ function makeMockStorage() {
   };
 }
 
-describe('UI-1 — Ulu Mese Parsomeni menu ve Kenney CC0 + boyama ozel varliklari', () => {
-  it('Kenney Adventure UI ve boyama ozel oak UI dosyalari gecerli baslik ve LICENSE.txt icerir', () => {
-    const dir = path.resolve('public/ui/kenney');
-    assert.ok(fs.existsSync(path.join(dir, 'LICENSE.txt')), 'LICENSE.txt eksik');
-    const pngs = [
-      'panel_brown.png',
-      'panel_brown_corners_a.png',
-      'panel_brown_dark.png',
-      'panel_brown_dark_corners_a.png',
-      'panel_border_brown_detail.png',
-      'panel_grid_paper.png',
-      'banner_hanging.png',
-      'button_brown.png',
-      'button_red.png',
-      'round_brown.png',
-      'round_brown_dark.png',
-      'progress_green.png',
-    ];
-    for (const file of pngs) {
-      const buf = fs.readFileSync(path.join(dir, file));
-      assert.ok(buf.length > 100, `${file} boyutu gecersiz`);
-      assert.equal(buf.subarray(12, 16).toString('ascii'), 'IHDR', `${file} gecerli PNG degil`);
-    }
+describe('UI-1 — Ulu Mese Parsomeni menu ve boyama ozel oak UI varliklari', () => {
+  it('Kullanilmayan kenney UI paketi kaldirilmis, oak UI ve portre dosyalari gecerlidir', () => {
+    assert.equal(fs.existsSync(path.resolve('public/ui/kenney')), false, 'kullanilmayan kenney klasoru temizlenmis olmali');
+    assert.ok(fs.existsSync(path.resolve('public/icon.svg')), 'public/icon.svg eksik');
 
     const oakDir = path.resolve('public/ui/oak');
     const mapBuf = fs.readFileSync(path.join(oakDir, 'world_map_oak.jpg'));

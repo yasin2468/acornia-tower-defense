@@ -125,8 +125,7 @@ export class AdService {
   }
 
   /**
-   * Phase 1 simulated rewarded ad hook.
-   * Phase 4 replaces body with AdMob / AppLovin MAX Capacitor bridge.
+   * Rewarded ad dispatcher; delegates to the native ad bridge when present.
    */
   async showRewarded(
     placement: AdPlacement,
@@ -159,7 +158,7 @@ export class BillingService {
     this.saveManager = saveManager;
   }
 
-  /** Phase 1 local simulation hook; Phase 4 binds directly to RevenueCat SDK via __PALAMUT_NATIVE_BRIDGE__. */
+  /** Grants the rescue bundle locally and triggers native IAP fulfillment when available. */
   purchaseFirstDefeatBundle(): boolean {
     const s = this.saveManager.get();
     if (s.firstDefeatBundleBought) return false;

@@ -331,7 +331,15 @@ export class SoundEngine {
       this.bus = master;
       const mBus = this.ctx.createGain();
       mBus.gain.value = 1.0;
-      mBus.connect(comp);
+      if (typeof this.ctx.createBiquadFilter === 'function') {
+        const mWarm = this.ctx.createBiquadFilter();
+        mWarm.type = 'lowpass';
+        mWarm.frequency.value = 1900;
+        mBus.connect(mWarm);
+        mWarm.connect(comp);
+      } else {
+        mBus.connect(comp);
+      }
       this.musicBus = mBus;
     }
     if (this.ctx.state === 'suspended') {

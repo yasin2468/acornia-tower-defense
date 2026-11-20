@@ -330,13 +330,16 @@ export class SaveManager {
       const prevVersion = typeof rest.version === 'number' ? rest.version : 1;
       const checksumOk = typeof checksum === 'number' && computeSaveChecksum(rest) === checksum;
       const { state, migrated } = migrateSave(rest as Partial<SaveState>, nowMs);
+      const isDev = Boolean((import.meta as { env?: { DEV?: boolean } }).env?.DEV);
       if (!checksumOk) {
-        console.warn(
-          `[SaveManager] Save checksum bozuk — JSON okunabildiği için veriler KURTARILDI (sıfırlama yapılmadı), uyarı: saveRecovered`,
-        );
+        if (isDev) {
+          console.warn(
+            `[SaveManager] Save checksum uyumsuz — JSON okunduğu için ilerleme kurtarıldı (saveRecovered).`,
+          );
+        }
         return { state, saveRecovered: true, migrated };
       }
-      if (migrated) {
+      if (migrated && isDev) {
         console.info(`[SaveManager] Save şeması v${prevVersion} -> v${SAVE_VERSION} olarak migrate edildi.`);
       }
       return { state, saveRecovered: false, migrated };

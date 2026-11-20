@@ -17,6 +17,7 @@ import {
   type TalentBranchId,
 } from '../data/talents.ts';
 import { CARD_MAX_LEVEL, TOWER_LIST, type HatId } from '../data/towers.ts';
+import type { Locale } from '../i18n/locales.ts';
 import type { ModelName } from '../rendering/AssetLoader.ts';
 import { isVipActive } from './CommercialServices.ts';
 import type {
@@ -227,7 +228,8 @@ export interface JournalEntry {
   statSummary: string;
 }
 
-export function getJournalCatalog(): JournalEntry[] {
+export function getJournalCatalog(locale: Locale = 'tr'): JournalEntry[] {
+  const isTr = locale === 'tr';
   const towers: JournalEntry[] = TOWER_LIST.map((tw) => ({
     id: tw.id,
     category: 'tower',
@@ -235,7 +237,9 @@ export function getJournalCatalog(): JournalEntry[] {
     nameKey: tw.nameKey,
     descKey: tw.roleKey,
     tacticKey: `codex.tactic.tower.${tw.id}`,
-    statSummary: `DMG ${tw.tier1.damage} · RNG ${tw.tier1.range}m · ${tw.tier1.cost}`,
+    statSummary: isTr
+      ? `Hasar ${tw.tier1.damage} · Menzil ${tw.tier1.range}m · ${tw.tier1.cost}`
+      : `DMG ${tw.tier1.damage} · RNG ${tw.tier1.range}m · ${tw.tier1.cost}`,
   }));
   const heroModelMap: Record<HeroId, ModelName> = {
     boz_pence: 'hero_bear',
@@ -250,7 +254,9 @@ export function getJournalCatalog(): JournalEntry[] {
     nameKey: h.nameKey,
     descKey: h.descKey,
     tacticKey: `codex.tactic.hero.${h.id}`,
-    statSummary: `HP ${h.maxHp} · DMG ${h.damage} · BLK ${h.blockCap}`,
+    statSummary: isTr
+      ? `Can ${h.maxHp} · Hasar ${h.damage} · Engel ${h.blockCap}`
+      : `HP ${h.maxHp} · DMG ${h.damage} · BLK ${h.blockCap}`,
   }));
   const enemies: JournalEntry[] = ENEMY_LIST.map((e) => ({
     id: e.id,
@@ -259,7 +265,9 @@ export function getJournalCatalog(): JournalEntry[] {
     nameKey: e.nameKey,
     descKey: e.descKey,
     tacticKey: `codex.tactic.enemy.${e.id}`,
-    statSummary: `HP ${e.baseHp} · SPD ${e.speed} · %${Math.round(e.armor * 100)}`,
+    statSummary: isTr
+      ? `Can ${e.baseHp} · Hız ${e.speed} · Zırh %${Math.round(e.armor * 100)}`
+      : `HP ${e.baseHp} · SPD ${e.speed} · Armor ${Math.round(e.armor * 100)}%`,
   }));
   return [...towers, ...heroes, ...enemies];
 }

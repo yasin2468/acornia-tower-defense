@@ -225,4 +225,111 @@ describe('v1.0.0 A-Z Lansman Hazırlığı (Hikâye, Yaşam Döngüsü, İade, Y
     assert.ok(fs.existsSync('capacitor.config.ts'), 'capacitor.config.ts eksik');
     assert.equal(fs.existsSync('public/world-map-bg.png'), false, 'kullanilmayan world-map-bg.png kaldirilmis olmali');
   });
+
+  it('Arayüz çıktısında ham Unicode emoji, kod sızıntısı ve karışık İngilizce metin yer almaz', () => {
+    const g = globalThis as Record<string, unknown>;
+    const hadStorage = 'localStorage' in g;
+    const prevStorage = g.localStorage;
+    g.localStorage = makeMockStorage();
+
+    try {
+      const sm = new SaveManager();
+      sm.update((d) => {
+        d.settings.locale = 'tr';
+      });
+      const mv = new MetaView(sm, new AdService(sm), new BillingService(sm), new NetworkService(), {
+        onStartLevel: () => {},
+        onStartExpedition: () => {},
+        onRefresh: () => {},
+      });
+      const container = {
+        innerHTML: '',
+        querySelectorAll: () => [],
+        querySelector: () => null,
+      } as unknown as HTMLElement;
+
+      const emojiRe = /[⚔⚡🛡✈💀🏆🎟📍🆘😎😂😭🔒]/u;
+      const forbiddenLeaks = [
+        'headSocket',
+        'SmartBotDirector',
+        '(?promo=1)',
+        'data-kenney-skin',
+        ': ON',
+        ': OFF',
+        '(Monthly)',
+        '(Lifetime)',
+        'WebSocket',
+        ' · v1.1',
+        'anti-rehber',
+        'taktik anti-rehberi',
+        'runını',
+      ];
+
+      for (const tab of ['map', 'multi', 'cards', 'journal', 'shop'] as const) {
+        mv.activeTab = tab;
+        mv.showSettings = tab === 'map';
+        mv.render(container);
+        assert.equal(emojiRe.test(container.innerHTML), false, `${tab} sekmesinde ham emoji bulundu`);
+        for (const leak of forbiddenLeaks) {
+          assert.equal(
+            container.innerHTML.includes(leak),
+            false,
+            `${tab} sekmesinde sızıntı dizesi (${leak}) bulundu`,
+          );
+        }
+      }
+
+      mv.activeTab = 'journal';
+      mv.journalSubTab = 'codex';
+      mv.showSettings = false;
+      mv.render(container);
+      assert.equal(container.innerHTML.includes('Hasar '), true, 'TR codex stats yerelleşmiş olmalı');
+      assert.equal(container.innerHTML.includes('DMG '), false, 'TR codex içinde DMG sızıntısı olmamalı');
+
+      const bv = new BattleView(sm, new AdService(sm), new BillingService(sm), new RemoteConfigService(), {
+        onRestart: () => {},
+        onExitToMap: () => {},
+        onNextLevel: () => {},
+        onSettingsChanged: () => {},
+      });
+      const dummyEl = {
+        style: { display: '' },
+        classList: { add: () => {}, remove: () => {}, toggle: () => {} },
+        textContent: '',
+        innerHTML: '',
+        title: '',
+        onclick: null,
+        querySelector: () => null,
+        querySelectorAll: () => [],
+      };
+      const contextHost = { innerHTML: '', querySelector: () => null, querySelectorAll: () => [] };
+      const modalHost = { innerHTML: '', querySelector: () => null, querySelectorAll: () => [] };
+      const bContainer = {
+        innerHTML: '',
+        querySelector: (sel: string) =>
+          sel === '#bw-modal-host' ? modalHost : sel === '#bw-context-layer' ? contextHost : dummyEl,
+        querySelectorAll: () => [],
+      } as unknown as HTMLElement;
+      const fakeScene = {
+        projectToScreen: () => ({ x: 100, y: 200, visible: true }),
+        cameraCtrl: { isZoomedOrPanned: () => false },
+      } as never;
+      const sim = new SimulationEngine(LEVELS[0], { seed: 42 });
+      const firstSlotId = Array.from(sim.slots.keys())[0];
+      bv.activeStoryBeat = null;
+      bv.paused = true;
+      bv.selectedSlotId = firstSlotId;
+      bv.previewTowerId = 'squirrel';
+      bv.render(bContainer, sim, fakeScene);
+      const combinedBattleHtml = modalHost.innerHTML + contextHost.innerHTML;
+      assert.ok(contextHost.innerHTML.includes('mobile-build-dock'), 'BattleView build dock render edilmeli');
+      assert.ok(modalHost.innerHTML.includes('Açık'), 'BattleView pause butonları Türkçe Açık/Kapalı olmalı');
+      assert.equal(emojiRe.test(combinedBattleHtml), false, 'BattleView modal/dock içinde ham emoji bulundu');
+      assert.equal(combinedBattleHtml.includes(': ON'), false, 'BattleView pause butonunda : ON sızıntısı');
+      assert.equal(combinedBattleHtml.includes(': OFF'), false, 'BattleView pause butonunda : OFF sızıntısı');
+    } finally {
+      if (hadStorage) g.localStorage = prevStorage;
+      else delete g.localStorage;
+    }
+  });
 });

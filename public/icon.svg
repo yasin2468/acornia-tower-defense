@@ -1,8 +1,38 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
-  <rect width="128" height="128" rx="28" fill="#1b2a22"/>
-  <circle cx="64" cy="64" r="46" fill="#2d4a36"/>
-  <path d="M64 26c-18 0-30 12-30 22h60c0-10-12-22-30-22z" fill="#7c4f2b"/>
-  <rect x="59" y="18" width="10" height="12" rx="4" fill="#5e3a1e"/>
-  <path d="M38 50c0 24 12 44 26 52 14-8 26-28 26-52H38z" fill="#d9a15b"/>
-  <ellipse cx="53" cy="66" rx="6" ry="11" fill="#f3cb8f" opacity="0.55"/>
+  <defs>
+    <radialGradient id="oakBg" cx="50%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#4e2e16"/>
+      <stop offset="100%" stop-color="#1e0f06"/>
+    </radialGradient>
+    <linearGradient id="brassRim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffe78c"/>
+      <stop offset="52%" stop-color="#d48c25"/>
+      <stop offset="100%" stop-color="#7c4409"/>
+    </linearGradient>
+    <radialGradient id="leafFill" cx="35%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#6ae072"/>
+      <stop offset="100%" stop-color="#227532"/>
+    </radialGradient>
+    <linearGradient id="capGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#9e6231"/>
+      <stop offset="100%" stop-color="#593112"/>
+    </linearGradient>
+    <linearGradient id="nutGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffe49e"/>
+      <stop offset="55%" stop-color="#df9c42"/>
+      <stop offset="100%" stop-color="#9c5b19"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#oakBg)"/>
+  <path d="M64 12L106 27v33c0 28.5-17.8 48.2-42 56-24.2-7.8-42-27.5-42-56V27L64 12z" fill="#2b1709" stroke="url(#brassRim)" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M64 20l34 12.2V59c0 23.6-14.2 39.8-34 46.8C44.2 98.8 30 82.6 30 59V32.2L64 20z" fill="#234729" stroke="#3c200b" stroke-width="2"/>
+  <path d="M32 68c-8 12-4 24 8 27 8-5 11-15 5-25-4-4-9-4-13-2z" fill="url(#leafFill)" stroke="#174d20" stroke-width="2"/>
+  <path d="M96 68c8 12 4 24-8 27-8-5-11-15-5-25 4-4 9-4 13-2z" fill="url(#leafFill)" stroke="#174d20" stroke-width="2"/>
+  <path d="M58 24c2-4 10-4 12 0l-1.5 11h-9L58 24z" fill="#6b3b16" stroke="#2c1406" stroke-width="2"/>
+  <path d="M39 54c0 22 10.5 39 25 46 14.5-7 25-24 25-46H39z" fill="url(#nutGrad)" stroke="#4c260a" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M34 52c0-11 13-19 30-19s30 8 30 19c0 3.2-2.6 5-6 5H40c-3.4 0-6-1.8-6-5z" fill="url(#capGrad)" stroke="#3b1b07" stroke-width="2.5"/>
+  <path d="M44 43c6-4 14-6 20-6s14 2 20 6M41 50h46" stroke="#c88c4b" stroke-width="1.6" stroke-linecap="round" opacity="0.55"/>
+  <ellipse cx="52" cy="69" rx="5.5" ry="11" transform="rotate(-12 52 69)" fill="#fff5cc" opacity="0.52"/>
+  <circle cx="40" cy="36" r="2.2" fill="#ffe68a"/>
+  <circle cx="88" cy="36" r="2.2" fill="#ffe68a"/>
 </svg>

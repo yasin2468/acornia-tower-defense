@@ -460,7 +460,7 @@ function processBattleEvents(events: SimEvent[]): void {
             ? 'heavy'
             : 'normal';
       const dmgText =
-        dmgKind === 'crit' ? `${ev.damage}!` : dmgKind === 'resisted' ? `🛡${ev.damage}` : `${ev.damage}`;
+        dmgKind === 'crit' ? `${ev.damage}!` : dmgKind === 'resisted' ? `(${ev.damage})` : `${ev.damage}`;
       battleView.addFloatingDamage(ev.x, ev.z, dmgText, dmgKind, ev.enemyId, ev.damage);
     } else if (ev.type === 'ENEMY_KILLED') {
       pendingSeasonKills += 1;

@@ -1,15 +1,15 @@
 :root {
-  --bg-deep: #101926;
-  --badge-bg: linear-gradient(180deg, #2a3e57 0%, #172334 100%);
-  --badge-border: rgba(255, 255, 255, 0.25);
-  --surface-card: linear-gradient(180deg, #24364c 0%, #162232 100%);
-  --text-primary: #ffffff;
-  --text-muted: #bdd0e6;
+  --bg-deep: #1a1008;
+  --badge-bg: linear-gradient(180deg, #4b2d17 0%, #2d1a0c 100%);
+  --badge-border: rgba(255, 214, 128, 0.36);
+  --surface-card: linear-gradient(180deg, #3a2313 0%, #231409 100%);
+  --text-primary: #fff7e6;
+  --text-muted: #e2c9a6;
   --accent-gold: #ffca45;
   --accent-gold-edge: #9e6508;
   --accent-green: #5be06e;
   --accent-green-edge: #207430;
-  --accent-cyan: #57dcff;
+  --accent-cyan: #72e6ff;
   --accent-red: #ff6b6b;
 }
 
@@ -26,9 +26,9 @@ body,
   padding: 0;
   width: 100%;
   height: 100%;
-  background: radial-gradient(circle at top, #1f3145 0%, #0a1017 100%);
+  background: radial-gradient(circle at top, #362011 0%, #120a04 100%);
   color: var(--text-primary);
-  font-family: ui-rounded, "SF Pro Rounded", "Avenir Next Rounded", "Trebuchet MS", sans-serif;
+  font-family: "Nunito", ui-rounded, "SF Pro Rounded", "Avenir Next Rounded", "Trebuchet MS", sans-serif;
   overflow: hidden;
   font-variant-numeric: tabular-nums;
 }
@@ -105,7 +105,7 @@ body,
   justify-content: center;
   gap: 14px;
   padding: 28px;
-  background: radial-gradient(circle at 50% 35%, #284258 0%, #101925 85%);
+  background: radial-gradient(circle at 50% 35%, #4a2d16 0%, #1a0f07 85%);
 }
 
 .loading-emblem {
@@ -116,8 +116,9 @@ body,
 }
 
 .loading-title {
-  font-size: 24px;
-  font-weight: 900;
+  font-family: "Fredoka", "Nunito", ui-rounded, sans-serif;
+  font-size: 25px;
+  font-weight: 700;
   letter-spacing: 0.04em;
   color: #ffe075;
   text-shadow: 0 3px 0 #5b3b06, 0 6px 14px rgba(0, 0, 0, 0.6);
@@ -127,8 +128,8 @@ body,
   width: 220px;
   height: 16px;
   border-radius: 999px;
-  background: #0d1520;
-  border: 2px solid rgba(255, 255, 255, 0.24);
+  background: #1b0e05;
+  border: 2px solid #9e6528;
   overflow: hidden;
   padding: 2px;
 }
@@ -146,17 +147,17 @@ body,
   color: var(--text-muted);
 }
 
-/* Tactile Supercell-Style Beveled Game Buttons */
+/* Tactile Carved Oak & Brass Game Buttons */
 .btn {
-  border: 2px solid rgba(255, 255, 255, 0.22);
+  border: 2px solid rgba(255, 224, 155, 0.34);
   border-radius: 14px;
   padding: 9px 14px;
   font-family: inherit;
   font-size: 13px;
   font-weight: 800;
-  color: #ffffff;
-  background: linear-gradient(180deg, #354e6b 0%, #203247 100%);
-  box-shadow: 0 4px 0 #0e1722, 0 6px 12px rgba(0, 0, 0, 0.34);
+  color: #fff7e6;
+  background: linear-gradient(180deg, #684020 0%, #3f240f 100%);
+  box-shadow: 0 4px 0 #1c0e04, 0 6px 12px rgba(0, 0, 0, 0.34);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -168,7 +169,7 @@ body,
 
 .btn:active:not(:disabled) {
   transform: translateY(3px);
-  box-shadow: 0 1px 0 #0e1722;
+  box-shadow: 0 1px 0 #1c0e04;
 }
 
 .btn-primary {
@@ -199,14 +200,14 @@ body,
   padding: 6px 11px;
   font-size: 12px;
   border-radius: 11px;
-  box-shadow: 0 3px 0 #0e1722;
+  box-shadow: 0 3px 0 #1c0e04;
 }
 
 .btn:disabled {
-  background: linear-gradient(180deg, #293545 0%, #1b2430 100%);
-  color: #7d90a6;
-  border-color: rgba(255, 255, 255, 0.12);
-  box-shadow: 0 3px 0 #0d131c;
+  background: linear-gradient(180deg, #3b2a1d 0%, #271a11 100%);
+  color: #a48a72;
+  border-color: rgba(255, 224, 155, 0.14);
+  box-shadow: 0 3px 0 #160c05;
   cursor: not-allowed;
   text-shadow: none;
 }
@@ -217,8 +218,8 @@ body,
   width: 46px;
   height: 26px;
   border-radius: 999px;
-  background: #141e2b;
-  border: 2px solid rgba(255, 255, 255, 0.22);
+  background: #231309;
+  border: 2px solid rgba(255, 224, 155, 0.28);
   cursor: pointer;
   padding: 0;
   transition: background 0.16s ease;
@@ -245,7 +246,7 @@ body,
   transform: translateX(20px);
 }
 
-/* Meta Shell — Tasarım 1: Ulu Meşe Parşömeni (Kenney Adventure UI) */
+/* Meta Shell — Tasarım 1: Ulu Meşe Parşömeni */
 .meta-screen {
   --bg-deep: #1e1108;
   --badge-bg: linear-gradient(180deg, #4b2d17 0%, #2b180b 100%);
@@ -515,10 +516,12 @@ body,
 }
 
 .oak-section-title {
-  font-size: 15px;
-  font-weight: 900;
+  font-family: "Fredoka", "Nunito", ui-rounded, sans-serif;
+  font-size: 15.5px;
+  font-weight: 700;
   color: #ffe27a;
   text-shadow: 0 2px 0 #261205;
+  letter-spacing: 0.015em;
 }
 
 .cards-subnav {
@@ -1363,20 +1366,69 @@ body,
 .map-horiz-bg-strip {
   position: absolute;
   inset: 0;
-  display: flex;
+  overflow: hidden;
   pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    #254a2e 0%,
+    #875024 14%,
+    #272357 24%,
+    #5f96bd 33%,
+    #772916 44%,
+    #225742 54%,
+    #2a3573 65%,
+    #4585b0 76%,
+    #7d2718 86%,
+    #4c6c2b 95%,
+    #967326 100%
+  );
 }
 
 .map-horiz-bg-tile {
-  flex: 1 1 11.1111%;
-  height: 100%;
-  background-size: cover;
-  background-position: center;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 15%;
+  background-size: 122% 114%;
   background-repeat: no-repeat;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 18%, #000 82%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0%, #000 18%, #000 82%, transparent 100%);
 }
 
-.map-horiz-bg-tile.mirrored {
-  transform: scaleX(-1);
+.map-horiz-bg-tile.tile-v0 {
+  left: 0%;
+  width: 14.5%;
+  background-position: 15% 48%;
+  -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 80%, transparent 100%);
+  mask-image: linear-gradient(90deg, #000 0%, #000 80%, transparent 100%);
+}
+.map-horiz-bg-tile.tile-v1 { left: 10.5%; background-position: 82% 40%; filter: hue-rotate(-14deg) saturate(1.12); }
+.map-horiz-bg-tile.tile-v2 { left: 21.5%; background-position: 28% 58%; filter: hue-rotate(36deg) saturate(0.95) brightness(0.9); }
+.map-horiz-bg-tile.tile-v3 { left: 32.5%; background-position: 70% 35%; filter: saturate(0.75) brightness(1.06); }
+.map-horiz-bg-tile.tile-v4 { left: 43.5%; background-position: 42% 62%; filter: sepia(0.24) saturate(1.16) brightness(0.92); }
+.map-horiz-bg-tile.tile-v5 { left: 54.5%; background-position: 64% 46%; filter: hue-rotate(14deg) saturate(1.05) brightness(0.94); }
+.map-horiz-bg-tile.tile-v6 { left: 65.5%; background-position: 22% 38%; filter: hue-rotate(48deg) saturate(1.04) brightness(0.9); }
+.map-horiz-bg-tile.tile-v7 { left: 76.5%; background-position: 78% 52%; filter: saturate(0.84) brightness(1.04); }
+.map-horiz-bg-tile.tile-v8 {
+  left: 85.5%;
+  width: 14.5%;
+  background-position: 50% 44%;
+  filter: sepia(0.18) saturate(1.14) brightness(1.02);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 20%, #000 100%);
+  mask-image: linear-gradient(90deg, transparent 0%, #000 20%, #000 100%);
+}
+
+.map-seam-mist {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent 9.5%,
+    rgba(255, 240, 205, 0.08) 12.2%,
+    transparent 14.8%
+  );
 }
 
 .map-biome-wash {
@@ -1387,8 +1439,8 @@ body,
     90deg,
     rgba(30, 74, 46, 0.24) 0%,
     rgba(30, 74, 46, 0.14) 9%,
-    rgba(168, 86, 36, 0.28) 14%,
-    rgba(42, 34, 92, 0.36) 22%,
+    rgba(168, 86, 36, 0.30) 14%,
+    rgba(42, 34, 92, 0.38) 22%,
     rgba(110, 168, 214, 0.30) 30%,
     rgba(128, 38, 20, 0.40) 40%,
     rgba(28, 92, 66, 0.36) 50%,
@@ -1414,8 +1466,9 @@ body,
   border: 2px solid #ffd564;
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.48);
   color: #fff6dc;
-  font-size: 11px;
-  font-weight: 900;
+  font-family: "Fredoka", "Nunito", ui-rounded, sans-serif;
+  font-size: 11.5px;
+  font-weight: 700;
   letter-spacing: 0.02em;
   white-space: nowrap;
   pointer-events: none;
@@ -1824,8 +1877,9 @@ body,
 .drawer-stage-title {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: 14.5px;
-  font-weight: 900;
+  font-family: "Fredoka", "Nunito", ui-rounded, sans-serif;
+  font-size: 15px;
+  font-weight: 700;
   color: var(--parchment-ink);
   line-height: 1.15;
   text-align: center;
@@ -2371,7 +2425,7 @@ body,
 .nav-pip.green { background: #2eb848; }
 .nav-pip.red { background: #dc362e; }
 
-/* In-Game Mobile Badges matching @remoteugur "SONRA" */
+/* In-Game Mobile HUD Badges */
 .hud-top {
   padding: calc(env(safe-area-inset-top, 10px) + 8px) 12px 0;
   display: flex;
@@ -3217,7 +3271,7 @@ body,
   position: absolute;
   inset: 0;
   z-index: 60;
-  background: rgba(10, 16, 24, 0.8);
+  background: rgba(18, 10, 4, 0.8);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
@@ -3228,14 +3282,16 @@ body,
 .modal-card {
   width: 100%;
   max-width: 350px;
-  background: var(--surface-card);
-  border: 2px solid rgba(255, 214, 102, 0.35);
-  border-radius: 22px;
+  background: linear-gradient(180deg, #3c2312 0%, #241409 100%);
+  border: 3px solid #8a5325;
+  outline: 2px solid #2b1406;
+  border-radius: 16px;
   padding: 18px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.6);
+  color: #fff7e6;
+  box-shadow: inset 0 1px 0 rgba(255, 224, 155, 0.2), 0 18px 40px rgba(0, 0, 0, 0.65);
 }
 
 .modal-card.oak-modal-dark {
@@ -3408,9 +3464,9 @@ body,
   width: 26px;
   height: 26px;
   border-radius: 8px;
-  border: 1.5px solid rgba(255, 255, 255, 0.22);
-  background: rgba(15, 23, 35, 0.85);
-  color: #ffffff;
+  border: 1.5px solid #8a5325;
+  background: linear-gradient(180deg, #4b2d17 0%, #2d180a 100%);
+  color: #fff7e6;
   font-size: 13px;
   line-height: 1;
   display: inline-flex;
@@ -3445,7 +3501,7 @@ body,
   min-height: 36px;
   border-radius: 999px;
   border: 2px solid #ffd454;
-  background: rgba(16, 25, 37, 0.92);
+  background: rgba(42, 24, 11, 0.94);
   color: #fff6d9;
   font-family: inherit;
   font-size: 11.5px;
@@ -3488,10 +3544,11 @@ body,
   right: 8px;
   bottom: calc(env(safe-area-inset-bottom, 6px) + 8px);
   z-index: 24;
-  border-radius: 18px;
-  border: 2px solid rgba(255, 215, 118, 0.55);
-  background: linear-gradient(180deg, rgba(26, 38, 54, 0.97) 0%, rgba(14, 21, 31, 0.98) 100%);
-  box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.62), inset 0 1.5px 0 rgba(255, 255, 255, 0.16);
+  border-radius: 16px;
+  border: 2.5px solid #9c652e;
+  outline: 2px solid #221005;
+  background: linear-gradient(180deg, rgba(54, 32, 17, 0.97) 0%, rgba(28, 16, 8, 0.98) 100%);
+  box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.62), inset 0 1.5px 0 rgba(255, 224, 155, 0.2);
   padding: 8px;
   display: flex;
   flex-direction: column;
@@ -3504,8 +3561,8 @@ body,
   gap: 8px;
   padding: 6px 8px;
   border-radius: 12px;
-  background: rgba(12, 18, 28, 0.88);
-  border: 1.5px solid rgba(255, 255, 255, 0.14);
+  background: rgba(24, 13, 6, 0.88);
+  border: 1.5px solid rgba(255, 214, 128, 0.24);
 }
 
 .mobile-build-preview.idle {
@@ -3516,7 +3573,7 @@ body,
 .preview-idle-hint {
   font-size: 11.5px;
   font-weight: 800;
-  color: #cfe0f5;
+  color: #e2c9a6;
 }
 
 .preview-thumb {
@@ -3544,9 +3601,10 @@ body,
 }
 
 .preview-name {
-  font-size: 12.5px;
-  font-weight: 900;
-  color: #ffffff;
+  font-family: "Fredoka", "Nunito", ui-rounded, sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff7e6;
 }
 
 .preview-target-pill {
@@ -3554,19 +3612,24 @@ body,
   font-weight: 900;
   padding: 1px 6px;
   border-radius: 999px;
-  background: rgba(71, 85, 105, 0.72);
-  color: #e2e8f0;
+  background: rgba(82, 48, 21, 0.88);
+  border: 1px solid rgba(255, 214, 128, 0.25);
+  color: #f3e0bf;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
 }
 
 .preview-target-pill.air {
-  background: rgba(14, 116, 144, 0.78);
-  color: #aef2ff;
+  background: rgba(16, 102, 126, 0.86);
+  border-color: rgba(130, 232, 255, 0.45);
+  color: #c2f4ff;
 }
 
 .preview-role {
   font-size: 10.5px;
   font-weight: 700;
-  color: #9ec0e6;
+  color: #e2c9a6;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3599,9 +3662,9 @@ body,
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  border: 1.5px solid rgba(255, 255, 255, 0.22);
-  background: rgba(34, 48, 66, 0.92);
-  color: #ffffff;
+  border: 1.5px solid rgba(255, 224, 155, 0.34);
+  background: rgba(68, 39, 17, 0.94);
+  color: #fff7e6;
   font-size: 14px;
   font-weight: 900;
   display: inline-flex;
@@ -3622,9 +3685,9 @@ body,
   min-height: 68px;
   padding: 4px 3px 5px;
   border-radius: 12px;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  background: linear-gradient(180deg, #273b52 0%, #162332 100%);
-  color: #ffffff;
+  border: 2px solid #6b3f1b;
+  background: linear-gradient(180deg, #4b2d17 0%, #2b180b 100%);
+  color: #fff7e6;
   font-family: inherit;
   display: flex;
   flex-direction: column;
@@ -3637,7 +3700,7 @@ body,
 
 .build-deck-card.selected {
   border-color: #ffe066;
-  background: linear-gradient(180deg, #3b5573 0%, #20344b 100%);
+  background: linear-gradient(180deg, #75461e 0%, #43240d 100%);
   box-shadow: 0 0 12px rgba(255, 214, 102, 0.45);
   transform: translateY(-2px);
 }
@@ -3724,9 +3787,10 @@ body,
 }
 
 .dock-title {
-  font-size: 13px;
-  font-weight: 900;
-  color: #ffffff;
+  font-family: "Fredoka", "Nunito", ui-rounded, sans-serif;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #fff7e6;
 }
 
 .dock-actions-row {
@@ -3757,9 +3821,9 @@ body,
   min-height: 54px;
   padding: 6px 8px;
   border-radius: 12px;
-  border: 2px solid rgba(255, 214, 102, 0.45);
-  background: linear-gradient(180deg, #324964 0%, #1c2c3e 100%);
-  color: #ffffff;
+  border: 2px solid #9c652e;
+  background: linear-gradient(180deg, #543319 0%, #2e190b 100%);
+  color: #fff7e6;
   font-family: inherit;
   text-align: left;
   display: flex;
@@ -3783,7 +3847,7 @@ body,
 .evo-btn-desc {
   font-size: 9.5px;
   font-weight: 700;
-  color: #bdd4ec;
+  color: #e2c9a6;
   line-height: 1.25;
 }
 
@@ -3795,8 +3859,8 @@ body,
   gap: 5px;
   padding: 7px 9px;
   border-radius: 10px;
-  background: rgba(14, 24, 36, 0.85);
-  border: 1px solid rgba(255, 214, 102, 0.4);
+  background: rgba(24, 13, 6, 0.88);
+  border: 1px solid rgba(255, 214, 102, 0.45);
   font-size: 11px;
   font-weight: 900;
   color: #ffe075;
@@ -4286,8 +4350,8 @@ body,
 .pause-audio-box {
   padding: 8px;
   border-radius: 12px;
-  background: rgba(15, 22, 34, 0.72);
-  border: 1px solid rgba(255, 213, 100, 0.25);
+  background: rgba(26, 14, 7, 0.78);
+  border: 1px solid rgba(255, 213, 100, 0.28);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -4310,4 +4374,80 @@ body,
   font-size: 10px;
   padding: 6px 4px;
   justify-content: center;
+}
+
+/* Inline Custom Game SVG Icons & Emotes */
+.ui-ico-inline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+  vertical-align: -2px;
+  flex-shrink: 0;
+}
+
+.ui-ico-inline svg {
+  width: 100%;
+  height: 100%;
+}
+
+.ui-ico-inline.emote-ico {
+  width: 17px;
+  height: 17px;
+  vertical-align: middle;
+}
+
+.stat-ico-pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.wp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.arena-soon-tier-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* Custom Carved Oak & Brass Range Slider */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #1b0e05 0%, #3a210f 100%);
+  border: 1.5px solid #7d4a21;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.7);
+  outline: none;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 35% 30%, #fff2b2 0%, #f5b935 60%, #a5630a 100%);
+  border: 2.5px solid #2b1406;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.55);
+  cursor: pointer;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 35% 30%, #fff2b2 0%, #f5b935 60%, #a5630a 100%);
+  border: 2.5px solid #2b1406;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.55);
+  cursor: pointer;
 }

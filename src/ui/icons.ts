@@ -73,21 +73,6 @@ export const UI_ICON_URLS = {
   chestEpic: resolvePublicUrl('ui/icon_chest_epic.png'),
 };
 
-export const KENNEY_UI_URLS = {
-  panelOak: resolvePublicUrl('ui/kenney/panel_brown.png'),
-  panelOakCorners: resolvePublicUrl('ui/kenney/panel_brown_corners_a.png'),
-  panelDarkOak: resolvePublicUrl('ui/kenney/panel_brown_dark.png'),
-  panelDarkCorners: resolvePublicUrl('ui/kenney/panel_brown_dark_corners_a.png'),
-  panelBorderDetail: resolvePublicUrl('ui/kenney/panel_border_brown_detail.png'),
-  parchment: resolvePublicUrl('ui/kenney/panel_grid_paper.png'),
-  bannerHanging: resolvePublicUrl('ui/kenney/banner_hanging.png'),
-  btnBrown: resolvePublicUrl('ui/kenney/button_brown.png'),
-  btnRed: resolvePublicUrl('ui/kenney/button_red.png'),
-  roundBrown: resolvePublicUrl('ui/kenney/round_brown.png'),
-  roundBrownDark: resolvePublicUrl('ui/kenney/round_brown_dark.png'),
-  progressGreen: resolvePublicUrl('ui/kenney/progress_green.png'),
-};
-
 export const OAK_UI_URLS = {
   worldMap: resolvePublicUrl('ui/oak/world_map_oak.jpg'),
   talentTreeBg: resolvePublicUrl('ui/oak/talent_tree_bg.jpg'),
@@ -199,4 +184,21 @@ export const ICONS = {
     <path d="M15.5 9.5l4.2 1.8v3.3c0 2.7-1.7 4.7-4.2 5.6-2.5-.9-4.2-2.9-4.2-5.6v-3.3l4.2-1.8z" fill="#e9eef3" stroke="#d19a2e" stroke-width="1.6"/>
     <path d="M15.5 11.8v6" stroke="#366ea8" stroke-width="2.2" stroke-linecap="round"/>
   </svg>`,
+  sword: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 4l-9.5 9.5"/><path d="M7.5 11.5l5 5"/><path d="M9.5 15.5L6 19l-1-1 3.5-3.5"/><path d="M16 4h3v3"/></svg>`,
+  bolt: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13.5 2L5 13.5h6l-1.5 8.5L19 10.5h-6L13.5 2z"/></svg>`,
+  shield: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5l7.5 3v6c0 4.8-3.2 8.5-7.5 10-4.3-1.5-7.5-5.2-7.5-10v-6l7.5-3z"/></svg>`,
+  wing: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 16c4.5-6 10.5-10 18-11-1.8 4-5.2 6.8-9.5 8 2.2 0 4.5-.6 6.2-1.8-1.6 3.5-5.2 5.4-9.7 5.4-1.8 0-3.5-.2-5-.6z"/></svg>`,
+  skull: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5C7 2.5 3.5 6 3.5 10.6c0 2.7 1.3 5 3.3 6.3V20a1.5 1.5 0 0 0 1.5 1.5h7.4A1.5 1.5 0 0 0 17.2 20v-3.1c2-1.3 3.3-3.6 3.3-6.3C20.5 6 17 2.5 12 2.5zM9 12.2a1.7 1.7 0 1 1 0-3.4 1.7 1.7 0 0 1 0 3.4zm6 0a1.7 1.7 0 1 1 0-3.4 1.7 1.7 0 0 1 0 3.4z"/></svg>`,
+  trophy: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4h10v5a5 5 0 0 1-10 0V4zm-3 1h2v4H4.8A2.8 2.8 0 0 1 2 6.2V6a1 1 0 0 1 1-1h1zm14 0h3a1 1 0 0 1 1 1v.2A2.8 2.8 0 0 1 19.2 9H18V5zm-7 9.5h2V18h3v2.5H8V18h3v-3.5z"/></svg>`,
+  ticket: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 6a2 2 0 0 0-2 2v2a2 2 0 1 1 0 4v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a2 2 0 1 1 0-4V8a2 2 0 0 0-2-2H4zm5 4h6v4H9v-4z"/></svg>`,
+  pin: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5a6.5 6.5 0 0 0-6.5 6.5c0 4.9 6.5 12.5 6.5 12.5s6.5-7.6 6.5-12.5A6.5 6.5 0 0 0 12 2.5zm0 9a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>`,
+  sos: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><circle cx="12" cy="16.5" r="0.8" fill="currentColor"/></svg>`,
+  emoteCool: `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9.5" fill="#ffd24c" stroke="#593506" stroke-width="1.6"/><path d="M5.5 9.5h5.2v2.2a2.6 2.6 0 0 1-5.2 0V9.5zm7.8 0h5.2v2.2a2.6 2.6 0 0 1-5.2 0V9.5zM10.7 10.3h2.6" fill="#2b1707" stroke="#2b1707" stroke-width="1.4"/><path d="M8.5 15.8c1 1.4 2.2 2 3.5 2s2.5-.6 3.5-2" stroke="#593506" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+  emoteLaugh: `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9.5" fill="#ffd24c" stroke="#593506" stroke-width="1.6"/><path d="M7.5 10l2-1.5 1 1.5M16.5 10l-2-1.5-1 1.5" stroke="#422108" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.5 14h9a4.5 4.5 0 0 1-9 0z" fill="#6b250e" stroke="#422108" stroke-width="1.4"/></svg>`,
+  emoteCry: `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9.5" fill="#ffd24c" stroke="#593506" stroke-width="1.6"/><path d="M7.5 10.5l2.5-1M16.5 10.5l-2.5-1" stroke="#422108" stroke-width="1.8" stroke-linecap="round"/><path d="M8 13v4M16 13v4" stroke="#4ec4ff" stroke-width="2.2" stroke-linecap="round"/><path d="M9 17.5c1-1.3 2-1.8 3-1.8s2 .5 3 1.8" stroke="#422108" stroke-width="1.7" stroke-linecap="round"/></svg>`,
 };
+
+export function uiIcon(key: keyof typeof ICONS, cls = ''): string {
+  const clsAttr = cls ? ` ${cls}` : '';
+  return `<span class="ui-ico-inline${clsAttr}" aria-hidden="true">${ICONS[key]}</span>`;
+}
