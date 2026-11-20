@@ -150,6 +150,7 @@ export class MetaView {
   codexFilter: CodexFilter = 'all';
   confirmResetSave = false;
   selectedLevelId = 1;
+  drawerCollapsed = false;
   ironMode = false;
   showSettings = false;
   showBestiary = false;
@@ -501,9 +502,9 @@ export class MetaView {
     });
 
     const Y_WAVE = [
-      36.5, 32.0, 38.0, 32.5, 37.5, 31.5, 38.0, 32.5, 37.0, 32.0, 37.5, 31.5,
-      37.5, 32.5, 38.0, 32.0, 37.0, 31.5, 38.0, 32.5, 37.5, 32.0, 37.5, 32.5,
-      37.0, 32.0, 38.0, 31.5, 37.5, 32.5, 38.0, 32.0, 37.0, 32.0, 37.5, 32.5,
+      39.5, 35.0, 41.5, 35.5, 41.0, 34.5, 41.5, 35.5, 40.5, 35.0, 41.0, 34.5,
+      41.0, 35.5, 41.5, 35.0, 40.5, 34.5, 41.5, 35.5, 41.0, 35.0, 41.0, 35.5,
+      40.5, 35.0, 41.5, 34.5, 41.0, 35.5, 41.5, 35.0, 40.5, 35.0, 41.0, 35.5,
     ];
     const OAK_HORIZ_TRAIL: ReadonlyArray<{ xPct: number; yPct: number }> = Y_WAVE.map((yPct, idx) => ({
       xPct: Number((3.2 + idx * 2.6743).toFixed(2)),
@@ -689,15 +690,16 @@ export class MetaView {
         </div>
       </div>
 
-      <section class="parchment-drawer ${slideAnimClass}" id="parchment-drawer">
+      <div class="region-jump-strip map-top-regions" id="region-jump-strip" role="navigation" aria-label="${t(loc, 'nav.map')}">
+        ${regionJumpHtml}
+      </div>
+
+      <section class="parchment-drawer ${slideAnimClass} ${this.drawerCollapsed ? 'is-collapsed' : ''}" id="parchment-drawer">
+        <button type="button" class="drawer-collapse-tab" id="btn-drawer-toggle" aria-label="${t(loc, 'map.toggleDrawer')}" aria-expanded="${!this.drawerCollapsed}">${this.drawerCollapsed ? '▲' : '▼'}</button>
         <span class="brass-corner tl" aria-hidden="true"></span>
         <span class="brass-corner tr" aria-hidden="true"></span>
         <span class="brass-corner bl" aria-hidden="true"></span>
         <span class="brass-corner br" aria-hidden="true"></span>
-
-        <div class="region-jump-strip" id="region-jump-strip" role="navigation" aria-label="${t(loc, 'nav.map')}">
-          ${regionJumpHtml}
-        </div>
 
         <div class="stage-pill-strip" id="stage-pill-strip" role="navigation" aria-label="${t(loc, 'nav.map')}">
           ${stagePillsHtml}
@@ -708,14 +710,13 @@ export class MetaView {
             <div class="drawer-title-row">
               <button type="button" class="drawer-step-btn" id="btn-drawer-prev" ${hasPrev ? '' : 'disabled'} aria-label="${t(loc, 'map.prevStage')}">◀</button>
               <div class="drawer-stage-title">${selLevel.id}. ${t(loc, selLevel.nameKey)}</div>
+              <span class="drawer-wave-chip">${selLevel.waves.length} ${t(loc, 'hud.wave')}</span>
               <button type="button" class="drawer-step-btn" id="btn-drawer-next" ${hasNext ? '' : 'disabled'} aria-label="${t(loc, 'map.nextStage')}">▶</button>
             </div>
-              <div class="drawer-concept-row">
-                <span class="stage-concept-pill">${t(loc, `level.${selLevel.id}.concept`)}</span>
-                <span class="drawer-stage-sub">${t(loc, selLevel.regionKey ?? `map.biome.${selLevel.biome}`)} · ${selLevel.waves.length} ${t(loc, 'hud.wave')}</span>
-              </div>
-            <div class="drawer-concept-desc">${t(loc, `level.${selLevel.id}.sub`)}</div>
-            <div class="drawer-threats" aria-label="${t(loc, 'map.threats')}">${threatsHtml}</div>
+            <div class="drawer-meta-threats-row">
+              <span class="stage-concept-pill" title="${t(loc, `level.${selLevel.id}.sub`)}">${t(loc, `level.${selLevel.id}.concept`)}</span>
+              <div class="drawer-threats" aria-label="${t(loc, 'map.threats')}">${threatsHtml}</div>
+            </div>
           </div>
         </div>
 
@@ -730,10 +731,7 @@ export class MetaView {
           </div>
           <button type="button" class="map-hero-pill" id="btn-map-hero-switch" aria-label="${t(loc, 'map.switchHeroTitle')}">
             <img src="${PORTRAIT_URLS[save.selectedHero]}" alt="${t(loc, HEROES[save.selectedHero].nameKey)}" />
-            <span class="map-hero-meta">
-              <small>${t(loc, 'map.quickHero')}</small>
-              <strong>${t(loc, HEROES[save.selectedHero].nameKey)}</strong>
-            </span>
+            <strong>${t(loc, HEROES[save.selectedHero].nameKey)}</strong>
             <span aria-hidden="true">▾</span>
           </button>
         </div>
@@ -2146,6 +2144,14 @@ export class MetaView {
     if (nextMapBtn) nextMapBtn.onclick = () => this.selectStageById(this.selectedLevelId + 1);
     if (prevDrawerBtn) prevDrawerBtn.onclick = () => this.selectStageById(this.selectedLevelId - 1);
     if (nextDrawerBtn) nextDrawerBtn.onclick = () => this.selectStageById(this.selectedLevelId + 1);
+
+    const drawerToggleBtn = container.querySelector<HTMLButtonElement>('#btn-drawer-toggle');
+    if (drawerToggleBtn) {
+      drawerToggleBtn.onclick = () => {
+        this.drawerCollapsed = !this.drawerCollapsed;
+        this.callbacks.onRefresh();
+      };
+    }
 
     const track = container.querySelector<HTMLElement>('#map-horiz-track');
     if (track) {
