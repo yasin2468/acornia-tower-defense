@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { ENEMIES } from '../data/enemies.ts';
 import type { LevelSpec } from '../data/levels.ts';
@@ -97,6 +98,7 @@ export interface LoadedModelInstance {
 }
 
 const loader = new GLTFLoader();
+loader.setMeshoptDecoder(MeshoptDecoder);
 const cache = new Map<string, GLTF>();
 const inFlight = new Map<string, Promise<GLTF>>();
 let preloadPromise: Promise<void> | null = null;

@@ -1,4 +1,4 @@
-import { APP_VERSION, ONLINE_ARENA_ENABLED } from '../config/features.ts';
+import { APP_VERSION, MONETIZATION_ENABLED, ONLINE_ARENA_ENABLED } from '../config/features.ts';
 import {
   AURA_SPECS,
   BANNER_SPECS,
@@ -179,6 +179,7 @@ export class MetaView {
   private lastSlideDir: 'left' | 'right' | null = null;
   private pillStripScrollLeft = 0;
   private regionStripScrollLeft = 0;
+  private exportedSaveCode = '';
 
   constructor(
     saveManager: SaveManager,
@@ -264,7 +265,7 @@ export class MetaView {
       }
     }
     const shop =
-      save.dailyFreeChestsUsed < 2 || vipStatus.canClaim || hasSeasonClaim ? '!' : '';
+      save.dailyFreeChestsUsed < 2 || (MONETIZATION_ENABLED && vipStatus.canClaim) || hasSeasonClaim ? '!' : '';
 
     return { map, multi, cards, journal, shop, towersSub, heroesSub, talentsSub };
   }
@@ -764,12 +765,12 @@ export class MetaView {
             <div>
               <div class="parchment-strong">${afk.hoursElapsed}/${t(loc, afk.capHours === 16 ? 'afk.duration16' : 'afk.duration8')}</div>
               <div class="parchment-muted">+${afk.oakCoins} ${t(loc, 'cur.oak')} · +${afk.shards} ${t(loc, 'nav.cards')}</div>
-              <div class="parchment-muted" style="font-size:10.5px;">${tParams(loc, 'map.afk.vip', { duration: t(loc, 'afk.duration16') })}</div>
+              ${MONETIZATION_ENABLED ? `<div class="parchment-muted" style="font-size:10.5px;">${tParams(loc, 'map.afk.vip', { duration: t(loc, 'afk.duration16') })}</div>` : ''}
             </div>
           </div>
           <div style="display:flex; flex-direction:column; gap:8px;">
             <button class="btn btn-gold" id="btn-afk-claim" ${afk.oakCoins < 1 ? 'disabled' : ''}>${t(loc, 'map.afk.collect')}</button>
-            <button class="btn btn-sm" id="btn-afk-boost">${tParams(loc, 'map.afk.boost', { amount: AFK_QUICK_BOOST_OAK, hours: AFK_QUICK_BOOST_HOURS })}</button>
+            ${MONETIZATION_ENABLED ? `<button class="btn btn-sm" id="btn-afk-boost">${tParams(loc, 'map.afk.boost', { amount: AFK_QUICK_BOOST_OAK, hours: AFK_QUICK_BOOST_HOURS })}</button>` : ''}
           </div>
         </div>
       </div>
@@ -1850,18 +1851,29 @@ export class MetaView {
     }).join('');
 
     return `
-      <div class="card-panel" style="border-color: var(--accent-gold); background: linear-gradient(180deg, #3c3118 0%, #201a11 100%); display:flex; flex-direction:column; gap:10px;">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <div style="font-size:16px; font-weight:900; color:#ffe17a;">${t(loc, 'shop.vipTitle')}</div>
-          ${vipActive ? `<span class="pill-badge gold">${t(loc, 'shop.vipActive')} (${save.vipTier})</span>` : ''}
-        </div>
-        <div style="font-size:12px; color:#f2e2be;">${tParams(loc, 'shop.vipPerks', { daily: VIP_DAILY_CLAIM_GEMS, lump: VIP_LIFETIME_GEMS, duration: t(loc, 'afk.duration16') })}</div>
-        ${save.vipTier !== 'none' ? this.renderVipClaimSection(loc, vipStatus) : ''}
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-          <button class="btn btn-gold btn-sm" id="btn-vip-monthly">${t(loc, 'shop.vipMonthly')}</button>
-          <button class="btn btn-primary btn-sm" id="btn-vip-lifetime">${t(loc, 'shop.vipLifetime')}</button>
-        </div>
-      </div>
+      ${
+        MONETIZATION_ENABLED
+          ? `
+            <div class="card-panel" style="border-color: var(--accent-gold); background: linear-gradient(180deg, #3c3118 0%, #201a11 100%); display:flex; flex-direction:column; gap:10px;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div style="font-size:16px; font-weight:900; color:#ffe17a;">${t(loc, 'shop.vipTitle')}</div>
+                ${vipActive ? `<span class="pill-badge gold">${t(loc, 'shop.vipActive')} (${save.vipTier})</span>` : ''}
+              </div>
+              <div style="font-size:12px; color:#f2e2be;">${tParams(loc, 'shop.vipPerks', { daily: VIP_DAILY_CLAIM_GEMS, lump: VIP_LIFETIME_GEMS, duration: t(loc, 'afk.duration16') })}</div>
+              ${save.vipTier !== 'none' ? this.renderVipClaimSection(loc, vipStatus) : ''}
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                <button class="btn btn-gold btn-sm" id="btn-vip-monthly">${t(loc, 'shop.vipMonthly')}</button>
+                <button class="btn btn-primary btn-sm" id="btn-vip-lifetime">${t(loc, 'shop.vipLifetime')}</button>
+              </div>
+            </div>
+          `
+          : `
+            <div class="card-panel" id="shop-free-banner" style="border-color: rgba(255, 213, 100, 0.35); background: rgba(36, 22, 10, 0.85); display:flex; justify-content:space-between; align-items:center; gap:8px;">
+              <div style="font-size:11.5px; color:#f2e2be; line-height:1.35;">${t(loc, 'shop.storeSoon')}</div>
+              <span class="pill-badge gold" style="flex-shrink:0;">${t(loc, 'multi.soonShort')}</span>
+            </div>
+          `
+      }
 
       <div class="card-panel" id="season-pass-panel" style="display:flex; flex-direction:column; gap:8px; border-color: rgba(110, 231, 183, 0.4);">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
@@ -1874,9 +1886,11 @@ export class MetaView {
           <span class="shard-bar-text">${tParams(loc, 'season.progress', { cur: killsInTier, need: KILLS_PER_SEASON_TIER })}</span>
         </div>
         ${
-          save.seasonGoldUnlocked
-            ? `<div style="font-size:11.5px; font-weight:900; color:var(--accent-gold);">${t(loc, 'season.goldActive')}</div>`
-            : `<button class="btn btn-gold btn-sm" id="btn-buy-season-gold">${t(loc, 'season.buyGold')}</button>`
+          !MONETIZATION_ENABLED
+            ? ''
+            : save.seasonGoldUnlocked
+              ? `<div style="font-size:11.5px; font-weight:900; color:var(--accent-gold);">${t(loc, 'season.goldActive')}</div>`
+              : `<button class="btn btn-gold btn-sm" id="btn-buy-season-gold">${t(loc, 'season.buyGold')}</button>`
         }
         <div class="season-track-list">${tierRowsHtml}</div>
       </div>
@@ -1884,10 +1898,10 @@ export class MetaView {
       <div style="font-size:15px; font-weight:900; color:#ffe17a;">${t(loc, 'shop.chests')}</div>
       <div class="chest-grid">
         <div class="chest-card">
-          <img src="${UI_ICON_URLS.chestFree}" alt="${t(loc, 'shop.freeChest')}" />
-          <div style="font-size:12.5px; font-weight:800;">${t(loc, 'shop.freeChest')}</div>
+          <img src="${UI_ICON_URLS.chestFree}" alt="${t(loc, MONETIZATION_ENABLED ? 'shop.freeChest' : 'shop.freeChestV1')}" />
+          <div style="font-size:12.5px; font-weight:800;">${t(loc, MONETIZATION_ENABLED ? 'shop.freeChest' : 'shop.freeChestV1')}</div>
           <div style="font-size:11px; color:var(--text-muted);">${2 - save.dailyFreeChestsUsed}/2 ${t(loc, 'shop.chestsRemaining')}</div>
-          <button class="btn btn-primary btn-sm" style="width:100%;" id="btn-chest-free" ${save.dailyFreeChestsUsed >= 2 ? 'disabled' : ''}>${t(loc, 'shop.openChest')}</button>
+          <button class="btn btn-primary btn-sm" style="width:100%;" id="btn-chest-free" ${save.dailyFreeChestsUsed >= 2 ? 'disabled' : ''}>${t(loc, MONETIZATION_ENABLED ? 'shop.openChest' : 'shop.claimDailyChest')}</button>
         </div>
         <div class="chest-card epic">
           <img src="${UI_ICON_URLS.chestEpic}" alt="${t(loc, 'shop.epicChest')}" />
@@ -1970,6 +1984,21 @@ export class MetaView {
           <div class="settings-privacy-box">
             <strong>${t(loc, 'settings.privacyTitle')}</strong>
             <span>${t(loc, 'settings.privacyBody')}</span>
+          </div>
+          <div class="settings-backup-box" id="save-backup-box">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
+              <strong>${t(loc, 'settings.backupTitle')}</strong>
+              <button class="btn btn-sm" id="btn-export-save" type="button">${t(loc, 'settings.backupExport')}</button>
+            </div>
+            ${
+              this.exportedSaveCode
+                ? `<input type="text" readonly class="settings-backup-input" id="export-save-code" value="${this.exportedSaveCode}" />`
+                : ''
+            }
+            <div style="display:flex; gap:6px; align-items:center;">
+              <input type="text" class="settings-backup-input" id="input-import-save" placeholder="${t(loc, 'settings.backupPlaceholder')}" />
+              <button class="btn btn-sm btn-primary" id="btn-import-save" type="button">${t(loc, 'settings.backupImport')}</button>
+            </div>
           </div>
           ${
             this.callbacks.onDevUnlock
@@ -2798,6 +2827,37 @@ export class MetaView {
     if (rngShake) {
       rngShake.oninput = () => {
         this.saveManager.update((d) => { d.settings.shakeStrength = Number(rngShake.value); });
+      };
+    }
+
+    const exportSaveBtn = container.querySelector<HTMLButtonElement>('#btn-export-save');
+    if (exportSaveBtn) {
+      exportSaveBtn.onclick = () => {
+        const code = this.saveManager.exportSaveCode();
+        this.exportedSaveCode = code;
+        if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+          void navigator.clipboard.writeText(code).catch(() => {});
+          this.statusNotice = t(loc, 'settings.backupCopiedToast');
+        } else {
+          this.statusNotice = t(loc, 'settings.backupExportedToast');
+        }
+        this.callbacks.onRefresh();
+      };
+    }
+
+    const importSaveBtn = container.querySelector<HTMLButtonElement>('#btn-import-save');
+    if (importSaveBtn) {
+      importSaveBtn.onclick = () => {
+        const raw = container.querySelector<HTMLInputElement>('#input-import-save')?.value ?? '';
+        const res = this.saveManager.importSaveCode(raw);
+        if (res.ok) {
+          this.exportedSaveCode = '';
+          this.statusNotice = t(loc, 'settings.backupImportedToast');
+          this.showSettings = false;
+        } else {
+          this.statusNotice = t(loc, 'settings.backupErrorToast');
+        }
+        this.callbacks.onRefresh();
       };
     }
 

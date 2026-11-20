@@ -155,7 +155,21 @@ export class SoundEngine {
   resume(): void {
     const ctx = this.ensureContext();
     if (ctx && ctx.state === 'suspended') {
-      void ctx.resume().catch(() => {});
+      void ctx.resume().then(() => this.syncMusicLoop()).catch(() => {});
+      return;
+    }
+    if (this.musicTimer === null && this.enabled && this.musicEnabled && this.musicTheme !== 'none') {
+      this.syncMusicLoop();
+    }
+  }
+
+  suspend(): void {
+    if (this.musicTimer !== null) {
+      clearInterval(this.musicTimer);
+      this.musicTimer = null;
+    }
+    if (this.ctx && this.ctx.state === 'running' && typeof this.ctx.suspend === 'function') {
+      void this.ctx.suspend().catch(() => {});
     }
   }
 

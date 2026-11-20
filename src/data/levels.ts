@@ -1648,7 +1648,7 @@ function createExtendedLevels(base: LevelSpec[]): LevelSpec[] {
 export const LEVELS: LevelSpec[] = [...BASE_LEVELS, ...createExtendedLevels(BASE_LEVELS)];
 
 export function isLevelUnlocked(levelId: number, levelStars: Record<number, number>): boolean {
-  if (levelId <= 10) return true;
+  if (levelId <= 1) return true;
   return (levelStars[levelId - 1] ?? 0) > 0;
 }
 
@@ -1670,6 +1670,6 @@ export const WORLD_MAP_NODES: WorldMapPreviewNode[] = LEVELS.map((lvl) => ({
   nameKey: lvl.nameKey,
   xPct: lvl.mapPin.xPct,
   yPct: lvl.mapPin.yPct,
-  unlocked: lvl.id <= 10,
+  unlocked: lvl.id <= 1,
   isBossStage: Boolean(lvl.isBossStage),
 }));

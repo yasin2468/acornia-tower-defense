@@ -1,3 +1,4 @@
+import { MONETIZATION_ENABLED } from '../config/features.ts';
 import { easeOutCubic, GhostHpTracker, popScale } from '../core/JuiceController.ts';
 import {
   computeBattleStars,
@@ -5,7 +6,9 @@ import {
   type SimulationEngine,
 } from '../core/SimulationEngine.ts';
 import { ENEMIES, HEROES, resolveHeroVisualVariant, type EnemyId } from '../data/enemies.ts';
+import { LEVELS } from '../data/levels.ts';
 import { EXPEDITION_CLEAR_GEMS, EXPEDITION_CLEAR_OAK } from '../data/roguelike.ts';
+import { getBossDisplayNameKey, getStoryBeatForLevel, type StoryBeat } from '../data/story.ts';
 import { SYNERGY_COMBOS, getActiveSynergyPartnersForTower, getTowerSynergies } from '../data/synergies.ts';
 import { TOWER_LIST, TOWERS, type TargetingPriority, type TowerId } from '../data/towers.ts';
 import { t, tParams, type Locale } from '../i18n/locales.ts';
@@ -51,6 +54,8 @@ interface FloatEl {
 export interface BattleViewCallbacks {
   onRestart: () => void;
   onExitToMap: () => void;
+  onNextLevel?: (nextLevelId: number) => void;
+  onSettingsChanged?: () => void;
   onSendPvpMerc?: (enemyId: EnemyId, cost: number) => void;
   onSendSocial?: (emoteId: SocialEmoteId) => void;
   onPreviewTap?: () => void;
@@ -65,10 +70,11 @@ export class BattleView {
   speedMultiplier: 1 | 2 | 3 = 1;
   speed2xUnlockedThisMatch = false;
   paused = false;
+  activeStoryBeat: StoryBeat | null = null;
   bannerText = '';
   bannerTimer = 0;
   floatingDamages: FloatingDamage[] = [];
-  tutorialPhase: 'intro' | 'build_tower' | 'move_hero' | 'done' = 'done';
+  tutorialPhase: 'intro' | 'build_tower' | 'move_hero' | 'start_wave' | 'done' = 'done';
   promoMode = false;
   promoHideHud = false;
 
@@ -161,7 +167,10 @@ export class BattleView {
     this.barPool = [];
     this.floatPool = [];
     this.lastTutorialHtml = '';
-    this.tutorialPhase = levelId === 1 && !this.saveManager.get().tutorialDone ? 'intro' : 'done';
+    const save = this.saveManager.get();
+    const beat = !this.promoMode && levelId <= 36 ? getStoryBeatForLevel(levelId) : null;
+    this.activeStoryBeat = beat && !save.seenStoryIds?.includes(beat.id) ? beat : null;
+    this.tutorialPhase = levelId === 1 && !save.tutorialDone ? 'build_tower' : 'done';
     this.mountedRoot = null;
     this.damageVignetteEl = null;
     this.castleHpRowEl = null;
@@ -253,8 +262,14 @@ export class BattleView {
     }
     this.ghostHp.prune(alive);
 
-    if (this.tutorialPhase === 'intro' && sim.elapsed >= 2.2) {
+    if (this.tutorialPhase === 'intro' && !this.activeStoryBeat && sim.elapsed >= 0.8) {
       this.tutorialPhase = 'build_tower';
+    }
+    if (this.tutorialPhase === 'start_wave' && !sim.waitingForFirstWave) {
+      this.tutorialPhase = 'done';
+      this.saveManager.update((d) => {
+        d.tutorialDone = true;
+      });
     }
   }
 
@@ -538,7 +553,9 @@ export class BattleView {
       if (liveBoss) {
         const bSpec = ENEMIES[liveBoss.enemyId];
         const bPct = Math.max(0, Math.min(100, (liveBoss.hp / liveBoss.maxHp) * 100));
-        if (this.bossNameEl) this.bossNameEl.textContent = t(loc, bSpec.nameKey);
+        if (this.bossNameEl) {
+          this.bossNameEl.textContent = t(loc, getBossDisplayNameKey(sim.level.id, bSpec.nameKey));
+        }
         if (this.bossHpTextEl) this.bossHpTextEl.textContent = `${Math.ceil(liveBoss.hp)}/${liveBoss.maxHp}`;
         if (this.bossHpFillEl) this.bossHpFillEl.style.width = `${bPct.toFixed(1)}%`;
       }
@@ -717,10 +734,21 @@ export class BattleView {
     }
 
     if (this.tutorialLayerEl) {
-      const tutHtml = this.buildTutorialHtml(sim, sceneMgr);
+      const tutHtml = this.buildTutorialHtml(sim, sceneMgr, loc);
       if (tutHtml !== this.lastTutorialHtml) {
         this.lastTutorialHtml = tutHtml;
         this.tutorialLayerEl.innerHTML = tutHtml;
+        const skipTut = this.tutorialLayerEl.querySelector?.('#btn-skip-tutorial') as HTMLButtonElement | null;
+        if (skipTut) {
+          skipTut.onclick = () => {
+            this.tutorialPhase = 'done';
+            this.saveManager.update((d) => {
+              d.tutorialDone = true;
+            });
+            this.lastTutorialHtml = '';
+            if (this.tutorialLayerEl) this.tutorialLayerEl.innerHTML = '';
+          };
+        }
       }
     }
 
@@ -750,7 +778,7 @@ export class BattleView {
       }
     }
 
-    const modalKey = `${this.paused}|${sim.status}|${sim.reviveUsed}|${save.firstDefeatBundleBought}`;
+    const modalKey = `${this.paused}|${this.activeStoryBeat?.id ?? 'none'}|${sim.status}|${sim.reviveUsed}|${save.firstDefeatBundleBought}|${save.settings.soundEnabled}|${save.settings.musicEnabled}|${save.settings.hapticsEnabled}|${loc}`;
     if (modalKey !== this.lastModalKey && this.modalHostEl) {
       this.lastModalKey = modalKey;
       this.modalHostEl.innerHTML = this.buildModal(sim, loc);
@@ -886,7 +914,8 @@ export class BattleView {
     }
   }
 
-  private buildTutorialHtml(sim: SimulationEngine, sceneMgr: SceneManager): string {
+  private buildTutorialHtml(sim: SimulationEngine, sceneMgr: SceneManager, loc: Locale): string {
+    if (this.activeStoryBeat || this.paused || sim.status !== 'playing') return '';
     const parts: string[] = [];
     if (this.tutorialPhase === 'build_tower') {
       const slot = sim.slots.get('slot_1');
@@ -894,9 +923,28 @@ export class BattleView {
         const proj = sceneMgr.projectToScreen(slot.x, 0.35, slot.z);
         parts.push(`<div class="tutorial-hand" style="left:${proj.x}px; top:${proj.y}px;">${ICONS.hand}</div>`);
       }
+      parts.push(`
+        <div class="tutorial-coach-pill interactive">
+          <span>${t(loc, 'tutorial.step.build')}</span>
+          <button type="button" class="tutorial-skip-btn" id="btn-skip-tutorial">${t(loc, 'tutorial.skip')}</button>
+        </div>
+      `);
     } else if (this.tutorialPhase === 'move_hero') {
       const proj = sceneMgr.projectToScreen(-1.5, 0.25, 4.0);
       parts.push(`<div class="tutorial-hand" style="left:${proj.x}px; top:${proj.y}px;">${ICONS.hand}</div>`);
+      parts.push(`
+        <div class="tutorial-coach-pill interactive">
+          <span>${t(loc, 'tutorial.step.hero')}</span>
+          <button type="button" class="tutorial-skip-btn" id="btn-skip-tutorial">${t(loc, 'tutorial.skip')}</button>
+        </div>
+      `);
+    } else if (this.tutorialPhase === 'start_wave') {
+      parts.push(`
+        <div class="tutorial-coach-pill interactive">
+          <span>${t(loc, 'tutorial.step.wave')}</span>
+          <button type="button" class="tutorial-skip-btn" id="btn-skip-tutorial">${t(loc, 'tutorial.skip')}</button>
+        </div>
+      `);
     }
     return parts.join('');
   }
@@ -1028,7 +1076,7 @@ export class BattleView {
             <span>${t(loc, 'hud.upgrade')} (${spec.tier2.cost})</span>
           </button>
           <button type="button" class="btn dock-sell-btn" id="btn-tower-sell">
-            ${t(loc, 'hud.sellShort')} +${refund}
+            ${t(loc, 'hud.sellShort')} +${refund}${sim.waitingForFirstWave ? ` (${t(loc, 'hud.sellFreeTag')})` : ''}
           </button>
         </div>
       `;
@@ -1051,7 +1099,7 @@ export class BattleView {
         </div>
         <div class="dock-actions-row" style="margin-top:6px;">
           <button type="button" class="btn dock-sell-btn" id="btn-tower-sell" style="width:100%;">
-            ${t(loc, 'hud.sellShort')} +${refund}
+            ${t(loc, 'hud.sellShort')} +${refund}${sim.waitingForFirstWave ? ` (${t(loc, 'hud.sellFreeTag')})` : ''}
           </button>
         </div>
       `;
@@ -1063,7 +1111,7 @@ export class BattleView {
         <div class="dock-actions-row">
           <div class="dock-max-pill">★ ${t(loc, 'hud.maxTier')} ${synPills}</div>
           <button type="button" class="btn dock-sell-btn" id="btn-tower-sell">
-            ${t(loc, 'hud.sellShort')} +${refund}
+            ${t(loc, 'hud.sellShort')} +${refund}${sim.waitingForFirstWave ? ` (${t(loc, 'hud.sellFreeTag')})` : ''}
           </button>
         </div>
       `;
@@ -1231,13 +1279,53 @@ export class BattleView {
 
   private buildModal(sim: SimulationEngine, loc: Locale): string {
     if (this.paused && sim.status === 'playing') {
+      const s = this.saveManager.get().settings;
       return `
         <div class="modal-backdrop">
-          <div class="modal-card">
+          <div class="modal-card" role="dialog" aria-modal="true">
             <div style="font-size:19px; font-weight:800;">${t(loc, 'hud.paused')}</div>
+            <div class="pause-audio-box">
+              <div class="pause-audio-title">${t(loc, 'hud.pauseAudio')}</div>
+              <div class="pause-audio-row">
+                <button type="button" class="btn btn-sm ${s.soundEnabled ? 'btn-primary' : ''}" id="btn-pause-sound">
+                  ${t(loc, 'settings.sound')}: ${s.soundEnabled ? 'ON' : 'OFF'}
+                </button>
+                <button type="button" class="btn btn-sm ${s.musicEnabled ? 'btn-primary' : ''}" id="btn-pause-music">
+                  ${t(loc, 'settings.music')}: ${s.musicEnabled ? 'ON' : 'OFF'}
+                </button>
+                <button type="button" class="btn btn-sm ${s.hapticsEnabled ? 'btn-primary' : ''}" id="btn-pause-haptics">
+                  ${t(loc, 'settings.haptics')}: ${s.hapticsEnabled ? 'ON' : 'OFF'}
+                </button>
+              </div>
+            </div>
             <button class="btn btn-primary" id="btn-resume">${t(loc, 'hud.resume')}</button>
             <button class="btn" id="btn-restart">${t(loc, 'hud.restart')}</button>
             <button class="btn" id="btn-exit-map">${t(loc, 'hud.exitMap')}</button>
+          </div>
+        </div>
+      `;
+    }
+
+    if (this.activeStoryBeat && sim.status === 'playing') {
+      const beat = this.activeStoryBeat;
+      const heroSpec = HEROES[beat.speaker];
+      return `
+        <div class="modal-backdrop">
+          <div class="modal-card oak-parchment-modal story-briefing-card" id="story-briefing-modal" role="dialog" aria-modal="true">
+            <span class="brass-corner tl" aria-hidden="true"></span>
+            <span class="brass-corner tr" aria-hidden="true"></span>
+            <span class="brass-corner bl" aria-hidden="true"></span>
+            <span class="brass-corner br" aria-hidden="true"></span>
+            <div class="story-briefing-head">
+              <img class="story-portrait" src="${PORTRAIT_URLS[beat.speaker]}" alt="${t(loc, heroSpec.nameKey)}" />
+              <div style="min-width:0;">
+                <span class="story-badge ${beat.isBossIntro ? 'boss' : ''}">${t(loc, beat.badgeKey)}</span>
+                <div class="modal-oak-title" style="margin-top:3px;">${t(loc, beat.titleKey)}</div>
+                <div class="parchment-muted" style="font-size:10.5px; font-weight:800;">${t(loc, heroSpec.nameKey)}</div>
+              </div>
+            </div>
+            <div class="story-briefing-body">${t(loc, beat.bodyKey)}</div>
+            <button class="btn btn-oak-play btn-primary" id="btn-story-continue" type="button">${t(loc, 'story.continueBtn')}</button>
           </div>
         </div>
       `;
@@ -1249,6 +1337,8 @@ export class BattleView {
       const isExpedition = sim.level.id > 100;
       const expStage = Math.max(1, sim.level.id - 100);
       const isExpeditionMid = isExpedition && expStage < 5;
+      const hasNextStage = !isExpedition && sim.level.id < LEVELS.length && Boolean(this.callbacks.onNextLevel);
+      const isGrandFinale = !isExpedition && sim.level.id === LEVELS.length;
       const titleText = isExpedition
         ? tParams(loc, 'rogue.stageVictory', { stage: expStage })
         : `${t(loc, 'hud.victory')} · ${'★'.repeat(stars)}`;
@@ -1259,11 +1349,26 @@ export class BattleView {
           : `+${rewards.oak} ${t(loc, 'cur.oak')} · +${rewards.gems} ${t(loc, 'cur.gem')}`;
       return `
         <div class="modal-backdrop">
-          <div class="modal-card">
+          <div class="modal-card" role="dialog" aria-modal="true">
             <div style="font-size:20px; font-weight:800; color:var(--accent-gold);">${titleText}</div>
             <div style="font-size:13px; color:var(--text-muted);">${rewardLine}</div>
-            ${isExpedition ? '' : `<button class="btn btn-gold" id="btn-double-reward">${t(loc, 'hud.doubleReward')}</button>`}
-            <button class="btn btn-primary" id="btn-exit-map">${isExpeditionMid ? t(loc, 'rogue.pickRelicBtn') : t(loc, 'hud.exitMap')}</button>
+            ${
+              isGrandFinale
+                ? `
+                  <div class="campaign-finale-box" id="campaign-finale-card">
+                    <strong>${t(loc, 'story.finale.title')}</strong>
+                    <span>${t(loc, 'story.finale.body')}</span>
+                  </div>
+                `
+                : ''
+            }
+            ${
+              hasNextStage
+                ? `<button class="btn btn-primary" id="btn-next-level">${tParams(loc, 'hud.nextStage', { next: sim.level.id + 1 })}</button>`
+                : ''
+            }
+            ${MONETIZATION_ENABLED && !isExpedition ? `<button class="btn btn-gold" id="btn-double-reward">${t(loc, 'hud.doubleReward')}</button>` : ''}
+            <button class="btn ${hasNextStage ? '' : 'btn-primary'}" id="btn-exit-map">${isExpeditionMid ? t(loc, 'rogue.pickRelicBtn') : t(loc, 'hud.exitMap')}</button>
           </div>
         </div>
       `;
@@ -1271,7 +1376,7 @@ export class BattleView {
 
     if (sim.status === 'lost') {
       const save = this.saveManager.get();
-      const showFirstFailBundle = !save.firstDefeatBundleBought;
+      const showFirstFailBundle = MONETIZATION_ENABLED && !save.firstDefeatBundleBought;
       const failPrices = showFirstFailBundle ? getFailOfferPrices(this.remoteConfig.get()) : null;
       const priceParams = failPrices
         ? {
@@ -1282,9 +1387,9 @@ export class BattleView {
         : null;
       return `
         <div class="modal-backdrop">
-          <div class="modal-card">
+          <div class="modal-card" role="dialog" aria-modal="true">
             <div style="font-size:19px; font-weight:800; color:var(--accent-red);">${t(loc, 'hud.defeat')}</div>
-            ${!sim.reviveUsed ? `<button class="btn btn-gold" id="btn-revive-ad">${t(loc, 'hud.reviveAd')}</button>` : ''}
+            ${MONETIZATION_ENABLED && !sim.reviveUsed ? `<button class="btn btn-gold" id="btn-revive-ad">${t(loc, 'hud.reviveAd')}</button>` : ''}
             ${
               showFirstFailBundle && priceParams
                 ? `
@@ -1298,7 +1403,7 @@ export class BattleView {
                 `
                 : ''
             }
-            <button class="btn" id="btn-restart">${t(loc, 'hud.restart')}</button>
+            <button class="btn btn-primary" id="btn-restart">${t(loc, 'hud.restart')}</button>
             <button class="btn" id="btn-exit-map">${t(loc, 'hud.exitMap')}</button>
           </div>
         </div>
@@ -1309,6 +1414,48 @@ export class BattleView {
   }
 
   private bindModalEvents(host: HTMLElement, sim: SimulationEngine): void {
+    const storyContinueBtn = host.querySelector<HTMLButtonElement>('#btn-story-continue');
+    if (storyContinueBtn && this.activeStoryBeat) {
+      const beatId = this.activeStoryBeat.id;
+      storyContinueBtn.onclick = () => {
+        this.saveManager.update((d) => {
+          if (!Array.isArray(d.seenStoryIds)) d.seenStoryIds = [];
+          if (!d.seenStoryIds.includes(beatId)) d.seenStoryIds.push(beatId);
+        });
+        this.activeStoryBeat = null;
+        if (this.mountedRoot && this.lastSceneMgr) {
+          this.render(this.mountedRoot, sim, this.lastSceneMgr);
+        }
+      };
+    }
+
+    const pauseSoundBtn = host.querySelector<HTMLButtonElement>('#btn-pause-sound');
+    if (pauseSoundBtn) {
+      pauseSoundBtn.onclick = () => {
+        this.saveManager.update((d) => { d.settings.soundEnabled = !d.settings.soundEnabled; });
+        this.callbacks.onSettingsChanged?.();
+      };
+    }
+    const pauseMusicBtn = host.querySelector<HTMLButtonElement>('#btn-pause-music');
+    if (pauseMusicBtn) {
+      pauseMusicBtn.onclick = () => {
+        this.saveManager.update((d) => { d.settings.musicEnabled = !d.settings.musicEnabled; });
+        this.callbacks.onSettingsChanged?.();
+      };
+    }
+    const pauseHapticsBtn = host.querySelector<HTMLButtonElement>('#btn-pause-haptics');
+    if (pauseHapticsBtn) {
+      pauseHapticsBtn.onclick = () => {
+        this.saveManager.update((d) => { d.settings.hapticsEnabled = !d.settings.hapticsEnabled; });
+        this.callbacks.onSettingsChanged?.();
+      };
+    }
+
+    const nextLevelBtn = host.querySelector<HTMLButtonElement>('#btn-next-level');
+    if (nextLevelBtn) {
+      nextLevelBtn.onclick = () => this.callbacks.onNextLevel?.(sim.level.id + 1);
+    }
+
     const resumeBtn = host.querySelector<HTMLButtonElement>('#btn-resume');
     if (resumeBtn) resumeBtn.onclick = () => { this.paused = false; };
     const restartBtn = host.querySelector<HTMLButtonElement>('#btn-restart');

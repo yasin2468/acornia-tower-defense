@@ -1652,6 +1652,7 @@ export class SimulationEngine {
   }
 
   getTowerSellRefund(totalSpent: number): number {
+    if (this.waitingForFirstWave) return totalSpent;
     const rate = this.relics.includes('lightning_refund') ? 0.95 : this.talentMods.sellRefundRate;
     return computeSellRefund(totalSpent, rate);
   }

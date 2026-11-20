@@ -515,6 +515,43 @@ export const ACHIEVEMENTS: readonly AchievementSpec[] = [
       s.unlockedAuras.filter((a) => a !== 'none').length +
       s.unlockedBanners.filter((b) => b !== 'none').length,
   },
+  {
+    id: 'ach_stars_60',
+    titleKey: 'ach.stars_60.title',
+    descKey: 'ach.stars_60.desc',
+    target: 60,
+    rewardOak: 400,
+    rewardGems: 60,
+    measure: (s) => computeTotalEarnedStars(s.levelStars, s.ironCleared),
+  },
+  {
+    id: 'ach_stars_100',
+    titleKey: 'ach.stars_100.title',
+    descKey: 'ach.stars_100.desc',
+    target: 100,
+    rewardOak: 750,
+    rewardGems: 120,
+    measure: (s) => computeTotalEarnedStars(s.levelStars, s.ironCleared),
+  },
+  {
+    id: 'ach_kills_1000',
+    titleKey: 'ach.kills_1000.title',
+    descKey: 'ach.kills_1000.desc',
+    target: 1000,
+    rewardOak: 450,
+    rewardGems: 75,
+    measure: (s) => s.seasonPassKills,
+  },
+  {
+    id: 'ach_clear_36',
+    titleKey: 'ach.clear_36.title',
+    descKey: 'ach.clear_36.desc',
+    target: 1,
+    rewardOak: 1000,
+    rewardGems: 200,
+    unlockHat: 'crown',
+    measure: (s) => ((s.levelStars[36] ?? 0) > 0 ? 1 : 0),
+  },
 ];
 
 export function claimAchievement(saveManager: SaveManager, achievementId: string): boolean {

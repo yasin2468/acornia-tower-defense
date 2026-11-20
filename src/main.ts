@@ -157,6 +157,11 @@ const battleView = new BattleView(
       void startLevel(currentLevelId, currentIronMode);
     },
     onExitToMap: () => exitToMap(),
+    onNextLevel: (nextId) => {
+      metaView.selectedLevelId = nextId;
+      void startLevel(nextId, false);
+    },
+    onSettingsChanged: () => syncAudioAndCameraSettings(),
     onSendPvpMerc: (enemyId, cost) => {
       if (!activeSim || activeSim.status !== 'playing' || activeSim.gold < cost) return;
       activeSim.gold -= cost;
@@ -361,6 +366,10 @@ async function startExpeditionStage(): Promise<void> {
 }
 
 function exitToMap(): void {
+  const nextSelectedAfterWin =
+    !currentIsExpedition && activeSim?.status === 'won'
+      ? Math.min(LEVELS.length, currentLevelId + 1)
+      : null;
   flushSeasonKills();
   sound.setBossIntensity(false);
   if (network.state !== 'idle') {
@@ -375,6 +384,9 @@ function exitToMap(): void {
   currentIsExpedition = false;
   activeSim = null;
   metaView.activeTab = 'map';
+  if (nextSelectedAfterWin !== null) {
+    metaView.selectedLevelId = nextSelectedAfterWin;
+  }
   metaView.showExpeditionModal = Boolean(activeRun);
   renderMeta();
 }
@@ -512,12 +524,23 @@ function processBattleEvents(events: SimEvent[]): void {
       sound.playExplosion(true);
       haptics.impact('heavy');
       const bossSpec = ENEMIES[ev.bossId ?? 'mega_harvester'];
-      battleView.showBanner(t(loc, bossSpec.descKey), 3.5);
+      battleView.showBanner(
+        ev.smokedSlotId ? `${t(loc, bossSpec.descKey)} · ${t(loc, 'tutorial.smokeTip')}` : t(loc, bossSpec.descKey),
+        3.8,
+      );
     } else if (ev.type === 'WAVE_STARTED') {
       flushSeasonKills();
+      if (battleView.tutorialPhase === 'start_wave') {
+        battleView.tutorialPhase = 'done';
+        saveManager.update((d) => {
+          d.tutorialDone = true;
+        });
+      }
       if (ev.announceEnemy) {
         const enemySpec = ENEMIES[ev.announceEnemy];
         battleView.showBanner(`${t(loc, 'hud.newEnemy')}: ${t(loc, enemySpec.nameKey)}`, 3.4);
+      } else if (currentLevelId === 2 && ev.waveNumber === 1) {
+        battleView.showBanner(t(loc, 'tutorial.synergyTip'), 3.8);
       }
     } else if (ev.type === 'SYNERGY_COMBO') {
       sound.playSynergyCombo(ev.comboId);
@@ -633,10 +656,7 @@ function dispatchHeroMove(x: number, z: number): void {
   if (!activeSim) return;
   activeSim.dispatch({ type: 'MOVE_HERO', x, z });
   if (battleView.tutorialPhase === 'move_hero') {
-    battleView.tutorialPhase = 'done';
-    saveManager.update((d) => {
-      d.tutorialDone = true;
-    });
+    battleView.tutorialPhase = 'start_wave';
   }
 }
 
@@ -793,6 +813,87 @@ resizeObserver.observe(shell);
 
 window.addEventListener('pointerdown', () => sound.resume(), { passive: true });
 
+function pauseBattleForBackground(): void {
+  flushSeasonKills();
+  if (mode === 'battle' && activeSim && activeSim.status === 'playing' && network.state !== 'in_match') {
+    battleView.paused = true;
+    battleView.render(uiRoot, activeSim, sceneMgr);
+  }
+  sound.suspend();
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    pauseBattleForBackground();
+  } else {
+    sound.resume();
+  }
+});
+
+window.addEventListener('pagehide', () => pauseBattleForBackground());
+
+function handleHardwareBack(): boolean {
+  if (mode === 'battle' && activeSim) {
+    if (battleView.targetingSkill) {
+      battleView.targetingSkill = null;
+      sceneMgr.updateTargetingReticle(null);
+      battleView.showBanner('', 0);
+      return true;
+    }
+    if (battleView.selectedSlotId) {
+      battleView.selectedSlotId = null;
+      battleView.previewTowerId = null;
+      battleView.render(uiRoot, activeSim, sceneMgr);
+      return true;
+    }
+    if (activeSim.status === 'playing' && !battleView.paused) {
+      battleView.paused = true;
+      battleView.render(uiRoot, activeSim, sceneMgr);
+      return true;
+    }
+    return false;
+  }
+  if (
+    metaView.showSettings ||
+    metaView.showBestiary ||
+    metaView.showPatrolModal ||
+    metaView.showExpeditionModal ||
+    metaView.showHeroQuickModal ||
+    metaView.detailUnit
+  ) {
+    metaView.showSettings = false;
+    metaView.showBestiary = false;
+    metaView.showPatrolModal = false;
+    metaView.showExpeditionModal = false;
+    metaView.showHeroQuickModal = false;
+    metaView.detailUnit = null;
+    metaView.disposeTransient();
+    renderMeta();
+    return true;
+  }
+  if (metaView.activeTab !== 'map') {
+    metaView.activeTab = 'map';
+    renderMeta();
+    return true;
+  }
+  return false;
+}
+
+document.addEventListener('backbutton', (ev) => {
+  if (handleHardwareBack()) {
+    ev.preventDefault();
+  }
+});
+
+const capApp = (
+  globalThis as {
+    Capacitor?: { Plugins?: { App?: { addListener?: (ev: string, fn: () => void) => void } } };
+  }
+).Capacitor?.Plugins?.App;
+capApp?.addListener?.('backButton', () => {
+  void handleHardwareBack();
+});
+
 window.addEventListener('keydown', (ev) => {
   if (mode !== 'battle' || !activeSim || battleView.paused || activeSim.status !== 'playing') return;
   const tag = (ev.target as HTMLElement | null)?.tagName;
@@ -945,6 +1046,9 @@ async function boot(): Promise<void> {
       });
     } else {
       renderMeta();
+    }
+    if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+      void navigator.serviceWorker.register('./sw.js').catch(() => {});
     }
     requestAnimationFrame(frame);
   } catch (err) {

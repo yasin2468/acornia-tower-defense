@@ -90,6 +90,7 @@ export interface SaveState {
   dailyBoostsDate: string;
   dailyAfkBoostsUsed: number;
   dailyFreeChestsUsed: number;
+  seenStoryIds: string[];
   tutorialDone: boolean;
   settings: SaveSettings;
   checksum?: number;
@@ -195,6 +196,7 @@ export function createInitialSave(nowMs = Date.now()): SaveState {
     dailyBoostsDate: todayKey(nowMs),
     dailyAfkBoostsUsed: 0,
     dailyFreeChestsUsed: 0,
+    seenStoryIds: [],
     tutorialDone: false,
     settings: {
       locale: detectLocale(),
@@ -277,6 +279,7 @@ export function migrateSave(parsed: Partial<SaveState>, nowMs = Date.now()): { s
     claimedLeagueTiers: Array.isArray(parsed.claimedLeagueTiers) ? parsed.claimedLeagueTiers : [],
     claimedSeasonFreeTiers: Array.isArray(parsed.claimedSeasonFreeTiers) ? parsed.claimedSeasonFreeTiers : [],
     claimedSeasonGoldTiers: Array.isArray(parsed.claimedSeasonGoldTiers) ? parsed.claimedSeasonGoldTiers : [],
+    seenStoryIds: Array.isArray(parsed.seenStoryIds) ? Array.from(new Set(parsed.seenStoryIds)) : [],
   };
   state.vipExpiresAt =
     typeof state.vipExpiresAt === 'number' && Number.isFinite(state.vipExpiresAt)
@@ -388,6 +391,59 @@ export class SaveManager {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     } catch {
       // Storage full fallback ignored safely
+    }
+  }
+
+  exportSaveCode(): string {
+    const { checksum: _ignored, ...rest } = this.state;
+    const payload: SaveState = {
+      ...rest,
+      checksum: computeSaveChecksum(rest),
+    };
+    const json = JSON.stringify(payload);
+    const bytes = new TextEncoder().encode(json);
+    let bin = '';
+    for (let i = 0; i < bytes.length; i++) {
+      bin += String.fromCharCode(bytes[i]);
+    }
+    const b64 = typeof btoa === 'function' ? btoa(bin) : Buffer.from(bytes).toString('base64');
+    return `PK1:${b64}`;
+  }
+
+  importSaveCode(rawCode: string, nowMs = Date.now()): { ok: boolean; error?: string } {
+    const trimmed = rawCode.trim();
+    if (!trimmed.startsWith('PK1:') || trimmed.length < 16) {
+      return { ok: false, error: 'invalid_format' };
+    }
+    try {
+      const b64 = trimmed.slice(4);
+      const bin = typeof atob === 'function' ? atob(b64) : Buffer.from(b64, 'base64').toString('binary');
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) {
+        bytes[i] = bin.charCodeAt(i);
+      }
+      const json = new TextDecoder().decode(bytes);
+      const parsed: unknown = JSON.parse(json);
+      if (parsed === null || typeof parsed !== 'object') {
+        return { ok: false, error: 'invalid_json' };
+      }
+      const candidate = parsed as Partial<SaveState>;
+      if (typeof candidate.oakCoins !== 'number' || typeof candidate.emeraldGems !== 'number') {
+        return { ok: false, error: 'invalid_shape' };
+      }
+      if (typeof candidate.checksum === 'number') {
+        const { checksum, ...rest } = candidate as SaveState;
+        if (computeSaveChecksum(rest) !== checksum) {
+          return { ok: false, error: 'bad_checksum' };
+        }
+      }
+      const { state } = migrateSave(candidate, nowMs);
+      this.state = state;
+      this.save();
+      this.rollDailyCounters(nowMs);
+      return { ok: true };
+    } catch {
+      return { ok: false, error: 'decode_error' };
     }
   }
 }
