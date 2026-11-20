@@ -66,6 +66,9 @@ const SLOW_TINT = new THREE.Color('#38a1db');
 const STUN_TINT = new THREE.Color('#ffcf54');
 const FROZEN_TINT = new THREE.Color('#9fe8ff');
 const TRAIL_POINTS = 10;
+const MOBILE_TOWER_SCALE = 1.15;
+const MOBILE_HERO_SCALE = 1.18;
+const MOBILE_ENEMY_SCALE = 1.18;
 
 interface MaterialBase {
   mat: THREE.MeshStandardMaterial;
@@ -974,6 +977,10 @@ export class SceneManager {
   private enemyIceCages = new Map<number, THREE.Group>();
   private enemyStunHalos = new Map<number, THREE.Group>();
   private towerBuffHalos = new Map<string, { group: THREE.Group; mat: THREE.MeshBasicMaterial }>();
+  private enemyGroundRings: THREE.InstancedMesh;
+  private flyingShadowDiscs: THREE.InstancedMesh;
+  private readonly ringDummy = new THREE.Object3D();
+  private readonly ringColor = new THREE.Color();
   private lodTrees: Array<{ lod: THREE.LOD; phase: number }> = [];
   private batterySaver = false;
   private heroRig: HeroRig | null = null;
@@ -1212,6 +1219,41 @@ export class SceneManager {
     this.rallyMarker.add(rallyRing, rallyPole, rallyFlag);
     this.rallyMarker.visible = false;
 
+    const eRingGeo = new THREE.RingGeometry(0.42, 0.62, 24);
+    eRingGeo.rotateX(-Math.PI / 2);
+    this.enemyGroundRings = new THREE.InstancedMesh(
+      eRingGeo,
+      new THREE.MeshBasicMaterial({
+        color: '#ffffff',
+        transparent: true,
+        opacity: 0.9,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        toneMapped: false,
+      }),
+      96,
+    );
+    this.enemyGroundRings.frustumCulled = false;
+    this.enemyGroundRings.renderOrder = 1;
+    this.enemyGroundRings.setColorAt(0, new THREE.Color('#e0f2fe'));
+    this.enemyGroundRings.count = 0;
+
+    const flyShadowGeo = new THREE.CircleGeometry(0.46, 16);
+    flyShadowGeo.rotateX(-Math.PI / 2);
+    this.flyingShadowDiscs = new THREE.InstancedMesh(
+      flyShadowGeo,
+      new THREE.MeshBasicMaterial({
+        color: '#09111c',
+        transparent: true,
+        opacity: 0.42,
+        depthWrite: false,
+      }),
+      32,
+    );
+    this.flyingShadowDiscs.frustumCulled = false;
+    this.flyingShadowDiscs.renderOrder = 1;
+    this.flyingShadowDiscs.count = 0;
+
     this.scene.add(
       this.levelGroup,
       this.dynamicGroup,
@@ -1220,6 +1262,8 @@ export class SceneManager {
       this.targetingLinkLine,
       this.heroFieldAuraGroup,
       this.rallyMarker,
+      this.enemyGroundRings,
+      this.flyingShadowDiscs,
     );
     this.initPools();
   }
@@ -1965,7 +2009,7 @@ export class SceneManager {
     // Woodland trees (LOD-wrapped with cloned per-biome shared material) & instanced fences (omitted in Crystal Cavern)
     if (level.biome !== 'cavern') {
       const pineAll = level.biome === 'snow' || level.biome === 'foundry';
-      const baseTrees: Array<[number, number, number, 'oak' | 'pine']> =
+      const rawTrees: Array<[number, number, number, 'oak' | 'pine']> =
         level.biome === 'canyon' || level.biome === 'foundry'
           ? [
               [-4.7, 7.6, 0.9, 'pine'],
@@ -1982,19 +2026,12 @@ export class SceneManager {
               [4.8, -4.5, 0.98, 'pine'],
               [-4.2, -8.2, 1.05, 'pine'],
               [4.2, -8.2, 1.02, pineAll ? 'pine' : 'oak'],
-              ...(level.biome === 'forest'
-                ? ([
-                    [-4.6, 0.4, 0.96, 'oak'],
-                    [4.7, -0.8, 0.98, 'pine'],
-                    [-4.5, -6.2, 0.94, 'oak'],
-                    [4.5, 5.2, 0.96, 'oak'],
-                  ] as Array<[number, number, number, 'oak' | 'pine']>)
-                : []),
             ];
       const variantMatCache = new Map<'oak' | 'pine', THREE.Material>();
-      for (let i = 0; i < baseTrees.length; i++) {
-        const [rawTx, rawTz, sc, variant] = baseTrees[i];
-        const safeTree = resolveClearEnvPos(rawTx, rawTz, 1.45, 1.35);
+      for (let i = 0; i < rawTrees.length; i++) {
+        const [tx0, rawTz, sc, variant] = rawTrees[i];
+        const rawTx = tx0 < 0 ? tx0 - 0.35 : tx0 + 0.35;
+        const safeTree = resolveClearEnvPos(rawTx, rawTz, 1.85, 1.65);
         if (!safeTree) continue;
         const [tx, tz] = safeTree;
         const tree = createTreeProp(sc, variant);
@@ -2114,6 +2151,8 @@ export class SceneManager {
     this.heroRig = null;
     this.heroVisualKey = '';
     this.rangeRing.visible = false;
+    this.enemyGroundRings.count = 0;
+    this.flyingShadowDiscs.count = 0;
     this.enemyFeel.clear();
     this.towerPunch.clear();
     for (const s of this.sparks) {
@@ -2190,6 +2229,7 @@ export class SceneManager {
       if (tAuraNode) tAuraNode.rotation.y = this.animTime * 1.35;
       rigRef.turretHead.rotation.y = slot.tower.angle;
       updateTowerAnimation(rigRef, this.animTime, realDt);
+      rigRef.root.scale.multiplyScalar(MOBILE_TOWER_SCALE);
 
       // Defender recoil kick: keep stone tower base fixed on slot pad and tilt/dip upper turret only
       rigRef.root.position.set(slot.x, 0, slot.z);
@@ -2308,7 +2348,7 @@ export class SceneManager {
         if (this.heroRig.body.rotation.x !== 0) this.heroRig.body.rotation.x = 0;
       }
       this.heroRig.root.position.set(heroDispX, heroDispY, heroDispZ);
-      this.heroRig.root.scale.setScalar(sim.relics.includes('giant_hero') ? 1.22 : 1.0);
+      this.heroRig.root.scale.setScalar(MOBILE_HERO_SCALE * (sim.relics.includes('giant_hero') ? 1.22 : 1.0));
       this.heroRig.body.rotation.y = sim.hero.facingAngle;
 
       // Compact hero foot ring (strictly stays around hero feet — field buff uses heroFieldAuraGroup)
@@ -2432,6 +2472,8 @@ export class SceneManager {
 
     // Sync skeletal-animated Scrap-Bot enemies + hit flinch + flash
     const aliveIds = new Set<number>();
+    let ringIdx = 0;
+    let flyIdx = 0;
     for (const e of sim.enemies) {
       aliveIds.add(e.uid);
       let rig = this.enemyRigs.get(e.uid);
@@ -2439,6 +2481,33 @@ export class SceneManager {
         rig = createEnemyRig(e.enemyId);
         this.dynamicGroup.add(rig.root);
         this.enemyRigs.set(e.uid, rig);
+      }
+      rig.root.scale.setScalar(MOBILE_ENEMY_SCALE);
+      if (e.hp > 0 && ringIdx < 96) {
+        const ringScale = e.isBoss
+          ? e.radius * 1.52 * (1 + Math.sin(this.animTime * 7) * 0.08)
+          : e.isFlying
+            ? e.radius * 1.32 * (1 + Math.sin(this.animTime * 6 + e.uid) * 0.06)
+            : e.armor >= 0.25
+              ? e.radius * 1.28
+              : e.radius * 1.2;
+        this.ringDummy.position.set(e.x, 0.095, e.z);
+        this.ringDummy.rotation.set(0, 0, 0);
+        this.ringDummy.scale.setScalar(ringScale * MOBILE_ENEMY_SCALE);
+        this.ringDummy.updateMatrix();
+        this.enemyGroundRings.setMatrixAt(ringIdx, this.ringDummy.matrix);
+        this.ringColor.set(
+          e.isBoss ? '#ff4d5a' : e.isFlying ? '#38bdf8' : e.armor >= 0.25 ? '#fbbf24' : '#e0f2fe',
+        );
+        this.enemyGroundRings.setColorAt(ringIdx, this.ringColor);
+        ringIdx += 1;
+        if (e.isFlying && flyIdx < 32) {
+          this.ringDummy.position.set(e.x, 0.088, e.z);
+          this.ringDummy.scale.setScalar(e.radius * 1.05 * MOBILE_ENEMY_SCALE);
+          this.ringDummy.updateMatrix();
+          this.flyingShadowDiscs.setMatrixAt(flyIdx, this.ringDummy.matrix);
+          flyIdx += 1;
+        }
       }
       const feel = this.getEnemyFeel(e.uid, rig);
       const activePath = e.lane === 1 && sim.level.secondaryPath ? sim.level.secondaryPath : sim.level.path;
@@ -2539,6 +2608,14 @@ export class SceneManager {
         this.enemyStunHalos.delete(e.uid);
       }
     }
+
+    this.enemyGroundRings.count = ringIdx;
+    this.enemyGroundRings.instanceMatrix.needsUpdate = true;
+    if (ringIdx > 0 && this.enemyGroundRings.instanceColor) {
+      this.enemyGroundRings.instanceColor.needsUpdate = true;
+    }
+    this.flyingShadowDiscs.count = flyIdx;
+    this.flyingShadowDiscs.instanceMatrix.needsUpdate = true;
 
     // Detach killed enemy body for a parabolic 0.42s knockback tumble death pop!
     for (const [uid, rig] of this.enemyRigs.entries()) {
@@ -3351,6 +3428,38 @@ export class SceneManager {
       } else if (ev.type === 'HERO_RALLY') {
         this.rallyShowTimer = 2.2;
         this.spawnShockRing(ev.x, ev.z, '#ffda6b', 0.85, 0.25);
+      } else if (ev.type === 'SYNERGY_COMBO') {
+        if (ev.comboId === 'shatter') {
+          this.spawnShockRing(ev.x, ev.z, '#ffffff', 1.4, 0.16);
+          this.spawnShockRing(ev.x, ev.z, '#8cf0ff', 2.2, 0.36);
+          this.spawnParticles(ev.x, 0.8, ev.z, '#9cf5ff', 14, 1.35);
+          this.cameraCtrl.addZoomPunch(0.9);
+        } else if (ev.comboId === 'corrode_crit') {
+          this.spawnShockRing(ev.x, ev.z, '#74f78d', 1.65, 0.28);
+          this.spawnShockRing(ev.x, ev.z, '#ffd859', 1.2, 0.22);
+          this.spawnParticles(ev.x, 0.85, ev.z, '#88ff9c', 12, 1.25);
+        } else if (ev.comboId === 'ignite') {
+          this.spawnShockRing(ev.x, ev.z, '#ffffff', 1.3, 0.14);
+          this.spawnShockRing(ev.x, ev.z, '#ff7a2b', 2.3, 0.4);
+          this.spawnParticles(ev.x, 0.75, ev.z, '#ff8e36', 16, 1.45);
+          this.spawnScorch(ev.x, ev.z, 1.4);
+          this.cameraCtrl.addTrauma(0.22);
+        } else if (ev.comboId === 'superconduct') {
+          this.spawnShockRing(ev.x, ev.z, '#6de4ff', 1.8, 0.3);
+          this.spawnParticles(ev.x, 0.9, ev.z, '#8ef4ff', 12, 1.3);
+          if (ev.arcToX !== undefined && ev.arcToZ !== undefined) {
+            this.spawnJaggedLightning(
+              new THREE.Vector3(ev.x, 0.9, ev.z),
+              new THREE.Vector3(ev.arcToX, 0.9, ev.arcToZ),
+              '#ffffff',
+              '#6de4ff',
+              0.095,
+              0.24,
+              1,
+            );
+            this.spawnShockRing(ev.arcToX, ev.arcToZ, '#ffffff', 1.1, 0.2);
+          }
+        }
       } else if (ev.type === 'HERO_ATTACK') {
         const hx = ev.targetX - ev.x;
         const hz = ev.targetZ - ev.z;

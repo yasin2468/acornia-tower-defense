@@ -48,7 +48,9 @@ import {
   isTalentNodeUnlocked,
   type TalentBranchId,
 } from '../data/talents.ts';
-import { TOWER_LIST, TOWERS, type HatId, type TowerId } from '../data/towers.ts';
+import { TOWER_LIST, TOWERS, cardLevelMultiplier, type HatId, type TowerId } from '../data/towers.ts';
+import { getTowerSynergies } from '../data/synergies.ts';
+import { UnitPreview3D, type UnitPreviewTarget } from '../rendering/UnitPreview3D.ts';
 import { t, tParams, type Locale } from '../i18n/locales.ts';
 import {
   claimVipDaily,
@@ -138,6 +140,11 @@ export class MetaView {
   showBestiary = false;
   showPatrolModal = false;
   showExpeditionModal = false;
+  showHeroQuickModal = false;
+  detailUnit:
+    | { kind: 'tower'; id: TowerId; tierTab: 't1' | 't2' | 'evoA' | 'evoB' }
+    | { kind: 'hero'; id: HeroId }
+    | null = null;
   selectedJournalId = 'boz_pence';
   selectedTalentId: TalentBranchId = 'tower_power';
   multiMode: MultiMode = 'coop';
@@ -149,6 +156,7 @@ export class MetaView {
   private readonly billingService: BillingService;
   private readonly network: NetworkService;
   private readonly callbacks: MetaViewCallbacks;
+  private unitPreview3D = new UnitPreview3D();
   private escKeyHandler: ((ev: KeyboardEvent) => void) | null = null;
   private mapKeyHandler: ((ev: KeyboardEvent) => void) | null = null;
   private prevMapPanPct: number | null = null;
@@ -169,6 +177,10 @@ export class MetaView {
     this.billingService = billingService;
     this.network = network;
     this.callbacks = callbacks;
+  }
+
+  disposeTransient(): void {
+    this.unitPreview3D.dispose();
   }
 
   private computeNavBadges(nowMs: number): NavBadges {
@@ -318,6 +330,8 @@ export class MetaView {
         ${this.showBestiary ? this.renderBestiaryModal(loc) : ''}
         ${this.showPatrolModal ? this.renderPatrolModal(loc) : ''}
         ${this.showExpeditionModal ? this.renderExpeditionModal(loc) : ''}
+        ${this.showHeroQuickModal ? this.renderHeroQuickModal(loc) : ''}
+        ${this.detailUnit ? this.renderUnitDetailModal(loc) : ''}
       </div>
     `;
 
@@ -691,13 +705,23 @@ export class MetaView {
           </div>
         </div>
 
-        <div class="oak-mode-bar" role="group" aria-label="${t(loc, 'map.mode.normal')} / ${t(loc, 'map.mode.iron')}">
-          <button type="button" class="oak-switch-track ${this.ironMode ? 'iron' : 'normal'}" id="btn-mode-toggle" ${selUnlocked && hasCleared ? '' : 'disabled'} aria-label="${t(loc, 'map.mode.iron')}">
-            <span class="oak-switch-knob"></span>
+        <div class="drawer-controls-row">
+          <div class="oak-mode-bar" role="group" aria-label="${t(loc, 'map.mode.normal')} / ${t(loc, 'map.mode.iron')}">
+            <button type="button" class="oak-switch-track ${this.ironMode ? 'iron' : 'normal'}" id="btn-mode-toggle" ${selUnlocked && hasCleared ? '' : 'disabled'} aria-label="${t(loc, 'map.mode.iron')}">
+              <span class="oak-switch-knob"></span>
+            </button>
+            <button type="button" class="oak-mode-tab ${!this.ironMode ? 'active' : ''}" id="btn-mode-normal" ${selUnlocked ? '' : 'disabled'}>${t(loc, 'map.mode.normal')}</button>
+            <span class="oak-mode-sep" aria-hidden="true">|</span>
+            <button type="button" class="oak-mode-tab ${this.ironMode ? 'active iron' : ''}" id="btn-mode-iron" ${selUnlocked && hasCleared ? '' : 'disabled'}>${t(loc, 'map.mode.iron')}</button>
+          </div>
+          <button type="button" class="map-hero-pill" id="btn-map-hero-switch" aria-label="${t(loc, 'map.switchHeroTitle')}">
+            <img src="${PORTRAIT_URLS[save.selectedHero]}" alt="${t(loc, HEROES[save.selectedHero].nameKey)}" />
+            <span class="map-hero-meta">
+              <small>${t(loc, 'map.quickHero')}</small>
+              <strong>${t(loc, HEROES[save.selectedHero].nameKey)}</strong>
+            </span>
+            <span aria-hidden="true">▾</span>
           </button>
-          <button type="button" class="oak-mode-tab ${!this.ironMode ? 'active' : ''}" id="btn-mode-normal" ${selUnlocked ? '' : 'disabled'}>${t(loc, 'map.mode.normal')}</button>
-          <span class="oak-mode-sep" aria-hidden="true">|</span>
-          <button type="button" class="oak-mode-tab ${this.ironMode ? 'active iron' : ''}" id="btn-mode-iron" ${selUnlocked && hasCleared ? '' : 'disabled'}>${t(loc, 'map.mode.iron')}</button>
         </div>
 
         <div class="oak-cta-well">
@@ -750,6 +774,205 @@ export class MetaView {
             <button class="btn btn-sm" id="btn-close-expedition" type="button">${t(loc, 'map.close')}</button>
           </div>
           ${this.renderExpeditionPortal(loc)}
+        </div>
+      </div>
+    `;
+  }
+
+  private renderHeroQuickModal(loc: Locale): string {
+    const save = this.saveManager.get();
+    const rowsHtml = HERO_LIST.map((h) => {
+      const unlocked = save.unlockedHeroes.includes(h.id);
+      const active = save.selectedHero === h.id;
+      return `
+        <div class="quick-hero-row ${active ? 'active' : ''} ${unlocked ? '' : 'locked'}">
+          <img class="hero-roster-thumb" src="${PORTRAIT_URLS[h.id]}" alt="${t(loc, h.nameKey)}" />
+          <div style="flex:1; min-width:0;">
+            <div class="parchment-strong" style="font-size:13px;">${t(loc, h.nameKey)}</div>
+            <div class="parchment-muted" style="font-size:11px;">${t(loc, h.roleKey)}</div>
+            ${!unlocked ? `<div class="parchment-muted" style="font-size:10px;">${tParams(loc, 'hero.select.unlockAt', { lvl: h.unlockLevel })}</div>` : ''}
+          </div>
+          ${
+            unlocked
+              ? `<button type="button" class="btn btn-sm ${active ? 'btn-gold' : 'btn-primary'}" data-quick-select-hero="${h.id}" ${active ? 'disabled' : ''}>${t(loc, active ? 'hero.select.active' : 'hero.select.pick')}</button>`
+              : `<button type="button" class="btn btn-sm" id="btn-quick-goto-heroes">${t(loc, 'nav.units')}</button>`
+          }
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="modal-backdrop" data-modal-backdrop="hero_quick">
+        <div class="modal-card oak-parchment-modal" role="dialog" aria-modal="true">
+          <span class="brass-corner tl" aria-hidden="true"></span>
+          <span class="brass-corner tr" aria-hidden="true"></span>
+          <span class="brass-corner bl" aria-hidden="true"></span>
+          <span class="brass-corner br" aria-hidden="true"></span>
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+            <div class="modal-oak-title">${t(loc, 'map.switchHeroTitle')}</div>
+            <button class="btn btn-sm" id="btn-close-hero-quick" type="button">${t(loc, 'map.close')}</button>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            ${rowsHtml}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  private renderUnitDetailModal(loc: Locale): string {
+    if (!this.detailUnit) return '';
+    const save = this.saveManager.get();
+
+    if (this.detailUnit.kind === 'tower') {
+      const spec = TOWERS[this.detailUnit.id];
+      const lvl = save.cardLevels[spec.id] ?? 1;
+      const shards = save.cardShards[spec.id] ?? 0;
+      const upCost = getCardUpgradeCost(lvl);
+      const canUpgrade = shards >= upCost.shards && save.oakCoins >= upCost.oakCoins;
+      const mult = cardLevelMultiplier(lvl);
+      const bonusPct = Math.round((mult - 1) * 100);
+      const tierTab = this.detailUnit.tierTab;
+      const activeStats =
+        tierTab === 't1'
+          ? spec.tier1
+          : tierTab === 't2'
+            ? spec.tier2
+            : tierTab === 'evoA'
+              ? spec.evolutions[0].stats
+              : spec.evolutions[1].stats;
+      const effDamage = Math.round(activeStats.damage * mult);
+      const synergies = getTowerSynergies(spec.id);
+
+      const synHtml = synergies
+        .map(
+          (sy) => `
+            <div class="synergy-detail-item">
+              <div style="display:flex; align-items:center; gap:6px;">
+                <span class="synergy-dot" style="background:${sy.color};"></span>
+                <strong style="font-size:12px; color:#fff7e6;">⚡ ${t(loc, sy.nameKey)}</strong>
+              </div>
+              <div style="font-size:10.5px; color:#edd2a8; line-height:1.35;">${t(loc, sy.descKey)}</div>
+            </div>
+          `,
+        )
+        .join('');
+
+      const evoHtml = spec.evolutions
+        .map(
+          (evo) => `
+            <div class="unit-evo-card">
+              <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
+                <strong style="font-size:11.5px; color:#ffe17a;">${evo.branchKey}. ${t(loc, evo.nameKey)}</strong>
+                <span class="pill-badge gold" style="font-size:10px;">${evo.stats.cost}</span>
+              </div>
+              <div style="font-size:10.5px; color:#edd2a8; line-height:1.3;">${t(loc, evo.descKey)}</div>
+            </div>
+          `,
+        )
+        .join('');
+
+      return `
+        <div class="modal-backdrop unit-detail-backdrop" data-modal-backdrop="unit_detail">
+          <div class="modal-card oak-parchment-modal unit-detail-sheet" role="dialog" aria-modal="true" aria-label="${t(loc, 'cards.detailTitle')}">
+            <span class="brass-corner tl" aria-hidden="true"></span>
+            <span class="brass-corner tr" aria-hidden="true"></span>
+            <span class="brass-corner bl" aria-hidden="true"></span>
+            <span class="brass-corner br" aria-hidden="true"></span>
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+              <div style="min-width:0;">
+                <div class="modal-oak-title">${t(loc, spec.nameKey)} · ${t(loc, 'cards.level')}${lvl}</div>
+                <div class="parchment-muted" style="font-size:11px;">${t(loc, spec.roleKey)}</div>
+              </div>
+              <button class="btn btn-sm" id="btn-close-unit-detail" type="button">${t(loc, 'map.close')}</button>
+            </div>
+
+            <div class="unit-3d-stage">
+              <img class="unit-3d-fallback" src="${PORTRAIT_URLS[spec.id]}" alt="${t(loc, spec.nameKey)}" />
+              <canvas id="unit-3d-preview" width="240" height="176"></canvas>
+              <div class="unit-3d-hint">${t(loc, 'cards.spinHint')}</div>
+            </div>
+
+            <div class="preview-tier-tabs" role="tablist">
+              <button type="button" class="btn btn-sm ${tierTab === 't1' ? 'btn-gold' : ''}" data-preview-tier="t1">${t(loc, 'cards.previewT1')}</button>
+              <button type="button" class="btn btn-sm ${tierTab === 't2' ? 'btn-gold' : ''}" data-preview-tier="t2">${t(loc, 'cards.previewT2')}</button>
+              <button type="button" class="btn btn-sm ${tierTab === 'evoA' ? 'btn-gold' : ''}" data-preview-tier="evoA">${t(loc, 'cards.previewEvoA')}</button>
+              <button type="button" class="btn btn-sm ${tierTab === 'evoB' ? 'btn-gold' : ''}" data-preview-tier="evoB">${t(loc, 'cards.previewEvoB')}</button>
+            </div>
+
+            <div class="unit-stats-grid">
+              <div class="unit-stat-box"><span>${t(loc, 'hud.damage')}</span><strong>${effDamage}</strong></div>
+              <div class="unit-stat-box"><span>${t(loc, 'hud.rate')}</span><strong>${activeStats.fireRate}/s</strong></div>
+              <div class="unit-stat-box"><span>${t(loc, 'hud.range')}</span><strong>${activeStats.range}m</strong></div>
+              <div class="unit-stat-box"><span>${t(loc, 'cards.targetLabel')}</span><strong>${spec.canHitAir ? t(loc, 'hud.targetAirGround') : t(loc, 'hud.targetGround')}</strong></div>
+            </div>
+            <div class="parchment-muted" style="font-size:11px; text-align:center;">
+              ${t(loc, 'cards.cardBonus')}: +${bonusPct}% · ${activeStats.cost} ${t(loc, 'cur.oak')}
+            </div>
+
+            <div class="unit-section-title">${t(loc, 'cards.synergies')}</div>
+            <div class="synergy-chip-list">${synHtml}</div>
+
+            <div class="unit-section-title">${t(loc, 'cards.evolutions')}</div>
+            <div class="unit-evo-list">${evoHtml}</div>
+
+            <button type="button" class="btn ${canUpgrade ? 'btn-primary' : ''}" data-card-up="${spec.id}" ${canUpgrade ? '' : 'disabled'}>
+              ${t(loc, 'cards.upgrade')} (${shards}/${upCost.shards} · ${upCost.oakCoins})
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    const h = HEROES[this.detailUnit.id];
+    const unlocked = save.unlockedHeroes.includes(h.id);
+    const selected = save.selectedHero === h.id;
+    const lvl = save.cardLevels[h.id] ?? 1;
+    const shards = save.cardShards[h.id] ?? 0;
+    const upCost = getCardUpgradeCost(lvl);
+    const canUpgrade = unlocked && shards >= upCost.shards && save.oakCoins >= upCost.oakCoins;
+    const canBuy = !unlocked && h.gemUnlockCost > 0 && save.emeraldGems >= h.gemUnlockCost;
+
+    return `
+      <div class="modal-backdrop unit-detail-backdrop" data-modal-backdrop="unit_detail">
+        <div class="modal-card oak-parchment-modal unit-detail-sheet" role="dialog" aria-modal="true" aria-label="${t(loc, 'cards.detailTitle')}">
+          <span class="brass-corner tl" aria-hidden="true"></span>
+          <span class="brass-corner tr" aria-hidden="true"></span>
+          <span class="brass-corner bl" aria-hidden="true"></span>
+          <span class="brass-corner br" aria-hidden="true"></span>
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+            <div style="min-width:0;">
+              <div class="modal-oak-title">${t(loc, h.nameKey)} · ${t(loc, 'cards.level')}${lvl}</div>
+              <div class="parchment-muted" style="font-size:11px;">${t(loc, h.roleKey)}</div>
+            </div>
+            <button class="btn btn-sm" id="btn-close-unit-detail" type="button">${t(loc, 'map.close')}</button>
+          </div>
+
+          <div class="unit-3d-stage">
+            <img class="unit-3d-fallback" src="${PORTRAIT_URLS[h.id]}" alt="${t(loc, h.nameKey)}" />
+            <canvas id="unit-3d-preview" width="240" height="176"></canvas>
+            <div class="unit-3d-hint">${t(loc, 'cards.spinHint')}</div>
+          </div>
+
+          <div class="unit-stats-grid">
+            <div class="unit-stat-box"><span>${t(loc, 'bestiary.hp')}</span><strong>${h.maxHp}</strong></div>
+            <div class="unit-stat-box"><span>${t(loc, 'hud.damage')}</span><strong>${h.damage}</strong></div>
+            <div class="unit-stat-box"><span>${t(loc, 'bestiary.armor')}</span><strong>${Math.round(h.armor * 100)}%</strong></div>
+            <div class="unit-stat-box"><span>${t(loc, 'cards.targetLabel')}</span><strong>${h.canHitAir ? t(loc, 'hud.targetAirGround') : t(loc, 'hud.targetGround')}</strong></div>
+          </div>
+
+          <div class="parchment-strong" style="font-size:12px; line-height:1.4;">${t(loc, h.descKey)}</div>
+
+          <div style="display:flex; gap:8px;">
+            ${
+              unlocked
+                ? `<button type="button" class="btn ${selected ? 'btn-gold' : 'btn-primary'}" style="flex:1;" data-select-hero="${h.id}" ${selected ? 'disabled' : ''}>${t(loc, selected ? 'hero.select.active' : 'hero.select.pick')}</button>`
+                : `<button type="button" class="btn ${canBuy ? 'btn-gold' : ''}" style="flex:1;" data-unlock-hero="${h.id}" ${canBuy ? '' : 'disabled'}>${tParams(loc, 'hero.select.unlockGems', { gems: h.gemUnlockCost })}</button>`
+            }
+            <button type="button" class="btn ${canUpgrade ? 'btn-primary' : ''}" style="flex:1;" data-card-up="${h.id}" ${canUpgrade ? '' : 'disabled'}>
+              ${t(loc, 'cards.upgrade')} (${upCost.oakCoins})
+            </button>
+          </div>
         </div>
       </div>
     `;
@@ -988,7 +1211,7 @@ export class MetaView {
         const canUpgrade = shards >= cost.shards && save.oakCoins >= cost.oakCoins;
         const branchNote = `${t(loc, tw.evolutions[0].nameKey)} / ${t(loc, tw.evolutions[1].nameKey)}`;
         return `
-          <div class="collector-card">
+          <div class="collector-card interactive-card" data-open-unit-tower="${tw.id}" role="button" tabindex="0">
             <span class="collector-level-badge">${t(loc, 'cards.level')}${lvl}</span>
             <img class="collector-portrait" src="${PORTRAIT_URLS[tw.id]}" alt="${t(loc, tw.nameKey)}" />
             <div class="collector-name">${t(loc, tw.nameKey)}</div>
@@ -1018,7 +1241,7 @@ export class MetaView {
           ? `<button class="btn btn-sm ${selected ? 'btn-gold' : 'btn-primary'}" data-select-hero="${h.id}" ${selected ? 'disabled' : ''}>${t(loc, selected ? 'hero.select.active' : 'hero.select.pick')}</button>`
           : `<button class="btn btn-sm ${canBuy ? 'btn-gold' : ''}" data-unlock-hero="${h.id}" ${canBuy ? '' : 'disabled'}>${tParams(loc, 'hero.select.unlockGems', { gems: h.gemUnlockCost })}</button>`;
         return `
-          <div class="hero-roster-row ${selected ? 'active' : ''}">
+          <div class="hero-roster-row interactive-card ${selected ? 'active' : ''}" data-open-unit-hero="${h.id}" role="button" tabindex="0">
             <div class="hero-roster-main">
               <img class="hero-roster-thumb" src="${PORTRAIT_URLS[h.id]}" alt="${t(loc, h.nameKey)}" />
               <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:2px;">
@@ -1699,6 +1922,9 @@ export class MetaView {
     container.querySelectorAll<HTMLElement>('[data-tab]').forEach((btn) => {
       btn.onclick = () => {
         this.activeTab = btn.dataset.tab as MetaTab;
+        this.detailUnit = null;
+        this.showHeroQuickModal = false;
+        this.unitPreview3D.dispose();
         this.statusNotice = '';
         if (this.activeTab === 'multi' && !this.network.connected) {
           void this.network.connect();
@@ -1710,6 +1936,8 @@ export class MetaView {
     container.querySelectorAll<HTMLElement>('[data-cards-sub]').forEach((btn) => {
       btn.onclick = () => {
         this.cardsSubTab = (btn.dataset.cardsSub as CardsSubTab) ?? 'towers';
+        this.detailUnit = null;
+        this.unitPreview3D.dispose();
         this.callbacks.onRefresh();
       };
     });
@@ -1733,6 +1961,9 @@ export class MetaView {
         this.showBestiary = false;
         this.showPatrolModal = false;
         this.showExpeditionModal = false;
+        this.showHeroQuickModal = false;
+        this.detailUnit = null;
+        this.unitPreview3D.dispose();
         this.callbacks.onRefresh();
       };
     });
@@ -1742,13 +1973,23 @@ export class MetaView {
         window.removeEventListener('keydown', this.escKeyHandler);
         this.escKeyHandler = null;
       }
-      if (this.showSettings || this.showBestiary || this.showPatrolModal || this.showExpeditionModal) {
+      if (
+        this.showSettings ||
+        this.showBestiary ||
+        this.showPatrolModal ||
+        this.showExpeditionModal ||
+        this.showHeroQuickModal ||
+        this.detailUnit
+      ) {
         this.escKeyHandler = (ev: KeyboardEvent) => {
           if (ev.key !== 'Escape') return;
           this.showSettings = false;
           this.showBestiary = false;
           this.showPatrolModal = false;
           this.showExpeditionModal = false;
+          this.showHeroQuickModal = false;
+          this.detailUnit = null;
+          this.unitPreview3D.dispose();
           this.callbacks.onRefresh();
         };
         window.addEventListener('keydown', this.escKeyHandler);
@@ -1922,7 +2163,15 @@ export class MetaView {
         window.removeEventListener('keydown', this.mapKeyHandler);
         this.mapKeyHandler = null;
       }
-      if (this.activeTab === 'map' && !this.showSettings && !this.showBestiary && !this.showPatrolModal && !this.showExpeditionModal) {
+      if (
+        this.activeTab === 'map' &&
+        !this.showSettings &&
+        !this.showBestiary &&
+        !this.showPatrolModal &&
+        !this.showExpeditionModal &&
+        !this.showHeroQuickModal &&
+        !this.detailUnit
+      ) {
         this.mapKeyHandler = (ev: KeyboardEvent) => {
           if (ev.key === 'ArrowRight') {
             ev.preventDefault();
@@ -1937,11 +2186,17 @@ export class MetaView {
     }
 
     const startBtn = container.querySelector<HTMLButtonElement>('#btn-start-level');
-    if (startBtn) startBtn.onclick = () => this.callbacks.onStartLevel(this.selectedLevelId, this.ironMode);
+    if (startBtn) {
+      startBtn.onclick = () => {
+        this.unitPreview3D.dispose();
+        this.callbacks.onStartLevel(this.selectedLevelId, this.ironMode);
+      };
+    }
 
     const rogueStart = container.querySelector<HTMLButtonElement>('#btn-rogue-start');
     if (rogueStart) {
       rogueStart.onclick = () => {
+        this.unitPreview3D.dispose();
         this.saveManager.update((d) => {
           d.activeExpedition = startNewExpedition();
         });
@@ -1950,7 +2205,12 @@ export class MetaView {
     }
 
     const rogueContinue = container.querySelector<HTMLButtonElement>('#btn-rogue-continue');
-    if (rogueContinue) rogueContinue.onclick = () => this.callbacks.onStartExpedition();
+    if (rogueContinue) {
+      rogueContinue.onclick = () => {
+        this.unitPreview3D.dispose();
+        this.callbacks.onStartExpedition();
+      };
+    }
 
     const rogueAbandon = container.querySelector<HTMLButtonElement>('#btn-rogue-abandon');
     if (rogueAbandon) {
@@ -2005,7 +2265,8 @@ export class MetaView {
     }
 
     container.querySelectorAll<HTMLElement>('[data-card-up]').forEach((btn) => {
-      btn.onclick = () => {
+      btn.onclick = (ev) => {
+        ev?.stopPropagation?.();
         upgradeCard(this.saveManager, btn.dataset.cardUp as CardUnitId);
         this.callbacks.onRefresh();
       };
@@ -2039,7 +2300,8 @@ export class MetaView {
     }
 
     container.querySelectorAll<HTMLElement>('[data-select-hero]').forEach((btn) => {
-      btn.onclick = () => {
+      btn.onclick = (ev) => {
+        ev?.stopPropagation?.();
         const hid = btn.dataset.selectHero as HeroId;
         this.saveManager.update((s) => { s.selectedHero = hid; });
         this.callbacks.onRefresh();
@@ -2047,7 +2309,8 @@ export class MetaView {
     });
 
     container.querySelectorAll<HTMLElement>('[data-unlock-hero]').forEach((btn) => {
-      btn.onclick = () => {
+      btn.onclick = (ev) => {
+        ev?.stopPropagation?.();
         const hid = btn.dataset.unlockHero as HeroId;
         if (unlockHeroWithGems(this.saveManager, hid)) {
           this.statusNotice = tParams(loc, 'hero.select.unlockedToast', { name: t(loc, HEROES[hid].nameKey) });
@@ -2250,6 +2513,109 @@ export class MetaView {
 
     const closeSettings = container.querySelector<HTMLButtonElement>('#btn-close-settings');
     if (closeSettings) closeSettings.onclick = () => { this.confirmResetSave = false; this.showSettings = false; this.callbacks.onRefresh(); };
+
+    const openHeroSwitch = container.querySelector<HTMLButtonElement>('#btn-map-hero-switch');
+    if (openHeroSwitch) openHeroSwitch.onclick = () => { this.showHeroQuickModal = true; this.callbacks.onRefresh(); };
+
+    const closeHeroSwitch = container.querySelector<HTMLButtonElement>('#btn-close-hero-quick');
+    if (closeHeroSwitch) closeHeroSwitch.onclick = () => { this.showHeroQuickModal = false; this.callbacks.onRefresh(); };
+
+    container.querySelectorAll<HTMLElement>('[data-quick-select-hero]').forEach((btn) => {
+      btn.onclick = () => {
+        const hid = btn.dataset.quickSelectHero as HeroId;
+        this.saveManager.update((s) => { s.selectedHero = hid; });
+        this.showHeroQuickModal = false;
+        this.callbacks.onRefresh();
+      };
+    });
+
+    const gotoHeroesFromQuick = container.querySelector<HTMLButtonElement>('#btn-quick-goto-heroes');
+    if (gotoHeroesFromQuick) {
+      gotoHeroesFromQuick.onclick = () => {
+        this.showHeroQuickModal = false;
+        this.activeTab = 'cards';
+        this.cardsSubTab = 'heroes';
+        this.callbacks.onRefresh();
+      };
+    }
+
+    container.querySelectorAll<HTMLElement>('[data-open-unit-tower]').forEach((card) => {
+      const openFn = () => {
+        const tid = card.dataset.openUnitTower as TowerId;
+        if (!tid || !TOWERS[tid]) return;
+        this.detailUnit = { kind: 'tower', id: tid, tierTab: 't1' };
+        this.callbacks.onRefresh();
+      };
+      card.onclick = openFn;
+      card.onkeydown = (ev: KeyboardEvent) => {
+        if (ev.key === 'Enter' || ev.key === ' ') {
+          ev.preventDefault();
+          openFn();
+        }
+      };
+    });
+
+    container.querySelectorAll<HTMLElement>('[data-open-unit-hero]').forEach((row) => {
+      const openFn = () => {
+        const hid = row.dataset.openUnitHero as HeroId;
+        if (!hid || !HEROES[hid]) return;
+        this.detailUnit = { kind: 'hero', id: hid };
+        this.callbacks.onRefresh();
+      };
+      row.onclick = openFn;
+      row.onkeydown = (ev: KeyboardEvent) => {
+        if (ev.key === 'Enter' || ev.key === ' ') {
+          ev.preventDefault();
+          openFn();
+        }
+      };
+    });
+
+    const closeDetail = container.querySelector<HTMLButtonElement>('#btn-close-unit-detail');
+    if (closeDetail) {
+      closeDetail.onclick = () => {
+        this.detailUnit = null;
+        this.unitPreview3D.dispose();
+        this.callbacks.onRefresh();
+      };
+    }
+
+    container.querySelectorAll<HTMLElement>('[data-preview-tier]').forEach((btn) => {
+      btn.onclick = () => {
+        const tierTab = btn.dataset.previewTier as 't1' | 't2' | 'evoA' | 'evoB';
+        if (this.detailUnit?.kind === 'tower' && tierTab) {
+          this.detailUnit = { ...this.detailUnit, tierTab };
+          this.callbacks.onRefresh();
+        }
+      };
+    });
+
+    const previewCanvas = container.querySelector<HTMLCanvasElement>('#unit-3d-preview');
+    if (this.detailUnit && previewCanvas && typeof window !== 'undefined') {
+      const save = this.saveManager.get();
+      let target: UnitPreviewTarget;
+      if (this.detailUnit.kind === 'tower') {
+        const spec = TOWERS[this.detailUnit.id];
+        const tt = this.detailUnit.tierTab;
+        target = {
+          kind: 'tower',
+          towerId: spec.id,
+          tier: tt === 't1' ? 1 : tt === 't2' ? 2 : 3,
+          branchId: tt === 'evoA' ? spec.evolutions[0].id : tt === 'evoB' ? spec.evolutions[1].id : undefined,
+          hatId: save.equippedHat,
+        };
+      } else {
+        target = {
+          kind: 'hero',
+          heroId: this.detailUnit.id,
+          hatId: save.equippedHat,
+          heroClass: save.heroClass,
+        };
+      }
+      this.unitPreview3D.mount(previewCanvas, target);
+    } else {
+      this.unitPreview3D.dispose();
+    }
 
     const resetSaveBtn = container.querySelector<HTMLButtonElement>('#btn-reset-save');
     if (resetSaveBtn) {

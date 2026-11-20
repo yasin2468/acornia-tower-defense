@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { evalHitJolt, evalSquashPop } from '../core/JuiceController.ts';
 import { ENEMIES, type EnemyId, type HeroId, type HeroVisualVariant } from '../data/enemies.ts';
 import type { EvolutionBranchId, HatId, TowerId } from '../data/towers.ts';
-import { instantiateModel } from './AssetLoader.ts';
+import { instantiateModel, type ModelName } from './AssetLoader.ts';
 
 function fallbackBox(hex: string, size = 0.6): THREE.Group {
   const g = new THREE.Group();
@@ -112,13 +112,13 @@ export function triggerTowerRecoil(rig: TowerRig): void {
   rig.recoilTimer = rig.recoilDuration;
 }
 
-function resolveTowerModelName(
+export function resolveTowerModelName(
   towerId: TowerId,
   tier: 1 | 2 | 3,
   branchId: EvolutionBranchId | undefined,
-): string {
-  if (tier === 1) return `tower_${towerId}_t1`;
-  if (tier === 2) return `tower_${towerId}_t2`;
+): ModelName {
+  if (tier === 1) return `tower_${towerId}_t1` as ModelName;
+  if (tier === 2) return `tower_${towerId}_t2` as ModelName;
   switch (branchId) {
     case 'squirrel_sniper':
       return 'tower_squirrel_sniper';
@@ -153,7 +153,7 @@ function resolveTowerModelName(
     case 'lynx_frostbite':
       return 'tower_lynx_frostbite';
     default:
-      return `tower_${towerId}_t2`;
+      return `tower_${towerId}_t2` as ModelName;
   }
 }
 

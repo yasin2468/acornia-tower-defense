@@ -6,21 +6,21 @@ import {
 } from '../core/SimulationEngine.ts';
 import { ENEMIES, HEROES, resolveHeroVisualVariant, type EnemyId } from '../data/enemies.ts';
 import { EXPEDITION_CLEAR_GEMS, EXPEDITION_CLEAR_OAK } from '../data/roguelike.ts';
+import { SYNERGY_COMBOS, getActiveSynergyPartnersForTower, getTowerSynergies } from '../data/synergies.ts';
 import { TOWER_LIST, TOWERS, type TargetingPriority, type TowerId } from '../data/towers.ts';
 import { t, tParams, type Locale } from '../i18n/locales.ts';
 import type { SceneManager } from '../rendering/SceneManager.ts';
 import {
   getFailOfferPrices,
-  isVipActive,
   type AdService,
   type BillingService,
   type RemoteConfigService,
 } from '../services/CommercialServices.ts';
 import type { NetworkService, SocialEmoteId } from '../services/NetworkService.ts';
 import type { SaveManager } from '../services/SaveManager.ts';
-import { ICONS, PORTRAIT_URLS, UI_ICON_URLS } from './icons.ts';
+import { ICONS, PORTRAIT_URLS, UI_ICON_URLS, getEnemyBadgeUrl } from './icons.ts';
 
-export type FloatingDamageKind = 'normal' | 'heavy' | 'resisted' | 'crit' | 'gold' | 'base' | 'skill';
+export type FloatingDamageKind = 'normal' | 'heavy' | 'resisted' | 'crit' | 'gold' | 'base' | 'skill' | 'combo';
 
 export interface FloatingDamage {
   id: number;
@@ -53,6 +53,8 @@ export interface BattleViewCallbacks {
   onExitToMap: () => void;
   onSendPvpMerc?: (enemyId: EnemyId, cost: number) => void;
   onSendSocial?: (emoteId: SocialEmoteId) => void;
+  onPreviewTap?: () => void;
+  onResetCamera?: () => void;
 }
 
 export class BattleView {
@@ -104,7 +106,9 @@ export class BattleView {
   private modalHostEl: HTMLElement | null = null;
   private hudTopEl: HTMLElement | null = null;
   private hudBottomEl: HTMLElement | null = null;
+  private camResetBtnEl: HTMLButtonElement | null = null;
   private promoHudBtnEl: HTMLButtonElement | null = null;
+  private lastSceneMgr: SceneManager | null = null;
 
   private lastContextKey = '';
   private lastModalKey = '';
@@ -146,9 +150,8 @@ export class BattleView {
     this.selectedSlotId = null;
     this.previewTowerId = null;
     this.targetingSkill = null;
-    const vipActive = isVipActive(this.saveManager.get());
-    this.speedMultiplier = vipActive ? 2 : 1;
-    this.speed2xUnlockedThisMatch = vipActive;
+    this.speedMultiplier = 1;
+    this.speed2xUnlockedThisMatch = true;
     this.paused = false;
     this.bannerText = '';
     this.bannerTimer = 0;
@@ -209,15 +212,17 @@ export class BattleView {
       }
     }
     const life =
-      kind === 'skill'
-        ? 1.12
-        : kind === 'crit' || kind === 'base'
-          ? 0.95
-          : kind === 'heavy'
-            ? 0.82
-            : kind === 'gold'
-              ? 0.9
-              : 0.68;
+      kind === 'combo'
+        ? 1.25
+        : kind === 'skill'
+          ? 1.12
+          : kind === 'crit' || kind === 'base'
+            ? 0.95
+            : kind === 'heavy'
+              ? 0.82
+              : kind === 'gold'
+                ? 0.9
+                : 0.68;
     const driftX = ((this.floatingDamages.length % 5) - 2) * 8 + (Math.random() - 0.5) * 6;
     this.floatSeq += 1;
     this.floatingDamages.push({
@@ -292,6 +297,7 @@ export class BattleView {
       <div class="wave-preview-strip" id="bw-wave-preview" style="display:none;"></div>
       <div class="multi-hud-bar" id="bw-multi-bar" style="display:none;"></div>
       <div class="banner-toast" id="bw-banner" style="display:none;"></div>
+      <button class="cam-reset-pill interactive" id="bw-cam-reset" style="display:none;">${t(loc, 'hud.camReset')}</button>
 
       <div class="hud-bottom" id="bw-hud-bottom">
         <div class="hud-controls">
@@ -357,6 +363,7 @@ export class BattleView {
     this.modalHostEl = container.querySelector('#bw-modal-host');
     this.hudTopEl = container.querySelector('#bw-hud-top');
     this.hudBottomEl = container.querySelector('#bw-hud-bottom');
+    this.camResetBtnEl = container.querySelector('#bw-cam-reset');
     this.promoHudBtnEl = container.querySelector('#btn-promo-hud');
 
     this.bindStaticEvents(container, sim);
@@ -448,18 +455,17 @@ export class BattleView {
       this.earlyBtnEl.onclick = () => sim.dispatch({ type: 'CALL_WAVE_EARLY' });
     }
     if (this.speedBtnEl) {
-      this.speedBtnEl.onclick = async () => {
-        if (this.speedMultiplier === 1) {
-          if (!this.speed2xUnlockedThisMatch) {
-            const res = await this.adService.showRewarded('speed_2x');
-            if (!res.rewarded) return;
-            this.speed2xUnlockedThisMatch = true;
-          }
-          this.speedMultiplier = 2;
-        } else if (this.speedMultiplier === 2 && isVipActive(this.saveManager.get())) {
-          this.speedMultiplier = 3;
+      this.speedBtnEl.onclick = () => {
+        this.speedMultiplier = this.speedMultiplier === 1 ? 2 : this.speedMultiplier === 2 ? 3 : 1;
+        if (this.speedBtnEl) this.speedBtnEl.textContent = `x${this.speedMultiplier}`;
+      };
+    }
+    if (this.camResetBtnEl) {
+      this.camResetBtnEl.onclick = () => {
+        if (this.callbacks.onResetCamera) {
+          this.callbacks.onResetCamera();
         } else {
-          this.speedMultiplier = 1;
+          this.lastSceneMgr?.cameraCtrl?.resetView?.();
         }
       };
     }
@@ -494,6 +500,7 @@ export class BattleView {
   }
 
   render(container: HTMLElement, sim: SimulationEngine, sceneMgr: SceneManager): void {
+    this.lastSceneMgr = sceneMgr;
     if (this.mountedRoot !== container) {
       this.mount(container, sim);
     }
@@ -505,9 +512,16 @@ export class BattleView {
     const hpPct = Math.max(0, Math.min(100, (sim.baseHp / sim.maxBaseHp) * 100));
 
     const hide = this.promoMode && this.promoHideHud;
+    const hasDockOpen = Boolean(this.selectedSlotId && sim.slots.get(this.selectedSlotId));
     if (this.hudTopEl && this.hudBottomEl) {
       this.hudTopEl.style.display = hide ? 'none' : 'flex';
       this.hudBottomEl.style.display = hide ? 'none' : 'flex';
+      this.hudBottomEl.classList?.toggle?.('dock-open', !hide && hasDockOpen);
+    }
+    if (this.camResetBtnEl) {
+      const showCamReset = !hide && Boolean(sceneMgr.cameraCtrl?.isZoomedOrPanned?.());
+      this.camResetBtnEl.style.display = showCamReset ? 'inline-flex' : 'none';
+      this.camResetBtnEl.textContent = t(loc, 'hud.camReset');
     }
     if (this.promoHudBtnEl) {
       this.promoHudBtnEl.textContent = this.promoHideHud ? t(loc, 'promo.hudShow') : t(loc, 'promo.hudHide');
@@ -542,14 +556,21 @@ export class BattleView {
           const chips = nextWave.groups
             .map((g) => {
               const spec = ENEMIES[g.enemyId];
-              const badge = spec.isBoss
-                ? `<span class="wp-badge boss">${t(loc, 'hud.tagBoss')}</span>`
+              const thumbUrl = getEnemyBadgeUrl(g.enemyId, spec.isBoss);
+              const roleIcon = spec.isBoss
+                ? `<span class="wp-badge boss">💀 ${t(loc, 'hud.tagBoss')}</span>`
                 : spec.isFlying
-                  ? `<span class="wp-badge flying">${t(loc, 'hud.tagFlying')}</span>`
+                  ? `<span class="wp-badge flying">✈ ${t(loc, 'hud.tagFlying')}</span>`
                   : spec.armor >= 0.25
-                    ? `<span class="wp-badge armor">${t(loc, 'hud.tagArmor')}</span>`
+                    ? `<span class="wp-badge armor">🛡 ${t(loc, 'hud.tagArmor')}</span>`
                     : '';
-              return `<span class="wp-group-chip">${t(loc, spec.nameKey)} ×${g.count}${badge}</span>`;
+              return `
+                <span class="wp-group-chip ${spec.isBoss ? 'is-boss' : ''}" title="${t(loc, spec.nameKey)}">
+                  <img class="wp-enemy-thumb" src="${thumbUrl}" alt="${t(loc, spec.nameKey)}" />
+                  <span class="wp-count">×${g.count}</span>
+                  ${roleIcon}
+                </span>
+              `;
             })
             .join('');
           this.wavePreviewEl.innerHTML = `<span class="wp-label">${t(loc, 'hud.nextWavePreview')}</span>${chips}`;
@@ -708,8 +729,17 @@ export class BattleView {
       .filter((s) => s.tower && s.tower.smokedTimer > 0)
       .map((s) => s.id)
       .join(',');
+    const builtTypesKey = Array.from(
+      new Set(
+        Array.from(sim.slots.values())
+          .map((s) => s.tower?.towerId)
+          .filter((id): id is TowerId => Boolean(id)),
+      ),
+    )
+      .sort()
+      .join(',');
     const allowedKey = sim.allowedTowers ? sim.allowedTowers.join(',') : 'all';
-    const contextKey = `${this.selectedSlotId ?? 'none'}|${selSlot?.stumpLocked ? 'stump' : selSlot?.tower ? `${selSlot.tower.towerId}_${selSlot.tower.tier}_${selSlot.tower.priority}` : 'empty'}|${sim.gold}|${this.tutorialPhase}|${smokedSlots}|${allowedKey}`;
+    const contextKey = `${this.selectedSlotId ?? 'none'}|${this.previewTowerId ?? 'none'}|${selSlot?.stumpLocked ? 'stump' : selSlot?.tower ? `${selSlot.tower.towerId}_${selSlot.tower.tier}_${selSlot.tower.priority}` : 'empty'}|${sim.gold}|${this.tutorialPhase}|${smokedSlots}|${builtTypesKey}|${allowedKey}|${loc}`;
 
     if (contextKey !== this.lastContextKey) {
       this.lastContextKey = contextKey;
@@ -776,7 +806,7 @@ export class BattleView {
       const hp = g ? g.hp : e.hp / e.maxHp;
       const ghost = g ? g.ghost : hp;
       if (hp >= 0.9999 && ghost >= 0.9999) continue;
-      const proj = sceneMgr.projectToScreen(e.x, e.isFlying ? 2.15 : e.isBoss ? 2.48 : 1.38, e.z);
+      const proj = sceneMgr.projectToScreen(e.x, e.isFlying ? 2.4 : e.isBoss ? 2.82 : 1.58, e.z);
       if (!proj.visible) continue;
       const bar = this.acquireBar(barCount);
       if (!bar) break;
@@ -810,19 +840,31 @@ export class BattleView {
       const age = f.maxLife - f.life;
       const p = Math.max(0, Math.min(1, age / f.maxLife));
       const rise =
-        f.kind === 'gold'
-          ? 44
-          : f.kind === 'skill'
-            ? 52
-            : f.kind === 'crit' || f.kind === 'base'
-              ? 46
-              : f.kind === 'heavy'
-                ? 38
-                : 30;
+        f.kind === 'combo'
+          ? 56
+          : f.kind === 'gold'
+            ? 44
+            : f.kind === 'skill'
+              ? 52
+              : f.kind === 'crit' || f.kind === 'base'
+                ? 46
+                : f.kind === 'heavy'
+                  ? 38
+                  : 30;
       const dy = easeOutCubic(p) * rise;
       const dx = f.driftX * (0.4 + p * 0.9);
       const peak =
-        f.kind === 'crit' ? 1.75 : f.kind === 'base' ? 1.7 : f.kind === 'skill' ? 1.55 : f.kind === 'heavy' ? 1.5 : 1.35;
+        f.kind === 'crit'
+          ? 1.75
+          : f.kind === 'base'
+            ? 1.7
+            : f.kind === 'combo'
+              ? 1.65
+              : f.kind === 'skill'
+                ? 1.55
+                : f.kind === 'heavy'
+                  ? 1.5
+                  : 1.35;
       const sc = popScale(age, peak, f.kind === 'crit' ? 0.22 : 0.16);
       if (el.key !== f.id || el.text !== f.text || el.kind !== f.kind) {
         el.key = f.id;
@@ -875,20 +917,15 @@ export class BattleView {
     const slot = sim.slots.get(this.selectedSlotId);
     if (!slot) return parts.join('');
 
-    const proj = sceneMgr.projectToScreen(slot.x, 0.4, slot.z);
-    const hostW = this.mountedRoot?.clientWidth || sceneMgr.renderer.domElement.clientWidth || 430;
-    const hostH = this.mountedRoot?.clientHeight || sceneMgr.renderer.domElement.clientHeight || 840;
-    const padX = Math.min(116, Math.max(96, Math.floor(hostW * 0.27)));
-    const minY = Math.min(168, Math.max(132, Math.floor(hostH * 0.19)));
-    const maxY = Math.max(minY + 120, hostH - 188);
-    const clampedX = Math.max(padX, Math.min(hostW - padX, proj.x));
-    const clampedY = Math.max(minY, Math.min(maxY, proj.y));
-
     if (slot.stumpLocked) {
       parts.push(`
-        <div class="tower-hud-anchor" style="left:${clampedX}px; top:${clampedY}px;">
-          <div class="tower-top-pill" style="min-width:168px; justify-content:center;">
-            <button class="btn btn-gold btn-sm" id="btn-clear-stump" ${sim.gold >= slot.stumpClearCost ? '' : 'disabled'}>
+        <div class="mobile-tower-dock interactive">
+          <div class="dock-head-row">
+            <span class="dock-title">${t(loc, 'hud.clearStump')}</span>
+            <button type="button" class="dock-close-btn" id="btn-close-dock" aria-label="${t(loc, 'map.close')}">✕</button>
+          </div>
+          <div class="dock-actions-row">
+            <button type="button" class="btn btn-gold" id="btn-clear-stump" style="flex:1;" ${sim.gold >= slot.stumpClearCost ? '' : 'disabled'}>
               ${t(loc, 'hud.clearStump')} (${slot.stumpClearCost})
             </button>
           </div>
@@ -897,33 +934,77 @@ export class BattleView {
       return parts.join('');
     }
 
+    const builtIds = new Set<TowerId>();
+    for (const s of sim.slots.values()) {
+      if (s.tower) builtIds.add(s.tower.towerId);
+    }
+
     if (!slot.tower) {
-      const ringSize = 220;
-      const center = ringSize * 0.5;
-      const radius = 84;
-      const count = TOWER_LIST.length;
-      const rings = TOWER_LIST.map((tw, idx) => {
-        const ang = -Math.PI / 2 + (idx * Math.PI * 2) / count;
-        const left = `${(center + Math.cos(ang) * radius).toFixed(1)}px`;
-        const top = `${(center + Math.sin(ang) * radius).toFixed(1)}px`;
+      const previewSpec = this.previewTowerId ? TOWERS[this.previewTowerId] : null;
+      const previewAllowed = previewSpec ? !sim.allowedTowers || sim.allowedTowers.includes(previewSpec.id) : false;
+      const previewCanBuild = Boolean(previewSpec && previewAllowed && sim.gold >= previewSpec.tier1.cost);
+      const previewPartners = previewSpec ? getActiveSynergyPartnersForTower(previewSpec.id, builtIds) : [];
+
+      const previewHtml = previewSpec
+        ? `
+          <div class="mobile-build-preview">
+            <img class="preview-thumb" src="${PORTRAIT_URLS[previewSpec.id]}" alt="${t(loc, previewSpec.nameKey)}" />
+            <div class="preview-meta">
+              <div class="preview-title-row">
+                <span class="preview-name">${t(loc, previewSpec.nameKey)}</span>
+                <span class="preview-target-pill ${previewSpec.canHitAir ? 'air' : ''}">${previewSpec.canHitAir ? `✈ ${t(loc, 'hud.targetAirGround')}` : `🛡 ${t(loc, 'hud.targetGround')}`}</span>
+              </div>
+              <div class="preview-role">${t(loc, previewSpec.roleKey)}</div>
+              <div class="preview-stats-row">
+                <span>⚔ ${previewSpec.tier1.damage}</span>
+                <span>⚡ ${previewSpec.tier1.fireRate}/s</span>
+                <span>◎ ${previewSpec.tier1.range}</span>
+                ${
+                  previewPartners.length > 0
+                    ? `<span class="preview-syn-pill">⚡ ${t(loc, 'hud.synergyReady')}: ${previewPartners.map((cid) => t(loc, SYNERGY_COMBOS[cid].nameKey)).join(' · ')}</span>`
+                    : ''
+                }
+              </div>
+            </div>
+            <button type="button" class="btn btn-sm ${previewCanBuild ? 'btn-primary' : ''}" id="btn-confirm-build" ${previewCanBuild ? '' : 'disabled'}>
+              ${t(loc, 'hud.buildConfirm')} (${previewSpec.tier1.cost})
+            </button>
+            <button type="button" class="dock-close-btn" id="btn-close-dock" aria-label="${t(loc, 'map.close')}">✕</button>
+          </div>
+        `
+        : `
+          <div class="mobile-build-preview idle">
+            <span class="preview-idle-hint">${t(loc, 'hud.buildHint')}</span>
+            ${slot.runeSlot ? `<span class="rune-slot-inline">${t(loc, 'hud.runeSlotBadge')}</span>` : ''}
+            <button type="button" class="dock-close-btn" id="btn-close-dock" aria-label="${t(loc, 'map.close')}">✕</button>
+          </div>
+        `;
+
+      const deckCards = TOWER_LIST.map((tw) => {
         const allowed = !sim.allowedTowers || sim.allowedTowers.includes(tw.id);
-        const canBuild = allowed && sim.gold >= tw.tier1.cost;
+        const canAfford = sim.gold >= tw.tier1.cost;
+        const isSelected = this.previewTowerId === tw.id;
+        const partners = allowed ? getActiveSynergyPartnersForTower(tw.id, builtIds) : [];
         return `
-          <button class="radial-btn ${allowed ? '' : 'locked-tower'}" style="left:${left}; top:${top};" data-build-tower="${tw.id}" ${canBuild ? '' : 'disabled'} title="${t(loc, tw.nameKey)}">
+          <button
+            type="button"
+            class="build-deck-card ${isSelected ? 'selected' : ''} ${allowed ? '' : 'locked-tower'} ${allowed && !canAfford ? 'cant-afford' : ''}"
+            data-build-tower="${tw.id}"
+            title="${t(loc, tw.nameKey)}"
+          >
+            ${tw.canHitAir ? '<span class="deck-air-tag" aria-hidden="true">✈</span>' : ''}
+            ${partners.length > 0 ? `<span class="deck-syn-spark" data-synergy-spark="1" title="${t(loc, 'hud.synergyReady')}">⚡</span>` : ''}
             <img src="${PORTRAIT_URLS[tw.id]}" alt="${t(loc, tw.nameKey)}" />
-            <span class="radial-cost">${allowed ? tw.tier1.cost : '🔒'}</span>
+            <span class="deck-card-name">${t(loc, tw.nameKey)}</span>
+            <span class="deck-cost-pill ${canAfford && allowed ? '' : 'unaffordable'}">${allowed ? tw.tier1.cost : '🔒'}</span>
           </button>
         `;
       }).join('');
 
-      const badgeHtml = slot.runeSlot
-        ? `<div class="rune-slot-badge">${t(loc, 'hud.runeSlotBadge')}</div>`
-        : '';
       parts.push(`
-        <div class="radial-ring" style="left:${clampedX}px; top:${clampedY}px;">
-          <div class="radial-halo"></div>
-          ${badgeHtml}
-          ${rings}
+        <div class="mobile-build-dock interactive">
+          ${previewHtml}
+          <div class="mobile-build-grid">${deckCards}</div>
         </div>
       `);
       return parts.join('');
@@ -936,78 +1017,132 @@ export class BattleView {
     const starsTxt = `${'★'.repeat(tw.tier)}${'☆'.repeat(3 - tw.tier)}`;
 
     let statLine = `${t(loc, 'hud.damage')} ${curStats.damage} · ${t(loc, 'hud.rate')} ${curStats.fireRate} · ${t(loc, 'hud.range')} ${curStats.range}`;
-    let actionsHtml = '';
+    let bodyActionsHtml = '';
 
     if (tw.tier === 1) {
-      statLine = `${t(loc, 'hud.damage')} ${curStats.damage}→${spec.tier2.damage} · ${t(loc, 'hud.rate')} ${curStats.fireRate}→${spec.tier2.fireRate}`;
-      actionsHtml = `
-        <button class="tower-round-action sell" id="btn-tower-sell">
-          <span style="font-size:9px; opacity:0.85;">${t(loc, 'hud.sellShort')}</span>
-          <span>+${refund}</span>
-        </button>
-        <button class="tower-round-action upgrade" id="btn-tower-upgrade" ${sim.gold >= spec.tier2.cost ? '' : 'disabled'}>
-          <span class="svg-ico" style="width:18px;height:18px;">${ICONS.arrowUp}</span>
-          <span>${spec.tier2.cost}</span>
-        </button>
+      statLine = `${t(loc, 'hud.damage')} ${curStats.damage}→${spec.tier2.damage} · ${t(loc, 'hud.rate')} ${curStats.fireRate}→${spec.tier2.fireRate} · ${t(loc, 'hud.range')} ${curStats.range}→${spec.tier2.range}`;
+      bodyActionsHtml = `
+        <div class="dock-actions-row">
+          <button type="button" class="btn btn-primary dock-upg-btn" id="btn-tower-upgrade" ${sim.gold >= spec.tier2.cost ? '' : 'disabled'}>
+            <span class="svg-ico" style="width:16px;height:16px;">${ICONS.arrowUp}</span>
+            <span>${t(loc, 'hud.upgrade')} (${spec.tier2.cost})</span>
+          </button>
+          <button type="button" class="btn dock-sell-btn" id="btn-tower-sell">
+            ${t(loc, 'hud.sellShort')} +${refund}
+          </button>
+        </div>
       `;
     } else if (tw.tier === 2) {
-      actionsHtml = `
-        <div class="tower-evolve-grid">
+      bodyActionsHtml = `
+        <div class="dock-evolve-grid">
           ${spec.evolutions
             .map(
               (evo) => `
-                <button class="evolve-card-btn" data-evolve="${evo.id}" ${sim.gold >= evo.stats.cost ? '' : 'disabled'}>
-                  <span class="evolve-name">${t(loc, evo.nameKey)}</span>
-                  <span class="evolve-cost-pill">${evo.stats.cost}</span>
+                <button type="button" class="evolve-card-btn" data-evolve="${evo.id}" ${sim.gold >= evo.stats.cost ? '' : 'disabled'}>
+                  <div class="evo-btn-top">
+                    <span class="evolve-name">${t(loc, evo.nameKey)}</span>
+                    <span class="evolve-cost-pill">${evo.stats.cost}</span>
+                  </div>
+                  <div class="evo-btn-desc">${t(loc, evo.descKey)}</div>
                 </button>
               `,
             )
             .join('')}
         </div>
-        <button class="tower-round-action sell bottom" id="btn-tower-sell">
-          <span>${t(loc, 'hud.sellShort')} +${refund}</span>
-        </button>
+        <div class="dock-actions-row" style="margin-top:6px;">
+          <button type="button" class="btn dock-sell-btn" id="btn-tower-sell" style="width:100%;">
+            ${t(loc, 'hud.sellShort')} +${refund}
+          </button>
+        </div>
       `;
     } else {
-      actionsHtml = `
-        <button class="tower-round-action sell" id="btn-tower-sell">
-          <span style="font-size:9px; opacity:0.85;">${t(loc, 'hud.sellShort')}</span>
-          <span>+${refund}</span>
-        </button>
+      const synPills = getTowerSynergies(tw.towerId)
+        .map((sy) => `<span class="preview-syn-pill">⚡ ${t(loc, sy.nameKey)}</span>`)
+        .join('');
+      bodyActionsHtml = `
+        <div class="dock-actions-row">
+          <div class="dock-max-pill">★ ${t(loc, 'hud.maxTier')} ${synPills}</div>
+          <button type="button" class="btn dock-sell-btn" id="btn-tower-sell">
+            ${t(loc, 'hud.sellShort')} +${refund}
+          </button>
+        </div>
       `;
     }
 
     parts.push(`
-      <div class="tower-hud-anchor" style="left:${clampedX}px; top:${clampedY}px;">
-        <div class="tower-top-pill">
-          <img class="tower-top-thumb" src="${PORTRAIT_URLS[tw.towerId]}" alt="" />
+      <div class="mobile-tower-dock interactive">
+        <div class="dock-tower-head">
+          <img class="tower-top-thumb" src="${PORTRAIT_URLS[tw.towerId]}" alt="${t(loc, spec.nameKey)}" />
           <div class="tower-top-meta">
-            <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; font-weight:800; gap:6px;">
-              <span>${t(loc, spec.nameKey)} <span style="color:var(--accent-gold);">${starsTxt}</span></span>
-              <button class="btn btn-sm" id="btn-cycle-prio" style="padding:2px 7px; font-size:10px;">${t(loc, `priority.${tw.priority}`)}</button>
+            <div class="dock-title-line">
+              <span class="dock-title">${t(loc, spec.nameKey)} <span style="color:var(--accent-gold);">${starsTxt}</span></span>
+              <span class="preview-target-pill ${spec.canHitAir ? 'air' : ''}">${spec.canHitAir ? `✈ ${t(loc, 'hud.targetAirGround')}` : `🛡 ${t(loc, 'hud.targetGround')}`}</span>
             </div>
-            <div style="font-size:10.5px; font-weight:800; color:var(--accent-green);">${statLine}</div>
+            <div style="font-size:11px; font-weight:800; color:var(--accent-green);">${statLine}</div>
             ${slot.runeSlot ? `<div class="rune-slot-inline">${t(loc, 'hud.runeSlotBadge')}</div>` : ''}
           </div>
+          <button type="button" class="btn btn-sm" id="btn-cycle-prio">${t(loc, `priority.${tw.priority}`)}</button>
+          <button type="button" class="dock-close-btn" id="btn-close-dock" aria-label="${t(loc, 'map.close')}">✕</button>
         </div>
-        ${actionsHtml}
+        ${bodyActionsHtml}
       </div>
     `);
 
     return parts.join('');
   }
 
+  private refreshContextNow(sim: SimulationEngine): void {
+    this.lastContextKey = '';
+    if (this.mountedRoot && this.lastSceneMgr) {
+      this.render(this.mountedRoot, sim, this.lastSceneMgr);
+    }
+  }
+
   private bindContextEvents(host: HTMLElement, sim: SimulationEngine): void {
+    host.querySelectorAll<HTMLElement>('.mobile-build-dock, .mobile-tower-dock').forEach((dock) => {
+      dock.onpointerdown = (ev) => ev.stopPropagation();
+    });
+
+    const closeBtn = host.querySelector<HTMLButtonElement>('#btn-close-dock');
+    if (closeBtn) {
+      closeBtn.onclick = () => {
+        this.selectedSlotId = null;
+        this.previewTowerId = null;
+        this.refreshContextNow(sim);
+      };
+    }
+
+    const confirmBtn = host.querySelector<HTMLButtonElement>('#btn-confirm-build');
+    if (confirmBtn) {
+      confirmBtn.onclick = () => {
+        if (!this.selectedSlotId || !this.previewTowerId) return;
+        const twSpec = TOWERS[this.previewTowerId];
+        const allowed = !sim.allowedTowers || sim.allowedTowers.includes(this.previewTowerId);
+        if (!allowed || sim.gold < twSpec.tier1.cost) return;
+        sim.dispatch({
+          type: 'BUILD_TOWER',
+          slotId: this.selectedSlotId,
+          towerId: this.previewTowerId,
+        });
+        this.selectedSlotId = null;
+        this.previewTowerId = null;
+        if (this.tutorialPhase === 'build_tower') this.tutorialPhase = 'move_hero';
+        this.refreshContextNow(sim);
+      };
+    }
+
     host.querySelectorAll<HTMLElement>('[data-build-tower]').forEach((btn) => {
       const tid = btn.dataset.buildTower as TowerId;
-      btn.onpointerenter = () => {
-        this.previewTowerId = tid;
-      };
-      btn.onpointerleave = () => {
-        if (this.previewTowerId === tid) this.previewTowerId = null;
-      };
       btn.onclick = () => {
         if (!this.selectedSlotId) return;
+        const allowed = !sim.allowedTowers || sim.allowedTowers.includes(tid);
+        if (this.previewTowerId !== tid) {
+          this.previewTowerId = tid;
+          this.callbacks.onPreviewTap?.();
+          this.refreshContextNow(sim);
+          return;
+        }
+        if (!allowed || sim.gold < TOWERS[tid].tier1.cost) return;
         sim.dispatch({
           type: 'BUILD_TOWER',
           slotId: this.selectedSlotId,
@@ -1016,13 +1151,16 @@ export class BattleView {
         this.selectedSlotId = null;
         this.previewTowerId = null;
         if (this.tutorialPhase === 'build_tower') this.tutorialPhase = 'move_hero';
+        this.refreshContextNow(sim);
       };
     });
 
     const upgBtn = host.querySelector<HTMLButtonElement>('#btn-tower-upgrade');
     if (upgBtn) {
       upgBtn.onclick = () => {
-        if (this.selectedSlotId) sim.dispatch({ type: 'UPGRADE_TOWER', slotId: this.selectedSlotId });
+        if (!this.selectedSlotId) return;
+        sim.dispatch({ type: 'UPGRADE_TOWER', slotId: this.selectedSlotId });
+        this.refreshContextNow(sim);
       };
     }
 
@@ -1034,6 +1172,7 @@ export class BattleView {
           slotId: this.selectedSlotId,
           branchId: btn.dataset.evolve as never,
         });
+        this.refreshContextNow(sim);
       };
     });
 
@@ -1043,6 +1182,8 @@ export class BattleView {
         if (!this.selectedSlotId) return;
         sim.dispatch({ type: 'SELL_TOWER', slotId: this.selectedSlotId });
         this.selectedSlotId = null;
+        this.previewTowerId = null;
+        this.refreshContextNow(sim);
       };
     }
 
@@ -1053,16 +1194,23 @@ export class BattleView {
         const cur = sim.slots.get(this.selectedSlotId!)?.tower?.priority ?? 'first';
         const next = order[(order.indexOf(cur) + 1) % order.length];
         sim.dispatch({ type: 'SET_TARGETING', slotId: this.selectedSlotId!, priority: next });
+        this.refreshContextNow(sim);
       };
     }
 
     const stumpBtn = host.querySelector<HTMLButtonElement>('#btn-clear-stump');
     if (stumpBtn && this.selectedSlotId) {
-      stumpBtn.onclick = () => sim.dispatch({ type: 'CLEAR_STUMP', slotId: this.selectedSlotId! });
+      stumpBtn.onclick = () => {
+        sim.dispatch({ type: 'CLEAR_STUMP', slotId: this.selectedSlotId! });
+        this.refreshContextNow(sim);
+      };
     }
 
     host.querySelectorAll<HTMLElement>('[data-clear-smoke]').forEach((btn) => {
-      btn.onclick = () => sim.dispatch({ type: 'CLEAR_SMOKE', slotId: btn.dataset.clearSmoke! });
+      btn.onclick = () => {
+        sim.dispatch({ type: 'CLEAR_SMOKE', slotId: btn.dataset.clearSmoke! });
+        this.refreshContextNow(sim);
+      };
     });
   }
 

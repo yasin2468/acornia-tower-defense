@@ -9,6 +9,7 @@ import {
 } from '../data/enemies.ts';
 import type { LevelSpec, Vec2 } from '../data/levels.ts';
 import type { RelicId } from '../data/roguelike.ts';
+import type { SynergyComboId } from '../data/synergies.ts';
 import { computeTalentModifiers, type TalentBranchId, type TalentModifiers } from '../data/talents.ts';
 import {
   SELL_REFUND_RATE,
@@ -146,6 +147,16 @@ export type SimEvent =
   | { type: 'HERO_RALLY'; x: number; z: number }
   | { type: 'HERO_LEVELED'; level: number; x: number; z: number }
   | { type: 'WAVE_STARTED'; waveNumber: number; announceEnemy?: EnemyId; earlyBonus: number }
+  | {
+      type: 'SYNERGY_COMBO';
+      comboId: SynergyComboId;
+      enemyId: number;
+      x: number;
+      z: number;
+      bonusDamage: number;
+      arcToX?: number;
+      arcToZ?: number;
+    }
   | { type: 'BASE_HIT'; damage: number; remainingHp: number }
   | { type: 'GAME_WON'; stars: number }
   | { type: 'GAME_LOST' };
@@ -201,6 +212,12 @@ export interface EnemyInstance {
   phase2Triggered: boolean;
   engagedByHero: boolean;
   lane?: 0 | 1;
+  frostPrimeTimer: number;
+  acidPrimeTimer: number;
+  resinPrimeTimer: number;
+  burnTimer: number;
+  burnDps: number;
+  synergyCooldowns: Partial<Record<SynergyComboId, number>>;
 }
 
 export interface ProjectileInstance {
@@ -1140,6 +1157,12 @@ export class SimulationEngine {
       phase2Triggered: false,
       engagedByHero: false,
       lane,
+      frostPrimeTimer: 0,
+      acidPrimeTimer: 0,
+      resinPrimeTimer: 0,
+      burnTimer: 0,
+      burnDps: 0,
+      synergyCooldowns: {},
     };
     this.enemies.push(enemy);
     return enemy;
@@ -1538,6 +1561,22 @@ export class SimulationEngine {
 
       if (e.hitFlashTimer > 0) e.hitFlashTimer = Math.max(0, e.hitFlashTimer - dt);
       if (e.freezeVisualTimer > 0) e.freezeVisualTimer = Math.max(0, e.freezeVisualTimer - dt);
+      if (e.frostPrimeTimer > 0) e.frostPrimeTimer = Math.max(0, e.frostPrimeTimer - dt);
+      if (e.acidPrimeTimer > 0) e.acidPrimeTimer = Math.max(0, e.acidPrimeTimer - dt);
+      if (e.resinPrimeTimer > 0) e.resinPrimeTimer = Math.max(0, e.resinPrimeTimer - dt);
+      for (const key of Object.keys(e.synergyCooldowns) as SynergyComboId[]) {
+        const rem = (e.synergyCooldowns[key] ?? 0) - dt;
+        if (rem <= 0) delete e.synergyCooldowns[key];
+        else e.synergyCooldowns[key] = rem;
+      }
+      if (e.burnTimer > 0) {
+        e.burnTimer = Math.max(0, e.burnTimer - dt);
+        if (e.hp > 0 && e.burnDps > 0) {
+          this.damageEnemy(e, e.burnDps * dt, 0.25, false, true);
+          if (e.hp <= 0) continue;
+        }
+        if (e.burnTimer === 0) e.burnDps = 0;
+      }
       if (e.slowTimer > 0) {
         e.slowTimer = Math.max(0, e.slowTimer - dt);
         if (e.slowTimer === 0) e.slowPct = 0;
@@ -1830,6 +1869,7 @@ export class SimulationEngine {
             dirZ: cur.z - prevZ,
             heavy: false,
             towerId: tower.towerId,
+            branchId: tower.branchId,
           });
           prevX = cur.x;
           prevZ = cur.z;
@@ -1873,6 +1913,7 @@ export class SimulationEngine {
               dirZ: uz,
               heavy: true,
               towerId: tower.towerId,
+              branchId: tower.branchId,
             });
           }
         }
@@ -1980,6 +2021,7 @@ export class SimulationEngine {
                 dirZ: rlen > 0.05 ? rz : uz,
                 heavy: true,
                 towerId: p.towerId,
+                branchId: p.branchId,
               });
               if (eff.stunned) impactEv.isStun = true;
               if (eff.armorBroken) impactEv.isArmorBreak = true;
@@ -2008,6 +2050,7 @@ export class SimulationEngine {
             dirZ: uz,
             heavy: heavyHit,
             towerId: p.towerId,
+            branchId: p.branchId,
           });
           if (eff.stunned) impactEv.isStun = true;
           if (eff.armorBroken) impactEv.isArmorBreak = true;
@@ -2044,11 +2087,137 @@ export class SimulationEngine {
           this.damageEnemy(e, pool.dps * dt, 0, false, true);
           e.slowPct = Math.max(e.slowPct, pool.slowPct);
           e.slowTimer = Math.max(e.slowTimer, 0.3);
+          if (e.hp > 0) {
+            if (pool.kind === 'acid') {
+              e.acidPrimeTimer = Math.max(e.acidPrimeTimer, 1.5 * this.talentMods.statusDurationMult);
+            } else if (pool.kind === 'resin') {
+              e.resinPrimeTimer = Math.max(e.resinPrimeTimer, 1.5 * this.talentMods.statusDurationMult);
+            } else if (pool.kind === 'inferno' && e.resinPrimeTimer > 0) {
+              this.triggerSynergyCombo(e, pool.dps, 'badger', 'badger_inferno');
+            }
+          }
         }
       }
       next.push(pool);
     }
     this.resinPools = next;
+  }
+
+  private triggerSynergyCombo(
+    enemy: EnemyInstance,
+    baseDmg: number,
+    towerId: TowerId,
+    branchId?: EvolutionBranchId,
+  ): boolean {
+    if (enemy.hp <= 0) return false;
+    let triggeredArmorBreak = false;
+
+    // Shatter: Frost prime + heavy kinetic/mortar impact
+    if (
+      enemy.frostPrimeTimer > 0 &&
+      (towerId === 'beaver' || towerId === 'tortoise' || branchId === 'hedgehog_shred') &&
+      !(enemy.synergyCooldowns.shatter && enemy.synergyCooldowns.shatter > 0)
+    ) {
+      const bonus = Math.max(14, Math.round(baseDmg * 0.45));
+      for (const e of [...this.enemies]) {
+        if (e.hp > 0 && (!e.isFlying || e.uid === enemy.uid) && Math.hypot(e.x - enemy.x, e.z - enemy.z) <= 2.0) {
+          this.damageEnemy(e, bonus, 0.5, false, true);
+          e.synergyCooldowns.shatter = Math.max(e.synergyCooldowns.shatter ?? 0, 2.2);
+        }
+      }
+      enemy.frostPrimeTimer = Math.min(enemy.frostPrimeTimer, 0.4);
+      this.events.push({
+        type: 'SYNERGY_COMBO',
+        comboId: 'shatter',
+        enemyId: enemy.uid,
+        x: enemy.x,
+        z: enemy.z,
+        bonusDamage: bonus,
+      });
+    }
+
+    // Corrode Crit: Acid prime + Squirrel / Falcon / Hedgehog pierce
+    if (
+      enemy.hp > 0 &&
+      enemy.acidPrimeTimer > 0 &&
+      (towerId === 'squirrel' || towerId === 'falcon' || towerId === 'hedgehog') &&
+      !(enemy.synergyCooldowns.corrode_crit && enemy.synergyCooldowns.corrode_crit > 0)
+    ) {
+      const bonus = Math.max(12, Math.round(baseDmg * 0.35));
+      enemy.armor = Math.max(0, enemy.armor * 0.82);
+      triggeredArmorBreak = true;
+      this.damageEnemy(enemy, bonus, 0.7, true, true, true, { heavy: true, towerId });
+      enemy.synergyCooldowns.corrode_crit = 2.2;
+      enemy.acidPrimeTimer = Math.min(enemy.acidPrimeTimer, 0.4);
+      this.events.push({
+        type: 'SYNERGY_COMBO',
+        comboId: 'corrode_crit',
+        enemyId: enemy.uid,
+        x: enemy.x,
+        z: enemy.z,
+        bonusDamage: bonus,
+      });
+    }
+
+    // Ignite: Resin prime + Inferno / Owl / Tempest electric-thermal trigger
+    if (
+      enemy.hp > 0 &&
+      enemy.resinPrimeTimer > 0 &&
+      (branchId === 'badger_inferno' || towerId === 'owl' || branchId === 'falcon_tempest') &&
+      !(enemy.synergyCooldowns.ignite && enemy.synergyCooldowns.ignite > 0)
+    ) {
+      const bonus = Math.max(20, Math.round(baseDmg * 0.35 + 18));
+      for (const e of [...this.enemies]) {
+        if (e.hp > 0 && (!e.isFlying || e.uid === enemy.uid) && Math.hypot(e.x - enemy.x, e.z - enemy.z) <= 2.1) {
+          this.damageEnemy(e, bonus, 0.35, false, true);
+          e.burnTimer = Math.max(e.burnTimer, 2.5);
+          e.burnDps = Math.max(e.burnDps, 12);
+          e.synergyCooldowns.ignite = Math.max(e.synergyCooldowns.ignite ?? 0, 2.4);
+        }
+      }
+      enemy.resinPrimeTimer = 0;
+      this.events.push({
+        type: 'SYNERGY_COMBO',
+        comboId: 'ignite',
+        enemyId: enemy.uid,
+        x: enemy.x,
+        z: enemy.z,
+        bonusDamage: bonus,
+      });
+    }
+
+    // Superconduct: Frost prime + Owl / Falcon voltage arc
+    if (
+      enemy.hp > 0 &&
+      enemy.frostPrimeTimer > 0 &&
+      (towerId === 'owl' || towerId === 'falcon') &&
+      !(enemy.synergyCooldowns.superconduct && enemy.synergyCooldowns.superconduct > 0)
+    ) {
+      const bonus = Math.max(10, Math.round(baseDmg * 0.65));
+      const arcTarget = this.enemies
+        .filter((e) => e.uid !== enemy.uid && e.hp > 0 && Math.hypot(e.x - enemy.x, e.z - enemy.z) <= 3.6)
+        .sort((a, b) => Math.hypot(a.x - enemy.x, a.z - enemy.z) - Math.hypot(b.x - enemy.x, b.z - enemy.z))[0];
+      if (arcTarget) {
+        this.damageEnemy(arcTarget, bonus, 0.4, false, true);
+        arcTarget.stunTimer = Math.max(arcTarget.stunTimer, 0.55);
+      } else {
+        this.damageEnemy(enemy, bonus, 0.4, false, true);
+      }
+      enemy.stunTimer = Math.max(enemy.stunTimer, 0.55);
+      enemy.synergyCooldowns.superconduct = 2.4;
+      enemy.frostPrimeTimer = Math.min(enemy.frostPrimeTimer, 0.4);
+      this.events.push({
+        type: 'SYNERGY_COMBO',
+        comboId: 'superconduct',
+        enemyId: enemy.uid,
+        x: enemy.x,
+        z: enemy.z,
+        bonusDamage: bonus,
+        ...(arcTarget ? { arcToX: arcTarget.x, arcToZ: arcTarget.z } : {}),
+      });
+    }
+
+    return triggeredArmorBreak;
   }
 
   private applyTowerHitEffects(
@@ -2057,7 +2226,7 @@ export class SimulationEngine {
     stats: TowerTierStats,
     isCrit: boolean,
     isFourthShot: boolean,
-    hitMeta?: { dirX?: number; dirZ?: number; heavy?: boolean; towerId?: TowerId },
+    hitMeta?: { dirX?: number; dirZ?: number; heavy?: boolean; towerId?: TowerId; branchId?: EvolutionBranchId },
   ): { armorBroken: boolean; stunned: boolean; froze: boolean } {
     let dmg = rawDamage;
     if (enemy.isBoss && stats.bossBonusPct) {
@@ -2068,6 +2237,12 @@ export class SimulationEngine {
     }
 
     let armorBroken = false;
+    if (hitMeta?.towerId) {
+      if (this.triggerSynergyCombo(enemy, dmg, hitMeta.towerId, hitMeta.branchId)) {
+        armorBroken = true;
+      }
+    }
+
     if (stats.permanentArmorHalve && !enemy.armorHalved) {
       enemy.armor = enemy.armor * 0.5;
       enemy.armorHalved = true;
@@ -2098,6 +2273,19 @@ export class SimulationEngine {
       enemy.slowPct = Math.max(enemy.slowPct, 0.2);
       enemy.slowTimer = Math.max(enemy.slowTimer, 1.5);
       pierce = Math.min(0.95, pierce + 0.15);
+    }
+
+    const primeDurMult = this.talentMods.statusDurationMult;
+    const tId = hitMeta?.towerId;
+    const bId = hitMeta?.branchId;
+    if (tId === 'lynx' || tId === 'owl' || this.relics.includes('frost_thorns')) {
+      enemy.frostPrimeTimer = Math.max(enemy.frostPrimeTimer, 3.2 * primeDurMult);
+    }
+    if (tId === 'badger' && bId !== 'badger_inferno') {
+      enemy.acidPrimeTimer = Math.max(enemy.acidPrimeTimer, 3.4 * primeDurMult);
+    }
+    if (tId === 'beaver') {
+      enemy.resinPrimeTimer = Math.max(enemy.resinPrimeTimer, 3.2 * primeDurMult);
     }
 
     this.damageEnemy(enemy, dmg, pierce, isCrit, false, armorBroken, hitMeta);

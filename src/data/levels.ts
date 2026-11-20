@@ -86,7 +86,7 @@ const BASE_LEVELS: LevelSpec[] = [
     nameKey: 'level.1.name',
     unlocked: true,
     mapPin: { xPct: 48, yPct: 91 },
-    startGold: 150,
+    startGold: 165,
     baseHp: 150,
     killZoneMeters: 14.0,
     path: [
@@ -183,7 +183,7 @@ const BASE_LEVELS: LevelSpec[] = [
     nameKey: 'level.2.name',
     unlocked: true,
     mapPin: { xPct: 73, yPct: 83 },
-    startGold: 160,
+    startGold: 175,
     baseHp: 150,
     killZoneMeters: 14.5,
     path: [
@@ -297,7 +297,7 @@ const BASE_LEVELS: LevelSpec[] = [
     unlocked: true,
     isBossStage: true,
     mapPin: { xPct: 48, yPct: 74 },
-    startGold: 170,
+    startGold: 185,
     baseHp: 150,
     killZoneMeters: 15.0,
     path: [

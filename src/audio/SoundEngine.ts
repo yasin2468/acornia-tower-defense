@@ -1,4 +1,5 @@
 import type { HeroId } from '../data/enemies.ts';
+import type { SynergyComboId } from '../data/synergies.ts';
 
 /** Random pitch multiplier in [1 - spread, 1 + spread] (default ±10 %). */
 export function randomizePitch(freq: number, spread = 0.1, rnd: () => number = Math.random): number {
@@ -41,17 +42,86 @@ export type MusicTheme = 'none' | 'menu' | 'forest' | 'canyon' | 'cavern' | 'sno
 interface BiomeProgression {
   tempoMs: number;
   notes: readonly number[];
+  bass: readonly number[];
+  chords: readonly (readonly number[])[];
   wave: OscillatorType;
   gain: number;
+  perc: boolean;
 }
 
 const BIOME_MUSIC: Record<Exclude<MusicTheme, 'none'>, BiomeProgression> = {
-  menu: { tempoMs: 460, notes: [261.6, 329.6, 392.0, 493.9, 392.0, 329.6, 293.7, 392.0], wave: 'triangle', gain: 0.017 },
-  forest: { tempoMs: 420, notes: [293.7, 349.2, 440.0, 523.3, 440.0, 392.0, 349.2, 440.0], wave: 'triangle', gain: 0.016 },
-  canyon: { tempoMs: 360, notes: [220.0, 261.6, 329.6, 392.0, 440.0, 392.0, 329.6, 293.7], wave: 'triangle', gain: 0.017 },
-  cavern: { tempoMs: 520, notes: [246.9, 311.1, 370.0, 493.9, 370.0, 311.1, 277.2, 370.0], wave: 'sine', gain: 0.018 },
-  snow: { tempoMs: 490, notes: [329.6, 392.0, 493.9, 587.3, 659.3, 493.9, 392.0, 329.6], wave: 'sine', gain: 0.016 },
-  foundry: { tempoMs: 340, notes: [196.0, 233.1, 293.7, 349.2, 293.7, 261.6, 233.1, 293.7], wave: 'sawtooth', gain: 0.014 },
+  menu: {
+    tempoMs: 460,
+    notes: [261.6, 329.6, 392.0, 493.9, 392.0, 329.6, 293.7, 392.0],
+    bass: [130.8, 130.8, 146.8, 164.8],
+    chords: [
+      [261.6, 329.6],
+      [293.7, 392.0],
+    ],
+    wave: 'triangle',
+    gain: 0.015,
+    perc: false,
+  },
+  forest: {
+    tempoMs: 420,
+    notes: [293.7, 349.2, 440.0, 523.3, 440.0, 392.0, 349.2, 440.0],
+    bass: [146.8, 174.6, 130.8, 164.8],
+    chords: [
+      [293.7, 440.0],
+      [261.6, 392.0],
+    ],
+    wave: 'triangle',
+    gain: 0.014,
+    perc: true,
+  },
+  canyon: {
+    tempoMs: 360,
+    notes: [220.0, 261.6, 329.6, 392.0, 440.0, 392.0, 329.6, 293.7],
+    bass: [110.0, 130.8, 146.8, 110.0],
+    chords: [
+      [220.0, 329.6],
+      [196.0, 293.7],
+    ],
+    wave: 'triangle',
+    gain: 0.015,
+    perc: true,
+  },
+  cavern: {
+    tempoMs: 500,
+    notes: [246.9, 311.1, 370.0, 493.9, 370.0, 311.1, 277.2, 370.0],
+    bass: [123.5, 110.0, 146.8, 123.5],
+    chords: [
+      [246.9, 370.0],
+      [220.0, 329.6],
+    ],
+    wave: 'sine',
+    gain: 0.016,
+    perc: true,
+  },
+  snow: {
+    tempoMs: 470,
+    notes: [329.6, 392.0, 493.9, 587.3, 659.3, 493.9, 392.0, 329.6],
+    bass: [164.8, 196.0, 146.8, 130.8],
+    chords: [
+      [329.6, 493.9],
+      [293.7, 440.0],
+    ],
+    wave: 'sine',
+    gain: 0.014,
+    perc: true,
+  },
+  foundry: {
+    tempoMs: 340,
+    notes: [196.0, 233.1, 293.7, 349.2, 293.7, 261.6, 233.1, 293.7],
+    bass: [98.0, 116.5, 130.8, 98.0],
+    chords: [
+      [196.0, 293.7],
+      [174.6, 261.6],
+    ],
+    wave: 'sawtooth',
+    gain: 0.012,
+    perc: true,
+  },
 };
 
 export class SoundEngine {
@@ -64,11 +134,22 @@ export class SoundEngine {
   private musicTheme: MusicTheme = 'none';
   private musicTimer: ReturnType<typeof setInterval> | null = null;
   private musicStep = 0;
+  private bossIntensity = false;
   enabled = true;
   musicEnabled = true;
 
   getMusicTheme(): MusicTheme {
     return this.musicTheme;
+  }
+
+  isBossIntensity(): boolean {
+    return this.bossIntensity;
+  }
+
+  setBossIntensity(active: boolean): void {
+    if (this.bossIntensity === active) return;
+    this.bossIntensity = active;
+    this.syncMusicLoop();
   }
 
   resume(): void {
@@ -105,7 +186,8 @@ export class SoundEngine {
       return;
     }
     const spec = BIOME_MUSIC[this.musicTheme];
-    this.musicTimer = setInterval(() => this.playMusicStep(spec), spec.tempoMs);
+    const tempo = Math.max(180, Math.round(spec.tempoMs * (this.bossIntensity ? 0.82 : 1)));
+    this.musicTimer = setInterval(() => this.playMusicStep(spec), tempo);
   }
 
   private playMusicStep(spec: BiomeProgression): void {
@@ -113,19 +195,94 @@ export class SoundEngine {
     const ctx = this.ctx;
     if (!ctx || ctx.state !== 'running' || !this.musicBus) return;
     const now = ctx.currentTime;
-    const freq = spec.notes[this.musicStep % spec.notes.length];
+    const stepIdx = this.musicStep;
     this.musicStep += 1;
+
+    // 1. Melodic voice
+    const freq = spec.notes[stepIdx % spec.notes.length];
     const osc = ctx.createOscillator();
     const g = ctx.createGain();
     osc.type = spec.wave;
     osc.frequency.setValueAtTime(freq, now);
     g.gain.setValueAtTime(0.0001, now);
-    g.gain.linearRampToValueAtTime(spec.gain, now + 0.04);
-    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.34);
+    g.gain.linearRampToValueAtTime(spec.gain, now + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
     osc.connect(g);
     g.connect(this.musicBus);
     osc.start(now);
-    osc.stop(now + 0.36);
+    osc.stop(now + 0.32);
+
+    // 2. Warm low-pass bass pulse every 2 steps
+    if (stepIdx % 2 === 0 && spec.bass.length > 0) {
+      const bassFreq = spec.bass[Math.floor(stepIdx / 2) % spec.bass.length];
+      const bOsc = ctx.createOscillator();
+      const bFilt = ctx.createBiquadFilter();
+      const bGain = ctx.createGain();
+      bOsc.type = 'triangle';
+      bOsc.frequency.setValueAtTime(bassFreq, now);
+      bFilt.type = 'lowpass';
+      bFilt.frequency.value = 340;
+      const bPeak = spec.gain * (this.bossIntensity ? 1.45 : 1.05);
+      bGain.gain.setValueAtTime(0.0001, now);
+      bGain.gain.linearRampToValueAtTime(bPeak, now + 0.02);
+      bGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.44);
+      bOsc.connect(bFilt);
+      bFilt.connect(bGain);
+      bGain.connect(this.musicBus);
+      bOsc.start(now);
+      bOsc.stop(now + 0.46);
+    }
+
+    // 3. Soft chord pad every 4 steps
+    if (stepIdx % 4 === 0 && spec.chords.length > 0) {
+      const chord = spec.chords[Math.floor(stepIdx / 4) % spec.chords.length];
+      for (const cf of chord) {
+        const cOsc = ctx.createOscillator();
+        const cGain = ctx.createGain();
+        cOsc.type = 'sine';
+        cOsc.frequency.setValueAtTime(cf, now);
+        cGain.gain.setValueAtTime(0.0001, now);
+        cGain.gain.linearRampToValueAtTime(spec.gain * 0.42, now + 0.12);
+        cGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.95);
+        cOsc.connect(cGain);
+        cGain.connect(this.musicBus);
+        cOsc.start(now);
+        cOsc.stop(now + 0.98);
+      }
+    }
+
+    // 4. Rhythm shaker + Boss war drum thump
+    if (spec.perc && (stepIdx % 2 === 1 || this.bossIntensity) && this.noiseBuf) {
+      const src = ctx.createBufferSource();
+      src.buffer = this.noiseBuf;
+      const filt = ctx.createBiquadFilter();
+      filt.type = 'highpass';
+      filt.frequency.value = 4800;
+      const pGain = ctx.createGain();
+      pGain.gain.setValueAtTime(0.0001, now);
+      pGain.gain.linearRampToValueAtTime(this.bossIntensity ? 0.011 : 0.006, now + 0.004);
+      pGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.048);
+      src.connect(filt);
+      filt.connect(pGain);
+      pGain.connect(this.musicBus);
+      src.start(now);
+      src.stop(now + 0.055);
+    }
+
+    if (this.bossIntensity && stepIdx % 4 === 0) {
+      const dOsc = ctx.createOscillator();
+      const dGain = ctx.createGain();
+      dOsc.type = 'sine';
+      dOsc.frequency.setValueAtTime(108, now);
+      dOsc.frequency.exponentialRampToValueAtTime(42, now + 0.16);
+      dGain.gain.setValueAtTime(0.0001, now);
+      dGain.gain.linearRampToValueAtTime(spec.gain * 1.9, now + 0.006);
+      dGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+      dOsc.connect(dGain);
+      dGain.connect(this.musicBus);
+      dOsc.start(now);
+      dOsc.stop(now + 0.2);
+    }
   }
 
   private duckMusic(level = 0.35, releaseSec = 0.22): void {
@@ -528,5 +685,33 @@ export class SoundEngine {
     // classic bear roar + seismic earth thump
     this.playExplosion(true);
     this.tone(240, 120, 0.28, 'sawtooth', 0.11, 0.02, 2);
+  }
+
+  /** Soft wooden click for 1st-tap tower preview and unit drawer navigation. */
+  playUiTick(): void {
+    this.tone(540, 420, 0.045, 'triangle', 0.055, 0, 0, 0.04);
+  }
+
+  /** Distinct multi-layered SFX when two complementary towers trigger an elemental combo. */
+  playSynergyCombo(comboId: SynergyComboId): void {
+    if (comboId === 'shatter') {
+      this.noiseBurst(5400, 'highpass', 0.15, 0.12, 1.8, 0, 2);
+      this.tone(1180, 1760, 0.14, 'sine', 0.095, 0, 2, 0.04);
+      this.tone(180, 72, 0.2, 'triangle', 0.13, 0.02, 2);
+    } else if (comboId === 'corrode_crit') {
+      this.noiseBurst(2800, 'bandpass', 0.18, 0.11, 2.2, 0, 2);
+      this.tone(740, 1180, 0.14, 'triangle', 0.095, 0.01, 2, 0.05);
+      this.tone(1480, 990, 0.12, 'sine', 0.08, 0.07, 2);
+    } else if (comboId === 'ignite') {
+      this.transient(0.09, 0.22, 82, 2);
+      this.noiseBurst(1100, 'lowpass', 0.26, 0.15, 1.0, 0, 2);
+      this.tone(360, 680, 0.18, 'sawtooth', 0.08, 0.02, 2);
+    } else {
+      // superconduct
+      this.noiseBurst(4200, 'bandpass', 0.16, 0.1, 3.4, 0, 2);
+      this.tone(920, 1860, 0.13, 'sawtooth', 0.08, 0, 2);
+      this.tone(1320, 660, 0.15, 'sine', 0.085, 0.05, 2);
+    }
+    this.duckMusic(0.55, 0.2);
   }
 }

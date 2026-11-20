@@ -3,6 +3,8 @@ import * as THREE from 'three';
 /** Reduced Motion caps: trauma is scaled and hard-capped, roll and zoom punches are cut. */
 export const REDUCED_MOTION_TRAUMA_SCALE = 0.35;
 export const REDUCED_MOTION_TRAUMA_CAP = 0.4;
+export const CAMERA_MIN_ZOOM = 1.0;
+export const CAMERA_MAX_ZOOM = 1.85;
 
 /**
  * Shake amount from trauma: trauma^2 so light hits barely move and heavy hits punch.
@@ -29,6 +31,14 @@ export class CameraController {
   private kickX = 0;
   private kickZ = 0;
   private lastRoll = 0;
+  private zoom = 1;
+  private targetZoom = 1;
+  private panX = 0;
+  private panZ = 0;
+  private targetPanX = 0;
+  private targetPanZ = 0;
+  private readonly anchorPos = new THREE.Vector3();
+  private readonly anchorLook = new THREE.Vector3();
 
   constructor(aspect: number) {
     this.camera = new THREE.PerspectiveCamera(this.baseFov, Math.max(0.4, aspect), 0.5, 80);
@@ -75,6 +85,61 @@ export class CameraController {
 
   getKick(): { x: number; z: number } {
     return { x: this.kickX, z: this.kickZ };
+  }
+
+  private clampPan(z: number, x: number, pz: number): { x: number; z: number } {
+    const t = Math.max(0, z - 1);
+    const maxX = t * 4.4;
+    const maxZ = t * 5.8;
+    return {
+      x: Math.max(-maxX, Math.min(maxX, x)),
+      z: Math.max(-maxZ, Math.min(maxZ, pz)),
+    };
+  }
+
+  setZoom(z: number): void {
+    const clamped = Math.max(CAMERA_MIN_ZOOM, Math.min(CAMERA_MAX_ZOOM, Number.isFinite(z) ? z : CAMERA_MIN_ZOOM));
+    this.targetZoom = clamped;
+    const p = this.clampPan(clamped, this.targetPanX, this.targetPanZ);
+    this.targetPanX = p.x;
+    this.targetPanZ = p.z;
+  }
+
+  zoomBy(factor: number): void {
+    if (!Number.isFinite(factor) || factor <= 0) return;
+    this.setZoom(this.targetZoom * factor);
+  }
+
+  addPanDelta(dx: number, dz: number): void {
+    if (!Number.isFinite(dx) || !Number.isFinite(dz)) return;
+    const p = this.clampPan(this.targetZoom, this.targetPanX + dx, this.targetPanZ + dz);
+    this.targetPanX = p.x;
+    this.targetPanZ = p.z;
+  }
+
+  resetView(instant = false): void {
+    this.targetZoom = CAMERA_MIN_ZOOM;
+    this.targetPanX = 0;
+    this.targetPanZ = 0;
+    if (instant) {
+      this.zoom = CAMERA_MIN_ZOOM;
+      this.panX = 0;
+      this.panZ = 0;
+      this.camera.position.copy(this.basePosition);
+      this.camera.lookAt(this.baseLookAt);
+    }
+  }
+
+  getZoom(): number {
+    return this.zoom;
+  }
+
+  getPan(): { x: number; z: number } {
+    return { x: this.panX, z: this.panZ };
+  }
+
+  isZoomedOrPanned(): boolean {
+    return this.targetZoom > 1.03 || Math.abs(this.targetPanX) > 0.08 || Math.abs(this.targetPanZ) > 0.08;
   }
 
   addTrauma(amount: number): void {
@@ -129,10 +194,33 @@ export class CameraController {
       }
     }
 
+    const damp = 1 - Math.exp(-14 * dt);
+    const stepToward = (cur: number, target: number): number =>
+      Math.abs(target - cur) < 1e-4 ? target : cur + (target - cur) * damp;
+    this.zoom = stepToward(this.zoom, this.targetZoom);
+    this.panX = stepToward(this.panX, this.targetPanX);
+    this.panZ = stepToward(this.panZ, this.targetPanZ);
+    const clampedCur = this.clampPan(this.zoom, this.panX, this.panZ);
+    this.panX = clampedCur.x;
+    this.panZ = clampedCur.z;
+
+    if (this.zoom === 1 && this.panX === 0 && this.panZ === 0) {
+      this.anchorPos.copy(this.basePosition);
+      this.anchorLook.copy(this.baseLookAt);
+    } else {
+      const inv = 1 / this.zoom;
+      this.anchorLook.set(this.baseLookAt.x + this.panX, this.baseLookAt.y, this.baseLookAt.z + this.panZ);
+      this.anchorPos.set(
+        this.baseLookAt.x + (this.basePosition.x - this.baseLookAt.x) * inv + this.panX,
+        this.baseLookAt.y + (this.basePosition.y - this.baseLookAt.y) * inv,
+        this.baseLookAt.z + (this.basePosition.z - this.baseLookAt.z) * inv + this.panZ,
+      );
+    }
+
     if (this.trauma <= 0 && this.kickX === 0 && this.kickZ === 0) {
       this.lastRoll = 0;
-      this.camera.position.copy(this.basePosition);
-      this.camera.lookAt(this.baseLookAt);
+      this.camera.position.copy(this.anchorPos);
+      this.camera.lookAt(this.anchorLook);
       return;
     }
 
@@ -149,22 +237,22 @@ export class CameraController {
     const pitch = this.reducedMotion ? 0 : 0.24 * shake * Math.sin(this.shakeTime * 2.1 + 0.7);
 
     this.camera.position.set(
-      this.basePosition.x + ox + this.kickX,
-      this.basePosition.y + oy,
-      this.basePosition.z + oz + this.kickZ,
+      this.anchorPos.x + ox + this.kickX,
+      this.anchorPos.y + oy,
+      this.anchorPos.z + oz + this.kickZ,
     );
     this.camera.lookAt(
-      this.baseLookAt.x + ox * 0.42 + this.kickX * 0.6,
-      this.baseLookAt.y + pitch,
-      this.baseLookAt.z + this.kickZ * 0.6,
+      this.anchorLook.x + ox * 0.42 + this.kickX * 0.6,
+      this.anchorLook.y + pitch,
+      this.anchorLook.z + this.kickZ * 0.6,
     );
     this.camera.rotateZ(roll);
     this.lastRoll = roll;
 
     if (this.trauma === 0 && this.kickX === 0 && this.kickZ === 0) {
       this.lastRoll = 0;
-      this.camera.position.copy(this.basePosition);
-      this.camera.lookAt(this.baseLookAt);
+      this.camera.position.copy(this.anchorPos);
+      this.camera.lookAt(this.anchorLook);
     }
   }
 }

@@ -167,6 +167,11 @@ const battleView = new BattleView(
       network.sendSocialPing(emoteId, px, pz);
       triggerSocialFeedback(true, emoteId, px, pz);
     },
+    onPreviewTap: () => {
+      sound.playUiTick();
+      haptics.impact('light');
+    },
+    onResetCamera: () => sceneMgr.cameraCtrl.resetView(),
   },
   isPromoMode,
   network,
@@ -230,6 +235,7 @@ function renderMeta(): void {
   mode = 'meta';
   juice.reset();
   syncAudioAndCameraSettings();
+  sound.setBossIntensity(false);
   sound.setMusicTheme('menu');
   metaView.render(uiRoot);
 }
@@ -246,6 +252,9 @@ async function launchBattleSpec(
     initialBaseHp?: number;
   },
 ): Promise<void> {
+  metaView.disposeTransient();
+  sceneMgr.cameraCtrl.resetView(true);
+  sound.setBossIntensity(false);
   if (!options.isMultiMatch && network.state !== 'idle') {
     network.leaveRoom();
   }
@@ -352,6 +361,7 @@ async function startExpeditionStage(): Promise<void> {
 
 function exitToMap(): void {
   flushSeasonKills();
+  sound.setBossIntensity(false);
   if (network.state !== 'idle') {
     network.leaveRoom();
   }
@@ -380,6 +390,7 @@ function processBattleEvents(events: SimEvent[]): void {
       questBuilds += 1;
     } else if (ev.type === 'TOWER_UPGRADED') {
       sound.playUpgrade();
+      haptics.impact('medium');
       questBuilds += 1;
     } else if (ev.type === 'STUMP_CLEARED') {
       sound.playWoodBreak();
@@ -507,9 +518,20 @@ function processBattleEvents(events: SimEvent[]): void {
         const enemySpec = ENEMIES[ev.announceEnemy];
         battleView.showBanner(`${t(loc, 'hud.newEnemy')}: ${t(loc, enemySpec.nameKey)}`, 3.4);
       }
+    } else if (ev.type === 'SYNERGY_COMBO') {
+      sound.playSynergyCombo(ev.comboId);
+      haptics.impact('medium');
+      juice.triggerMicroHitStop(0.032, 0.1);
+      battleView.addFloatingDamage(
+        ev.x,
+        ev.z,
+        `${t(loc, `synergy.${ev.comboId}.name`)}! +${ev.bonusDamage}`,
+        'combo',
+      );
     } else if (ev.type === 'GAME_WON' && !victoryRecorded) {
       victoryRecorded = true;
       questWins += 1;
+      haptics.impact('medium');
       flushSeasonKills();
       if (network.state === 'in_match' && !multiOutcomeRecorded) {
         multiOutcomeRecorded = true;
@@ -582,6 +604,22 @@ function processBattleEvents(events: SimEvent[]): void {
   }
 }
 
+const activePointers = new Map<number, { x: number; y: number }>();
+let pinchState: { dist: number; midX: number; midY: number } | null = null;
+let panGestureActive = false;
+
+function getPinchMetrics(): { dist: number; midX: number; midY: number } | null {
+  if (activePointers.size < 2) return null;
+  const pts = Array.from(activePointers.values());
+  const a = pts[0];
+  const b = pts[1];
+  return {
+    dist: Math.hypot(b.x - a.x, b.y - a.y),
+    midX: (a.x + b.x) * 0.5,
+    midY: (a.y + b.y) * 0.5,
+  };
+}
+
 let dragHeroState: {
   startX: number;
   startY: number;
@@ -603,6 +641,15 @@ function dispatchHeroMove(x: number, z: number): void {
 
 canvas.addEventListener('pointerdown', (ev) => {
   if (mode !== 'battle' || !activeSim || battleView.paused || activeSim.status !== 'playing') return;
+  activePointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+  if (activePointers.size >= 2) {
+    dragHeroState = null;
+    panGestureActive = true;
+    pinchState = getPinchMetrics();
+    return;
+  }
+  if (panGestureActive) return;
+
   const hit = sceneMgr.pickWorld(ev.clientX, ev.clientY);
   if (!hit) return;
 
@@ -669,6 +716,26 @@ canvas.addEventListener('pointerdown', (ev) => {
 
 canvas.addEventListener('pointermove', (ev) => {
   if (mode !== 'battle' || !activeSim || battleView.paused || activeSim.status !== 'playing') return;
+  if (activePointers.has(ev.pointerId)) {
+    activePointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+  }
+  if (activePointers.size >= 2 && pinchState) {
+    const cur = getPinchMetrics();
+    if (cur) {
+      if (pinchState.dist > 8 && cur.dist > 8) {
+        sceneMgr.cameraCtrl.zoomBy(cur.dist / pinchState.dist);
+      }
+      const dx = cur.midX - pinchState.midX;
+      const dy = cur.midY - pinchState.midY;
+      const scale = sceneMgr.cameraCtrl.getZoom() * 26;
+      sceneMgr.cameraCtrl.addPanDelta(-dx / scale, -dy / scale);
+      pinchState = cur;
+      panGestureActive = true;
+    }
+    return;
+  }
+  if (panGestureActive) return;
+
   if (battleView.targetingSkill) {
     const hover = sceneMgr.pickWorld(ev.clientX, ev.clientY);
     if (hover) {
@@ -694,12 +761,29 @@ canvas.addEventListener('pointermove', (ev) => {
   }
 });
 
-window.addEventListener('pointerup', () => {
-  dragHeroState = null;
-});
-window.addEventListener('pointercancel', () => {
-  dragHeroState = null;
-});
+canvas.addEventListener(
+  'wheel',
+  (ev) => {
+    if (mode !== 'battle' || !activeSim || battleView.paused || activeSim.status !== 'playing') return;
+    ev.preventDefault();
+    sceneMgr.cameraCtrl.zoomBy(ev.deltaY < 0 ? 1.12 : 0.89);
+  },
+  { passive: false },
+);
+
+const clearPointer = (ev: PointerEvent): void => {
+  activePointers.delete(ev.pointerId);
+  if (activePointers.size < 2) {
+    pinchState = null;
+  }
+  if (activePointers.size === 0) {
+    panGestureActive = false;
+    dragHeroState = null;
+  }
+};
+
+window.addEventListener('pointerup', clearPointer);
+window.addEventListener('pointercancel', clearPointer);
 
 const resizeObserver = new ResizeObserver(() => {
   sceneMgr.resize(shell.clientWidth, shell.clientHeight);
@@ -750,6 +834,10 @@ function frame(nowMs: number): void {
         processBattleEvents(events);
         sceneMgr.handleSimEvents(events, activeSim);
       }
+      const hasLiveBoss = activeSim.enemies.some((e) => e.isBoss && e.hp > 0);
+      sound.setBossIntensity(hasLiveBoss);
+    } else {
+      sound.setBossIntensity(false);
     }
     if (network.state === 'in_match') {
       network.stepBot(simDt * battleView.speedMultiplier, activeSim);
