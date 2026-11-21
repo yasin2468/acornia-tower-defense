@@ -8,7 +8,7 @@ const config = {
   plugins: {
     SplashScreen: {
       launchAutoHide: true,
-      backgroundColor: '#16202e',
+      backgroundColor: '#24140a',
     },
   },
 };

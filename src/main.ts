@@ -8,8 +8,14 @@ import {
   type SimEvent,
 } from './core/SimulationEngine.ts';
 import { getBannerSpec } from './data/accessories.ts';
+import {
+  DAILY_CHALLENGE_GEMS,
+  DAILY_CHALLENGE_OAK,
+  DAILY_MUTATORS,
+  getDailyChallengeSpec,
+} from './data/daily.ts';
 import { ENEMIES, HEROES } from './data/enemies.ts';
-import { LEVELS, type LevelSpec } from './data/levels.ts';
+import { LEVELS, isLevelUnlocked, type LevelSpec } from './data/levels.ts';
 import {
   EXPEDITION_CLEAR_GEMS,
   EXPEDITION_CLEAR_OAK,
@@ -20,6 +26,7 @@ import { recordMultiplayerOutcome } from './data/season.ts';
 import { t, tParams } from './i18n/locales.ts';
 import { SoundEngine } from './audio/SoundEngine.ts';
 import {
+  MODEL_NAMES,
   ensureModelsLoaded,
   getLevelModelDependencies,
   preloadBootModels,
@@ -41,7 +48,7 @@ import {
   grantCampaignHeroUnlocks,
   recordDailyQuestProgress,
 } from './services/ProgressionService.ts';
-import { SaveManager } from './services/SaveManager.ts';
+import { SaveManager, type BattleCheckpointState, type DailyMutatorId } from './services/SaveManager.ts';
 import { BattleView } from './ui/BattleView.ts';
 import { MetaView } from './ui/MetaView.ts';
 import { UI_ICON_URLS } from './ui/icons.ts';
@@ -84,7 +91,11 @@ let activeSim: SimulationEngine | null = null;
 let currentLevelId = 1;
 let currentIronMode = false;
 let currentIsExpedition = false;
+let currentEndlessMode = false;
+let currentDailyDate: string | undefined;
+let currentIsMultiMatch = false;
 let victoryRecorded = false;
+let lossRecorded = false;
 let multiOutcomeRecorded = false;
 let pendingSeasonKills = 0;
 let simAccumulator = 0;
@@ -132,6 +143,10 @@ function applyDevUnlock(): void {
 const metaView = new MetaView(saveManager, adService, billingService, network, {
   onStartLevel: (levelId, ironMode) => void startLevel(levelId, ironMode),
   onStartExpedition: () => void startExpeditionStage(),
+  onResumeCheckpoint: (cp) => void resumeFromCheckpoint(cp),
+  onDiscardCheckpoint: () => {},
+  onStartDailyChallenge: () => void startDailyChallenge(),
+  onStartEndlessMode: () => void startEndlessMode(),
   onDevUnlock: import.meta.env.DEV ? () => applyDevUnlock() : undefined,
   onRefresh: () => renderMeta(),
 });
@@ -143,6 +158,11 @@ const battleView = new BattleView(
   remoteConfig,
   {
     onRestart: () => {
+      if (!currentIsMultiMatch && !currentIsExpedition) {
+        saveManager.update((d) => {
+          d.activeBattleCheckpoint = null;
+        });
+      }
       if (currentIsExpedition) {
         if (activeSim?.status === 'lost') {
           saveManager.update((d) => {
@@ -152,6 +172,14 @@ const battleView = new BattleView(
           return;
         }
         void startExpeditionStage();
+        return;
+      }
+      if (currentEndlessMode) {
+        void startEndlessMode();
+        return;
+      }
+      if (currentDailyDate) {
+        void startDailyChallenge();
         return;
       }
       void startLevel(currentLevelId, currentIronMode);
@@ -235,6 +263,9 @@ function syncAudioAndCameraSettings(): void {
   sceneMgr.setReducedMotion(reduced);
   battleView.setReducedMotion(reduced);
   haptics.setReducedMotion(reduced);
+  if (activeSim) {
+    activeSim.autoStartWaves = s.autoStartWaves;
+  }
 }
 
 function renderMeta(): void {
@@ -253,6 +284,10 @@ async function launchBattleSpec(
     customSeed?: number;
     isMultiMatch: boolean;
     isExpedition: boolean;
+    endlessMode?: boolean;
+    mutatorId?: DailyMutatorId;
+    dailyDate?: string;
+    checkpoint?: BattleCheckpointState;
     allowedTowers?: import('./data/towers.ts').TowerId[];
     relics?: import('./data/roguelike.ts').RelicId[];
     initialBaseHp?: number;
@@ -267,12 +302,22 @@ async function launchBattleSpec(
   currentLevelId = spec.id;
   currentIronMode = options.ironMode;
   currentIsExpedition = options.isExpedition;
+  currentEndlessMode = Boolean(options.endlessMode);
+  currentDailyDate = options.dailyDate;
+  currentIsMultiMatch = options.isMultiMatch;
   victoryRecorded = false;
+  lossRecorded = false;
   multiOutcomeRecorded = false;
   pendingSeasonKills = 0;
   simAccumulator = 0;
   lastStatePingMs = 0;
   juice.reset();
+
+  if (!options.checkpoint && !options.isMultiMatch && !options.isExpedition) {
+    saveManager.update((d) => {
+      d.activeBattleCheckpoint = null;
+    });
+  }
 
   const save = saveManager.get();
   const heroId = save.selectedHero ?? 'boz_pence';
@@ -285,6 +330,11 @@ async function launchBattleSpec(
           ? ['hero_wolf']
           : ['hero_bear', 'hero_bear_viking', 'hero_bear_royal'];
   const deps = getLevelModelDependencies(spec, heroModels, save.equippedHat);
+  if (options.endlessMode) {
+    for (const m of MODEL_NAMES) {
+      if (m.startsWith('enemy_') && !deps.includes(m)) deps.push(m);
+    }
+  }
   await ensureModelsLoaded(deps);
 
   const bannerSpec = !options.isMultiMatch ? getBannerSpec(save.equippedBanner) : null;
@@ -296,6 +346,9 @@ async function launchBattleSpec(
   activeSim = new SimulationEngine(effectiveSpec, {
     seed: options.customSeed,
     ironMode: options.ironMode,
+    endlessMode: options.endlessMode,
+    mutatorId: options.mutatorId,
+    autoStartWaves: save.settings.autoStartWaves,
     cardLevels: save.cardLevels,
     heroId,
     heroClass: save.heroClass,
@@ -308,6 +361,9 @@ async function launchBattleSpec(
     relics: options.relics,
     initialBaseHp: options.initialBaseHp,
   });
+  if (options.checkpoint) {
+    activeSim.restoreCheckpoint(options.checkpoint);
+  }
   if (options.isMultiMatch && network.mode === 'coop') {
     activeSim.onLocalDispatch = (cmd, tick) => network.sendGameCommand(cmd, tick);
   }
@@ -333,6 +389,10 @@ async function launchBattleSpec(
   mode = 'battle';
   analytics.track('level_start', { levelId: spec.id, ironMode: options.ironMode, expedition: options.isExpedition });
   battleView.render(uiRoot, activeSim, sceneMgr);
+  if (options.mutatorId) {
+    const loc = save.settings.locale;
+    battleView.showBanner(`${t(loc, `mutator.${options.mutatorId}.name`)}`, 3.6);
+  }
 }
 
 async function startLevel(
@@ -343,6 +403,47 @@ async function startLevel(
 ): Promise<void> {
   const spec = LEVELS.find((l) => l.id === levelId) ?? LEVELS[0];
   await launchBattleSpec(spec, { ironMode, customSeed, isMultiMatch, isExpedition: false });
+}
+
+async function startDailyChallenge(): Promise<void> {
+  const daily = getDailyChallengeSpec();
+  const spec = LEVELS.find((l) => l.id === daily.levelId) ?? LEVELS[0];
+  await launchBattleSpec(spec, {
+    ironMode: false,
+    customSeed: daily.seed,
+    isMultiMatch: false,
+    isExpedition: false,
+    mutatorId: daily.mutator.id,
+    dailyDate: daily.dateKey,
+    allowedTowers: daily.mutator.allowedTowers,
+  });
+}
+
+async function startEndlessMode(): Promise<void> {
+  const save = saveManager.get();
+  const chosenId = isLevelUnlocked(metaView.selectedLevelId, save.levelStars) ? metaView.selectedLevelId : 1;
+  const spec = LEVELS.find((l) => l.id === chosenId) ?? LEVELS[0];
+  await launchBattleSpec(spec, {
+    ironMode: false,
+    isMultiMatch: false,
+    isExpedition: false,
+    endlessMode: true,
+  });
+}
+
+async function resumeFromCheckpoint(cp: BattleCheckpointState): Promise<void> {
+  const spec = LEVELS.find((l) => l.id === cp.levelId) ?? LEVELS[0];
+  const mutSpec = cp.mutatorId ? DAILY_MUTATORS[cp.mutatorId] : undefined;
+  await launchBattleSpec(spec, {
+    ironMode: cp.ironMode,
+    endlessMode: cp.endlessMode,
+    mutatorId: cp.mutatorId,
+    dailyDate: cp.dailyDate,
+    isMultiMatch: false,
+    isExpedition: false,
+    allowedTowers: mutSpec?.allowedTowers,
+    checkpoint: cp,
+  });
 }
 
 async function startExpeditionStage(): Promise<void> {
@@ -367,7 +468,7 @@ async function startExpeditionStage(): Promise<void> {
 
 function exitToMap(): void {
   const nextSelectedAfterWin =
-    !currentIsExpedition && activeSim?.status === 'won'
+    !currentIsExpedition && !currentEndlessMode && !currentDailyDate && activeSim?.status === 'won'
       ? Math.min(LEVELS.length, currentLevelId + 1)
       : null;
   flushSeasonKills();
@@ -485,6 +586,13 @@ function processBattleEvents(events: SimEvent[]): void {
       haptics.impact('light');
       battleView.addFloatingDamage(ev.x, ev.z, t(loc, 'skill.magnet'), 'skill');
       questSkills += 1;
+    } else if (ev.type === 'REINFORCEMENTS_SUMMONED') {
+      sound.playReinforcementsHorn();
+      haptics.impact('medium');
+      battleView.addFloatingDamage(ev.x, ev.z, t(loc, 'skill.reinforcements'), 'skill');
+      questSkills += 1;
+    } else if (ev.type === 'HERO_RALLY') {
+      sound.playHeroBark(activeSim?.heroId ?? 'boz_pence');
     } else if (ev.type === 'BARREL_EXPLODED') {
       juice.triggerMicroHitStop(0.04, 0.08);
       sound.playExplosion(true);
@@ -539,8 +647,17 @@ function processBattleEvents(events: SimEvent[]): void {
       if (ev.announceEnemy) {
         const enemySpec = ENEMIES[ev.announceEnemy];
         battleView.showBanner(`${t(loc, 'hud.newEnemy')}: ${t(loc, enemySpec.nameKey)}`, 3.4);
+      } else if (currentEndlessMode) {
+        battleView.showBanner(tParams(loc, 'endless.waveBanner', { wave: ev.waveNumber }), 2.6);
       } else if (currentLevelId === 2 && ev.waveNumber === 1) {
         battleView.showBanner(t(loc, 'tutorial.synergyTip'), 3.8);
+      }
+    } else if (ev.type === 'WAVE_CLEARED') {
+      if (!currentIsMultiMatch && !currentIsExpedition && activeSim && activeSim.status === 'playing') {
+        const cp = activeSim.exportCheckpoint({ dailyDate: currentDailyDate });
+        saveManager.update((d) => {
+          d.activeBattleCheckpoint = cp;
+        });
       }
     } else if (ev.type === 'SYNERGY_COMBO') {
       sound.playSynergyCombo(ev.comboId);
@@ -589,21 +706,44 @@ function processBattleEvents(events: SimEvent[]): void {
       } else {
         const rewards = computeVictoryRewards(currentLevelId, ev.stars, currentIronMode);
         saveManager.update((d) => {
-          d.levelStars[currentLevelId] = Math.max(d.levelStars[currentLevelId] ?? 0, ev.stars);
-          if (currentIronMode) d.ironCleared[currentLevelId] = true;
-          d.oakCoins += rewards.oak;
-          d.emeraldGems += rewards.gems;
+          d.activeBattleCheckpoint = null;
+          if (currentDailyDate) {
+            if (!d.completedDailyDates.includes(currentDailyDate)) {
+              d.completedDailyDates.push(currentDailyDate);
+              d.oakCoins += DAILY_CHALLENGE_OAK;
+              d.emeraldGems += DAILY_CHALLENGE_GEMS;
+            }
+          } else {
+            d.levelStars[currentLevelId] = Math.max(d.levelStars[currentLevelId] ?? 0, ev.stars);
+            if (currentIronMode) d.ironCleared[currentLevelId] = true;
+            d.oakCoins += rewards.oak;
+            d.emeraldGems += rewards.gems;
+          }
         });
-        const newlyUnlocked = grantCampaignHeroUnlocks(saveManager, currentLevelId);
-        if (newlyUnlocked.length > 0) {
-          metaView.statusNotice = tParams(loc, 'hero.select.unlockedToast', {
-            name: t(loc, HEROES[newlyUnlocked[0]].nameKey),
-          });
+        if (!currentDailyDate) {
+          const newlyUnlocked = grantCampaignHeroUnlocks(saveManager, currentLevelId);
+          if (newlyUnlocked.length > 0) {
+            metaView.statusNotice = tParams(loc, 'hero.select.unlockedToast', {
+              name: t(loc, HEROES[newlyUnlocked[0]].nameKey),
+            });
+          }
         }
         analytics.track('level_win', { levelId: currentLevelId, stars: ev.stars });
       }
-    } else if (ev.type === 'GAME_LOST') {
+    } else if (ev.type === 'GAME_LOST' && !lossRecorded) {
+      lossRecorded = true;
       flushSeasonKills();
+      if (!currentIsMultiMatch && !currentIsExpedition) {
+        saveManager.update((d) => {
+          d.activeBattleCheckpoint = null;
+          if (currentEndlessMode && activeSim) {
+            const survived = Math.max(0, activeSim.currentWaveIndex);
+            d.endlessBestWave = Math.max(d.endlessBestWave, survived);
+            d.oakCoins += Math.max(1, survived) * 28;
+            d.emeraldGems += Math.floor(Math.max(1, survived) / 3) * 4;
+          }
+        });
+      }
       if (network.state === 'in_match' && !multiOutcomeRecorded) {
         multiOutcomeRecorded = true;
         const multiRes = recordMultiplayerOutcome(saveManager, network.mode, false);
@@ -684,6 +824,14 @@ canvas.addEventListener('pointerdown', (ev) => {
 
   if (battleView.targetingSkill === 'hero_leap') {
     activeSim.dispatch({ type: 'CAST_HERO_ULTIMATE', x: hit.x, z: hit.z });
+    battleView.targetingSkill = null;
+    sceneMgr.updateTargetingReticle(null);
+    battleView.showBanner('', 0);
+    return;
+  }
+
+  if (battleView.targetingSkill === 'guards') {
+    activeSim.dispatch({ type: 'CAST_REINFORCEMENTS', x: hit.x, z: hit.z });
     battleView.targetingSkill = null;
     sceneMgr.updateTargetingReticle(null);
     battleView.showBanner('', 0);
@@ -904,6 +1052,8 @@ window.addEventListener('keydown', (ev) => {
     battleView.triggerRainSkill(activeSim);
   } else if (ev.key === '3') {
     battleView.triggerMagnetSkill(activeSim);
+  } else if (ev.key === '4') {
+    battleView.triggerGuardsSkill(activeSim);
   } else if (ev.key === 'Escape' && battleView.targetingSkill) {
     battleView.targetingSkill = null;
     sceneMgr.updateTargetingReticle(null);

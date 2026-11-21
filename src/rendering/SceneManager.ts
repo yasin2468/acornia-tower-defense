@@ -968,6 +968,21 @@ export class SceneManager {
   >();
   private enemyFeel = new Map<number, EnemyFeel>();
   private towerPunch = new Map<string, TowerPunch>();
+  private pathPreviewGroup = new THREE.Group();
+  private pathPreviewArrows: Array<{ mesh: THREE.Mesh; curve: THREE.CatmullRomCurve3; offset: number }> = [];
+  private guardMeshes = new Map<number, THREE.Group>();
+  private guardBodyMat = new THREE.MeshStandardMaterial({ color: '#3b8c47', roughness: 0.6 });
+  private guardShieldMat = new THREE.MeshStandardMaterial({ color: '#ffd35c', roughness: 0.4, metalness: 0.35 });
+  private guardSkinMat = new THREE.MeshStandardMaterial({ color: '#c48b55', roughness: 0.7 });
+  private arrowMat = new THREE.MeshBasicMaterial({ color: '#ffe066', transparent: true, opacity: 0.85 });
+  private arrowGeo = (() => {
+    const g = new THREE.ConeGeometry(0.18, 0.42, 4);
+    g.rotateX(Math.PI * 0.5);
+    return g;
+  })();
+  private guardBodyGeo = new THREE.CapsuleGeometry(0.16, 0.22, 4, 8);
+  private guardHeadGeo = new THREE.SphereGeometry(0.14, 8, 6);
+  private guardShieldGeo = new THREE.BoxGeometry(0.06, 0.28, 0.22);
   private sparks: SparkItem[] = [];
   private scorches: ScorchDecal[] = [];
   private trails: TrailItem[] = [];
@@ -2123,6 +2138,19 @@ export class SceneManager {
     this.stageAnimatedProps = conceptFx.animatedProps;
     this.stagePulseMats = conceptFx.pulseMats;
 
+    this.pathPreviewGroup.clear();
+    this.pathPreviewArrows = [];
+    for (const c of curves) {
+      const arrowCount = 5;
+      for (let i = 0; i < arrowCount; i++) {
+        const mesh = new THREE.Mesh(this.arrowGeo, this.arrowMat);
+        mesh.scale.set(1.0, 0.45, 1.0);
+        this.pathPreviewGroup.add(mesh);
+        this.pathPreviewArrows.push({ mesh, curve: c, offset: i / arrowCount });
+      }
+    }
+    this.levelGroup.add(this.pathPreviewGroup);
+
     const heroVariant = resolveHeroVisualVariant(heroClass, 1);
     this.heroVisualKey = `${heroId}_${heroVariant}_${equippedHat}`;
     this.heroRig = createHeroRig(heroId, equippedHat, heroVariant);
@@ -2180,6 +2208,10 @@ export class SceneManager {
     this.dyingBodies = [];
     this.heroRig = null;
     this.heroVisualKey = '';
+    this.pathPreviewGroup.clear();
+    this.pathPreviewArrows = [];
+    for (const gm of this.guardMeshes.values()) this.dynamicGroup.remove(gm);
+    this.guardMeshes.clear();
     this.rangeRing.visible = false;
     this.enemyGroundRings.count = 0;
     this.flyingShadowDiscs.count = 0;
@@ -2217,6 +2249,42 @@ export class SceneManager {
     this.lastSim = sim;
     this.monitorFps(realDt);
     this.cameraCtrl.update(realDt);
+
+    if (this.pathPreviewArrows.length > 0) {
+      this.pathPreviewGroup.visible = sim.waitingForFirstWave;
+      if (this.pathPreviewGroup.visible) {
+        this.arrowMat.opacity = 0.55 + 0.35 * Math.sin(this.animTime * 4.2);
+        for (const item of this.pathPreviewArrows) {
+          const u = (item.offset + this.animTime * 0.14) % 0.96;
+          const pt = item.curve.getPointAt(u);
+          const tan = item.curve.getTangentAt(u);
+          item.mesh.position.set(pt.x, 0.18, pt.z);
+          item.mesh.rotation.set(0, Math.atan2(tan.x, tan.z), 0);
+        }
+      }
+    }
+
+    const activeGuardIds = new Set<number>();
+    for (const g of sim.guards) {
+      activeGuardIds.add(g.uid);
+      let gMesh = this.guardMeshes.get(g.uid);
+      if (!gMesh) {
+        gMesh = this.createOakGuardMesh();
+        this.dynamicGroup.add(gMesh);
+        this.guardMeshes.set(g.uid, gMesh);
+      }
+      const bob = Math.sin(this.animTime * 6 + g.uid) * 0.04;
+      gMesh.position.set(g.x, bob, g.z);
+      gMesh.rotation.y = g.facingAngle;
+      const lifeScale = g.life < 1.0 ? Math.max(0.2, g.life) : 1.0;
+      gMesh.scale.setScalar(lifeScale);
+    }
+    for (const [gid, gMesh] of this.guardMeshes.entries()) {
+      if (!activeGuardIds.has(gid)) {
+        this.dynamicGroup.remove(gMesh);
+        this.guardMeshes.delete(gid);
+      }
+    }
 
     for (const t of this.lodTrees) {
       t.lod.rotation.z = Math.sin(this.animTime * 1.3 + t.phase) * 0.018;
@@ -4609,7 +4677,7 @@ export class SceneManager {
   }
 
   updateTargetingReticle(
-    mode: 'rain' | 'hero_leap' | null,
+    mode: 'rain' | 'hero_leap' | 'guards' | null,
     x = 0,
     z = 0,
     opts?: { radius?: number; color?: string; heroX?: number; heroZ?: number; showLink?: boolean },
@@ -4621,10 +4689,10 @@ export class SceneManager {
     }
     this.targetingReticle.visible = true;
     this.targetingReticle.position.set(x, 0.085, z);
-    const radius = opts?.radius ?? (mode === 'rain' ? 3.1 : 3.5);
+    const radius = opts?.radius ?? (mode === 'guards' ? 2.2 : mode === 'rain' ? 3.1 : 3.5);
     this.targetingReticle.scale.setScalar(radius);
     this.reticleInnerMesh.rotation.z = this.animTime * 2.8;
-    const color = opts?.color ?? (mode === 'rain' ? '#ff9f43' : '#52e8ff');
+    const color = opts?.color ?? (mode === 'guards' ? '#62f295' : mode === 'rain' ? '#ff9f43' : '#52e8ff');
     const pulse = 0.72 + Math.sin(this.animTime * 8) * 0.18;
     this.reticleOuterMat.color.set(color);
     this.reticleOuterMat.opacity = pulse;
@@ -4873,6 +4941,19 @@ export class SceneManager {
     }
     ctx2d.clearRect(0, 0, dstW, dstH);
     ctx2d.drawImage(this.renderer.domElement, sx, sy, sw, sh, 0, 0, dstW, dstH);
+  }
+
+  private createOakGuardMesh(): THREE.Group {
+    const grp = new THREE.Group();
+    const body = new THREE.Mesh(this.guardBodyGeo, this.guardBodyMat);
+    body.position.y = 0.28;
+    const head = new THREE.Mesh(this.guardHeadGeo, this.guardSkinMat);
+    head.position.y = 0.54;
+    const shield = new THREE.Mesh(this.guardShieldGeo, this.guardShieldMat);
+    shield.position.set(0.19, 0.3, 0.08);
+    shield.rotation.y = Math.PI * 0.35;
+    grp.add(body, head, shield);
+    return grp;
   }
 }
 

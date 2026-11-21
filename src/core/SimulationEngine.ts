@@ -1,3 +1,4 @@
+import { DAILY_MUTATORS, type DailyMutatorId, type DailyMutatorSpec } from '../data/daily.ts';
 import {
   ENEMIES,
   HEROES,
@@ -7,7 +8,7 @@ import {
   type HeroClassId,
   type HeroId,
 } from '../data/enemies.ts';
-import type { LevelSpec, Vec2 } from '../data/levels.ts';
+import type { LevelSpec, Vec2, WaveSpec } from '../data/levels.ts';
 import type { RelicId } from '../data/roguelike.ts';
 import type { SynergyComboId } from '../data/synergies.ts';
 import { computeTalentModifiers, type TalentBranchId, type TalentModifiers } from '../data/talents.ts';
@@ -20,6 +21,7 @@ import {
   type TowerId,
   type TowerTierStats,
 } from '../data/towers.ts';
+import type { BattleCheckpointState } from '../services/SaveManager.ts';
 import { CommandBus, type GameCommand, type GameCommandInput } from './CommandBus.ts';
 import { SeededRNG } from './SeededRNG.ts';
 
@@ -132,6 +134,7 @@ export type SimEvent =
   | { type: 'BOSS_PHASE_TWO'; enemyId: number; bossId?: EnemyId; smokedSlotId?: string; x: number; z: number }
   | { type: 'PINECONE_RAIN'; x: number; z: number; hits: number; radius: number }
   | { type: 'ACORN_MAGNET'; x: number; z: number; duration: number; hits?: number }
+  | { type: 'REINFORCEMENTS_SUMMONED'; x: number; z: number; count: number }
   | { type: 'BARREL_EXPLODED'; barrelId: string; x: number; z: number; hits: number }
   | { type: 'HERO_ATTACK'; x: number; z: number; targetX: number; targetZ: number; ranged?: boolean; heroId?: HeroId; isCrit?: boolean }
   | { type: 'HERO_CLAW_SHOCK'; x: number; z: number; hits: number; heroId?: HeroId; radius?: number; buffedSlotIds?: string[] }
@@ -150,6 +153,7 @@ export type SimEvent =
   | { type: 'HERO_RALLY'; x: number; z: number }
   | { type: 'HERO_LEVELED'; level: number; x: number; z: number }
   | { type: 'WAVE_STARTED'; waveNumber: number; announceEnemy?: EnemyId; earlyBonus: number }
+  | { type: 'WAVE_CLEARED'; waveNumber: number; levelId: number; endless: boolean }
   | {
       type: 'SYNERGY_COMBO';
       comboId: SynergyComboId;
@@ -177,6 +181,22 @@ export interface TowerInstance {
   shotsFired: number;
   smokedTimer: number;
   angle: number;
+  totalDamage: number;
+  kills: number;
+}
+
+export interface GuardUnit {
+  uid: number;
+  x: number;
+  z: number;
+  hp: number;
+  maxHp: number;
+  damage: number;
+  radius: number;
+  life: number;
+  maxLife: number;
+  attackCooldown: number;
+  facingAngle: number;
 }
 
 export interface SlotState {
@@ -227,6 +247,7 @@ export interface ProjectileInstance {
   uid: number;
   towerId: TowerId;
   branchId?: EvolutionBranchId;
+  sourceSlotId?: string;
   x: number;
   z: number;
   targetUid: number;
@@ -247,6 +268,8 @@ export interface ResinPool {
   slowPct: number;
   timer: number;
   kind?: 'resin' | 'acid' | 'inferno';
+  sourceSlotId?: string;
+  sourceTowerId?: TowerId;
 }
 
 export interface HeroState {
@@ -294,6 +317,20 @@ export interface SimOptions {
   towerDamageBonusPct?: number;
   rainCooldownReduceSec?: number;
   waitForFirstWave?: boolean;
+  endlessMode?: boolean;
+  mutatorId?: DailyMutatorId;
+  autoStartWaves?: boolean;
+}
+
+export interface MatchSummary {
+  mvpTowerId: TowerId | null;
+  mvpDamage: number;
+  topTowers: Array<{ towerId: TowerId; damage: number; kills: number }>;
+  primaryLeakEnemyId: EnemyId | null;
+  primaryLeakCount: number;
+  firstLeakWave: number;
+  synergiesTriggered: number;
+  defeatTipKey: string;
 }
 
 export class SimulationEngine {
@@ -301,6 +338,10 @@ export class SimulationEngine {
   readonly rng: SeededRNG;
   readonly commands = new CommandBus();
   readonly ironMode: boolean;
+  readonly endlessMode: boolean;
+  readonly mutatorId: DailyMutatorId | null;
+  readonly mutatorSpec: DailyMutatorSpec | null;
+  autoStartWaves: boolean;
 
   tick = 0;
   elapsed = 0;
@@ -319,6 +360,7 @@ export class SimulationEngine {
   slots: Map<string, SlotState> = new Map();
   barrels: Map<string, { id: string; x: number; z: number; exploded: boolean }> = new Map();
   enemies: EnemyInstance[] = [];
+  guards: GuardUnit[] = [];
   projectiles: ProjectileInstance[] = [];
   resinPools: ResinPool[] = [];
   spawnQueue: SpawnQueueEntry[] = [];
@@ -327,6 +369,7 @@ export class SimulationEngine {
   pineconeRainCooldown = 0;
   magnetCooldown = 0;
   magnetActiveTimer = 0;
+  reinforcementsCooldown = 0;
   coopReserves: Record<'p1' | 'p2', number> = { p1: 50, p2: 50 };
   onLocalDispatch?: (cmd: GameCommandInput, tick: number) => void;
 
@@ -344,16 +387,28 @@ export class SimulationEngine {
   private pathLengths: number[] = [];
   private totalPathLength = 0;
   private events: SimEvent[] = [];
+  private runtimeWaves: WaveSpec[];
+  private totalDamageByTower: Partial<Record<TowerId, number>> = {};
+  private killsByTower: Partial<Record<TowerId, number>> = {};
+  private leakedByEnemy: Partial<Record<EnemyId, number>> = {};
+  private firstLeakWave = 0;
+  private synergiesTriggered = 0;
 
   constructor(level: LevelSpec, options: SimOptions = {}) {
     this.level = level;
     this.rng = new SeededRNG(options.seed ?? 1337 + level.id * 97);
     this.ironMode = Boolean(options.ironMode);
+    this.endlessMode = Boolean(options.endlessMode);
+    this.mutatorId = options.mutatorId ?? null;
+    this.mutatorSpec = this.mutatorId ? (DAILY_MUTATORS[this.mutatorId] ?? null) : null;
+    this.autoStartWaves = Boolean(options.autoStartWaves);
+    this.runtimeWaves = [...level.waves];
     this.waitingForFirstWave = Boolean(options.waitForFirstWave);
     this.heroId = options.heroId ?? 'boz_pence';
     this.heroClass = options.heroClass ?? 'auto';
     this.talentMods = computeTalentModifiers(options.talents);
-    this.allowedTowers = options.allowedTowers ? [...options.allowedTowers] : null;
+    const effectiveAllowed = options.allowedTowers ?? this.mutatorSpec?.allowedTowers ?? null;
+    this.allowedTowers = effectiveAllowed ? [...effectiveAllowed] : null;
     this.relics = options.relics ? [...options.relics] : [];
     this.towerDamageBonusPct = options.towerDamageBonusPct ?? 0;
     this.rainCooldownReduceSec = Math.max(0, options.rainCooldownReduceSec ?? 0);
@@ -373,7 +428,11 @@ export class SimulationEngine {
       ay_kurdu: options.cardLevels?.ay_kurdu ?? 1,
     };
 
-    this.gold = level.startGold + (options.extraStartGold ?? 0) + this.talentMods.extraStartGold;
+    this.gold =
+      level.startGold +
+      (options.extraStartGold ?? 0) +
+      (this.mutatorSpec?.extraStartGold ?? 0) +
+      this.talentMods.extraStartGold;
     this.maxBaseHp = this.ironMode ? 1 : level.baseHp + this.talentMods.extraBaseHp;
     this.baseHp = options.initialBaseHp !== undefined
       ? Math.max(1, Math.min(this.maxBaseHp, options.initialBaseHp))
@@ -515,9 +574,11 @@ export class SimulationEngine {
     if (this.pineconeRainCooldown > 0) this.pineconeRainCooldown = Math.max(0, this.pineconeRainCooldown - dt);
     if (this.magnetCooldown > 0) this.magnetCooldown = Math.max(0, this.magnetCooldown - dt);
     if (this.magnetActiveTimer > 0) this.magnetActiveTimer = Math.max(0, this.magnetActiveTimer - dt);
+    if (this.reinforcementsCooldown > 0) this.reinforcementsCooldown = Math.max(0, this.reinforcementsCooldown - dt);
 
     this.updateWaves(dt);
     this.updateHero(dt);
+    this.updateGuards(dt);
     this.updateEnemies(dt);
     this.updateTowers(dt);
     this.updateProjectiles(dt);
@@ -546,6 +607,8 @@ export class SimulationEngine {
           shotsFired: 0,
           smokedTimer: 0,
           angle: 0,
+          totalDamage: 0,
+          kills: 0,
         };
         this.events.push({ type: 'TOWER_BUILT', slotId: slot.id, towerId: cmd.towerId, x: slot.x, z: slot.z });
         break;
@@ -582,6 +645,7 @@ export class SimulationEngine {
         break;
       }
       case 'SELL_TOWER': {
+        if (!this.canSellTowers) return;
         const slot = this.slots.get(cmd.slotId);
         const tower = slot?.tower;
         if (!slot || !tower) return;
@@ -996,10 +1060,35 @@ export class SimulationEngine {
         });
         break;
       }
+      case 'CAST_REINFORCEMENTS': {
+        if (this.reinforcementsCooldown > 0) return;
+        this.reinforcementsCooldown = Number((22 * this.talentMods.spellCooldownMult).toFixed(2));
+        const basePt = this.sanitizeHeroPoint(cmd.x, cmd.z, 0.72);
+        const offsets = [-0.55, 0.55];
+        for (const ox of offsets) {
+          const gp = this.sanitizeHeroPoint(basePt.x + ox, basePt.z + (ox > 0 ? 0.2 : -0.2), 0.7);
+          this.guards.push({
+            uid: this.nextUid++,
+            x: gp.x,
+            z: gp.z,
+            hp: 165,
+            maxHp: 165,
+            damage: 18,
+            radius: 0.45,
+            life: 16,
+            maxLife: 16,
+            attackCooldown: 0,
+            facingAngle: 0,
+          });
+        }
+        this.events.push({ type: 'REINFORCEMENTS_SUMMONED', x: basePt.x, z: basePt.z, count: 2 });
+        break;
+      }
       case 'CALL_WAVE_EARLY': {
         if (this.waveInProgress) return;
         const nextIdx = this.currentWaveIndex + 1;
-        if (nextIdx >= this.level.waves.length) return;
+        this.ensureNextEndlessWave(nextIdx);
+        if (nextIdx >= this.runtimeWaves.length) return;
         this.startWave(nextIdx, this.getEarlyWaveBonus());
         break;
       }
@@ -1038,9 +1127,86 @@ export class SimulationEngine {
     }
   }
 
+  get canSellTowers(): boolean {
+    return !this.mutatorSpec || this.mutatorSpec.allowSell;
+  }
+
+  get totalWaveCount(): number {
+    return this.runtimeWaves.length;
+  }
+
+  getWaveSpec(idx: number): WaveSpec | undefined {
+    this.ensureNextEndlessWave(idx);
+    return this.runtimeWaves[idx];
+  }
+
+  private ensureNextEndlessWave(idx: number): void {
+    if (!this.endlessMode) return;
+    while (this.runtimeWaves.length <= idx) {
+      this.runtimeWaves.push(this.generateEndlessWave(this.runtimeWaves.length + 1));
+    }
+  }
+
+  private generateEndlessWave(waveNumber: number): WaveSpec {
+    const baseLen = this.level.waves.length;
+    const extraWave = Math.max(1, waveNumber - baseLen);
+    const scale = 1 + extraWave * 0.24;
+    const spdMult = 1 + Math.min(0.45, extraWave * 0.025);
+    const wRng = new SeededRNG(this.level.id * 9973 + waveNumber * 613);
+    const pool: EnemyId[] = [
+      'swarm_saw',
+      'shield_loader',
+      'hover_drone',
+      'turbo_hopper',
+      'chomp_brute',
+      'crystal_golem',
+      'repair_drone',
+      'frost_warden',
+      'ember_bomber',
+      'tesla_strider',
+    ];
+    const e1 = pool[Math.floor(wRng.next() * pool.length)] ?? 'shield_loader';
+    const e2 = pool[Math.floor(wRng.next() * pool.length)] ?? 'hover_drone';
+    const groups: WaveSpec['groups'] = [
+      {
+        enemyId: e1,
+        count: Math.min(24, 6 + Math.floor(extraWave * 0.85)),
+        spacing: Math.max(0.42, 0.9 - extraWave * 0.02),
+        hpOverride: Math.round(ENEMIES[e1].baseHp * scale),
+        speedOverride: Number((ENEMIES[e1].speed * spdMult).toFixed(2)),
+      },
+      {
+        enemyId: e2,
+        count: Math.min(18, 4 + Math.floor(extraWave * 0.65)),
+        spacing: Math.max(0.55, 1.05 - extraWave * 0.02),
+        hpOverride: Math.round(ENEMIES[e2].baseHp * scale),
+        speedOverride: Number((ENEMIES[e2].speed * spdMult).toFixed(2)),
+      },
+    ];
+    if (waveNumber % 5 === 0) {
+      const bosses: EnemyId[] = ['mega_harvester', 'cryo_colossus', 'magma_overlord'];
+      const bossId = bosses[Math.floor(waveNumber / 5) % bosses.length];
+      groups.push({
+        enemyId: bossId,
+        count: 1,
+        spacing: 2.0,
+        hpOverride: Math.round(ENEMIES[bossId].baseHp * scale * 0.85),
+        speedOverride: Number((ENEMIES[bossId].speed * (1 + Math.min(0.25, extraWave * 0.015))).toFixed(2)),
+      });
+    }
+    return {
+      waveNumber,
+      clearBonus: 35 + Math.min(80, extraWave * 5),
+      announceEnemy: waveNumber % 5 === 0 ? groups[groups.length - 1].enemyId : e1,
+      groups,
+    };
+  }
+
   getEarlyWaveBonus(): number {
     if (this.waveInProgress || this.currentWaveIndex < 0) return 0;
-    if (this.currentWaveIndex + 1 >= this.level.waves.length) return 0;
+    const nextIdx = this.currentWaveIndex + 1;
+    this.ensureNextEndlessWave(nextIdx);
+    if (nextIdx >= this.runtimeWaves.length) return 0;
     const waveScale = 1 + Math.max(0, this.currentWaveIndex) * 0.08;
     const baseBonus = Math.min(36, Math.max(4, Math.floor(Math.max(0, this.waveCountdown) * 2.5 * waveScale)));
     return Math.round(baseBonus * this.talentMods.earlyWaveBonusMult);
@@ -1050,7 +1216,8 @@ export class SimulationEngine {
     if (!this.waveInProgress) {
       if (this.waitingForFirstWave) return;
       const nextIdx = this.currentWaveIndex + 1;
-      if (nextIdx < this.level.waves.length) {
+      this.ensureNextEndlessWave(nextIdx);
+      if (nextIdx < this.runtimeWaves.length) {
         this.waveCountdown -= dt;
         if (this.waveCountdown <= 0) {
           this.startWave(nextIdx, 0);
@@ -1071,21 +1238,29 @@ export class SimulationEngine {
         }
       }
     } else if (this.enemies.length === 0) {
-      const finishedWave = this.level.waves[this.currentWaveIndex];
+      const finishedWave = this.runtimeWaves[this.currentWaveIndex];
       if (finishedWave) {
         this.gold +=
           Math.round(finishedWave.clearBonus * this.talentMods.waveClearBonusMult) +
           (this.relics.includes('emerald_bounty') ? 20 : 0);
       }
       this.waveInProgress = false;
-      if (this.currentWaveIndex + 1 < this.level.waves.length) {
-        this.waveCountdown = 8.0;
+      this.events.push({
+        type: 'WAVE_CLEARED',
+        waveNumber: finishedWave?.waveNumber ?? this.currentWaveIndex + 1,
+        levelId: this.level.id,
+        endless: this.endlessMode,
+      });
+      this.ensureNextEndlessWave(this.currentWaveIndex + 1);
+      if (this.currentWaveIndex + 1 < this.runtimeWaves.length) {
+        this.waveCountdown = this.autoStartWaves ? 1.4 : 8.0;
       }
     }
   }
 
   private startWave(index: number, earlyBonus: number): void {
-    const wave = this.level.waves[index];
+    this.ensureNextEndlessWave(index);
+    const wave = this.runtimeWaves[index];
     if (!wave) return;
     this.currentWaveIndex = index;
     this.waveInProgress = true;
@@ -1133,7 +1308,11 @@ export class SimulationEngine {
     const spec = ENEMIES[enemyId];
     const activePath = lane === 1 && this.level.secondaryPath ? this.level.secondaryPath : this.level.path;
     const start = activePath[0];
-    const hp = hpOverride ?? spec.baseHp;
+    const m = this.mutatorSpec;
+    const hp = Math.max(1, Math.round((hpOverride ?? spec.baseHp) * (m ? m.hpMult : 1)));
+    const speed = Number(((speedOverride ?? spec.speed) * (m ? m.speedMult : 1)).toFixed(3));
+    const armor = Math.min(0.85, spec.armor + (m ? m.extraArmor : 0));
+    const bounty = Math.max(1, Math.round((bountyOverride ?? spec.bounty) * (m ? m.bountyMult : 1)));
     const enemy: EnemyInstance = {
       uid: this.nextUid++,
       enemyId,
@@ -1143,9 +1322,9 @@ export class SimulationEngine {
       z: startAt?.z ?? start.z,
       hp,
       maxHp: hp,
-      speed: speedOverride ?? spec.speed,
-      armor: spec.armor,
-      bounty: bountyOverride ?? spec.bounty,
+      speed,
+      armor,
+      bounty,
       baseDamage: spec.baseDamage,
       radius: spec.radius,
       wpIndex: startAt?.wpIndex ?? 1,
@@ -1540,6 +1719,48 @@ export class SimulationEngine {
     }
   }
 
+  private updateGuards(dt: number): void {
+    if (this.guards.length === 0) return;
+    const aliveGuards: GuardUnit[] = [];
+    for (const g of this.guards) {
+      g.life -= dt;
+      if (g.life <= 0 || g.hp <= 0) continue;
+      if (g.attackCooldown > 0) g.attackCooldown = Math.max(0, g.attackCooldown - dt);
+
+      const blockers = this.enemies
+        .filter((e) => !e.isFlying && !e.engagedByHero && e.hp > 0 && Math.hypot(e.x - g.x, e.z - g.z) <= 1.45)
+        .sort((a, b) => b.progress - a.progress)
+        .slice(0, 2);
+
+      for (const e of blockers) {
+        e.engagedByHero = true;
+      }
+
+      if (blockers.length > 0) {
+        const target = blockers[0];
+        g.facingAngle = Math.atan2(target.x - g.x, target.z - g.z);
+        if (g.attackCooldown <= 0) {
+          g.attackCooldown = 0.85;
+          this.damageEnemy(target, g.damage, 0.15, false, false, false, {
+            dirX: target.x - g.x,
+            dirZ: target.z - g.z,
+            heavy: false,
+          });
+        }
+        const incoming = blockers.reduce(
+          (acc, e) => acc + Math.max(4, Math.min(13, 2 + e.baseDamage * 0.34)),
+          0,
+        );
+        g.hp -= incoming * dt;
+      }
+
+      if (g.hp > 0 && g.life > 0) {
+        aliveGuards.push(g);
+      }
+    }
+    this.guards = aliveGuards;
+  }
+
   private updateEnemies(dt: number): void {
     const survivors: EnemyInstance[] = [];
 
@@ -1641,6 +1862,10 @@ export class SimulationEngine {
       }
 
       if (leaked) {
+        this.leakedByEnemy[e.enemyId] = (this.leakedByEnemy[e.enemyId] ?? 0) + 1;
+        if (this.firstLeakWave === 0) {
+          this.firstLeakWave = Math.max(1, this.currentWaveIndex + 1);
+        }
         this.baseHp = Math.max(0, this.baseHp - e.baseDamage);
         this.events.push({ type: 'BASE_HIT', damage: e.baseDamage, remainingHp: this.baseHp });
       } else {
@@ -1690,9 +1915,10 @@ export class SimulationEngine {
   selectTarget(tower: TowerInstance): EnemyInstance | null {
     const spec = TOWERS[tower.towerId];
     const stats = this.getTowerStats(tower);
+    const allowGroundedAir = Boolean(this.mutatorSpec?.groundedAirTargets);
     const inRange = this.enemies.filter((e) => {
       if (e.hp <= 0) return false;
-      if (e.isFlying && !spec.canHitAir) return false;
+      if (e.isFlying && !spec.canHitAir && !allowGroundedAir) return false;
       if (!e.isFlying && !spec.canHitGround) return false;
       return Math.hypot(e.x - tower.x, e.z - tower.z) <= stats.range;
     });
@@ -1874,6 +2100,7 @@ export class SimulationEngine {
             heavy: false,
             towerId: tower.towerId,
             branchId: tower.branchId,
+            slotId: tower.slotId,
           });
           prevX = cur.x;
           prevZ = cur.z;
@@ -1918,6 +2145,7 @@ export class SimulationEngine {
               heavy: true,
               towerId: tower.towerId,
               branchId: tower.branchId,
+              slotId: tower.slotId,
             });
           }
         }
@@ -1940,6 +2168,7 @@ export class SimulationEngine {
           uid: this.nextUid++,
           towerId: tower.towerId,
           branchId: tower.branchId,
+          sourceSlotId: tower.slotId,
           x: tower.x,
           z: tower.z,
           targetUid: target.uid,
@@ -2026,6 +2255,7 @@ export class SimulationEngine {
                 heavy: true,
                 towerId: p.towerId,
                 branchId: p.branchId,
+                slotId: p.sourceSlotId,
               });
               if (eff.stunned) impactEv.isStun = true;
               if (eff.armorBroken) impactEv.isArmorBreak = true;
@@ -2046,6 +2276,8 @@ export class SimulationEngine {
               slowPct: p.stats.resinSlowPct ?? 0.2,
               timer: p.stats.resinDuration * this.talentMods.statusDurationMult,
               kind: poolKind,
+              sourceSlotId: p.sourceSlotId,
+              sourceTowerId: p.towerId,
             });
           }
         } else if (target) {
@@ -2055,6 +2287,7 @@ export class SimulationEngine {
             heavy: heavyHit,
             towerId: p.towerId,
             branchId: p.branchId,
+            slotId: p.sourceSlotId,
           });
           if (eff.stunned) impactEv.isStun = true;
           if (eff.armorBroken) impactEv.isArmorBreak = true;
@@ -2067,6 +2300,7 @@ export class SimulationEngine {
                   dirZ: e.z - target.z,
                   heavy: false,
                   towerId: p.towerId,
+                  slotId: p.sourceSlotId,
                 });
               }
             }
@@ -2088,7 +2322,10 @@ export class SimulationEngine {
       if (pool.timer <= 0) continue;
       for (const e of this.enemies) {
         if (!e.isFlying && e.hp > 0 && Math.hypot(e.x - pool.x, e.z - pool.z) <= pool.radius) {
-          this.damageEnemy(e, pool.dps * dt, 0, false, true);
+          this.damageEnemy(e, pool.dps * dt, 0, false, true, false, {
+            towerId: pool.sourceTowerId,
+            slotId: pool.sourceSlotId,
+          });
           e.slowPct = Math.max(e.slowPct, pool.slowPct);
           e.slowTimer = Math.max(e.slowTimer, 0.3);
           if (e.hp > 0) {
@@ -2129,6 +2366,7 @@ export class SimulationEngine {
           e.synergyCooldowns.shatter = Math.max(e.synergyCooldowns.shatter ?? 0, 2.2);
         }
       }
+      this.synergiesTriggered += 1;
       enemy.frostPrimeTimer = Math.min(enemy.frostPrimeTimer, 0.4);
       this.events.push({
         type: 'SYNERGY_COMBO',
@@ -2152,6 +2390,7 @@ export class SimulationEngine {
       triggeredArmorBreak = true;
       this.damageEnemy(enemy, bonus, 0.7, true, true, true, { heavy: true, towerId });
       enemy.synergyCooldowns.corrode_crit = 2.2;
+      this.synergiesTriggered += 1;
       enemy.acidPrimeTimer = Math.min(enemy.acidPrimeTimer, 0.4);
       this.events.push({
         type: 'SYNERGY_COMBO',
@@ -2179,6 +2418,7 @@ export class SimulationEngine {
           e.synergyCooldowns.ignite = Math.max(e.synergyCooldowns.ignite ?? 0, 2.4);
         }
       }
+      this.synergiesTriggered += 1;
       enemy.resinPrimeTimer = 0;
       this.events.push({
         type: 'SYNERGY_COMBO',
@@ -2208,6 +2448,7 @@ export class SimulationEngine {
         this.damageEnemy(enemy, bonus, 0.4, false, true);
       }
       enemy.stunTimer = Math.max(enemy.stunTimer, 0.55);
+      this.synergiesTriggered += 1;
       enemy.synergyCooldowns.superconduct = 2.4;
       enemy.frostPrimeTimer = Math.min(enemy.frostPrimeTimer, 0.4);
       this.events.push({
@@ -2230,7 +2471,7 @@ export class SimulationEngine {
     stats: TowerTierStats,
     isCrit: boolean,
     isFourthShot: boolean,
-    hitMeta?: { dirX?: number; dirZ?: number; heavy?: boolean; towerId?: TowerId; branchId?: EvolutionBranchId },
+    hitMeta?: { dirX?: number; dirZ?: number; heavy?: boolean; towerId?: TowerId; branchId?: EvolutionBranchId; slotId?: string },
   ): { armorBroken: boolean; stunned: boolean; froze: boolean } {
     let dmg = rawDamage;
     if (enemy.isBoss && stats.bossBonusPct) {
@@ -2303,15 +2544,26 @@ export class SimulationEngine {
     isCrit: boolean,
     suppressEvents = false,
     armorBroken = false,
-    hitMeta?: { dirX?: number; dirZ?: number; heavy?: boolean; towerId?: TowerId },
+    hitMeta?: { dirX?: number; dirZ?: number; heavy?: boolean; towerId?: TowerId; slotId?: string },
   ): void {
     if (enemy.hp <= 0) return;
 
     const effectiveArmor = enemy.armor * (1 - armorPiercePct);
     const finalDamage = Math.max(1, rawDamage * (1 - effectiveArmor));
     const resisted = effectiveArmor >= 0.28 && armorPiercePct < 0.45 && !isCrit && !armorBroken;
+    const prevHp = enemy.hp;
     enemy.hp -= finalDamage;
     enemy.hitFlashTimer = 0.04; // 40 ms crisp flash
+
+    const countedDamage = Math.max(1, Math.round(Math.min(prevHp, finalDamage)));
+    const sourceTower = hitMeta?.slotId ? this.slots.get(hitMeta.slotId)?.tower : null;
+    if (sourceTower) {
+      sourceTower.totalDamage += countedDamage;
+    }
+    const statTowerId = hitMeta?.towerId ?? sourceTower?.towerId;
+    if (statTowerId) {
+      this.totalDamageByTower[statTowerId] = (this.totalDamageByTower[statTowerId] ?? 0) + countedDamage;
+    }
 
     if (!suppressEvents) {
       this.events.push({
@@ -2373,6 +2625,12 @@ export class SimulationEngine {
     if (enemy.hp <= 0) {
       enemy.hp = 0;
       this.totalKills += 1;
+      if (sourceTower) {
+        sourceTower.kills += 1;
+      }
+      if (statTowerId) {
+        this.killsByTower[statTowerId] = (this.killsByTower[statTowerId] ?? 0) + 1;
+      }
       const magnetMult = (this.magnetActiveTimer > 0 ? 1.5 : 1.0) * (this.relics.includes('emerald_bounty') ? 1.3 : 1.0);
       const eliteMult = enemy.isBoss || enemy.bounty >= 11 ? this.talentMods.eliteBountyMult : 1.0;
       const earned = Math.round(enemy.bounty * magnetMult * eliteMult);
@@ -2410,9 +2668,10 @@ export class SimulationEngine {
       this.events.push({ type: 'GAME_LOST' });
       return;
     }
+    if (this.endlessMode) return;
 
     const allWavesSpawned =
-      this.currentWaveIndex === this.level.waves.length - 1 &&
+      this.currentWaveIndex === this.runtimeWaves.length - 1 &&
       this.spawnQueue.length === 0 &&
       this.enemies.length === 0;
 
@@ -2421,6 +2680,148 @@ export class SimulationEngine {
       const stars = computeBattleStars(this.baseHp, this.ironMode);
       this.events.push({ type: 'GAME_WON', stars });
     }
+  }
+
+  getMatchSummary(): MatchSummary {
+    const towerIds = Object.keys(this.totalDamageByTower) as TowerId[];
+    const topTowers = towerIds
+      .map((tid) => ({
+        towerId: tid,
+        damage: this.totalDamageByTower[tid] ?? 0,
+        kills: this.killsByTower[tid] ?? 0,
+      }))
+      .filter((t) => t.damage > 0)
+      .sort((a, b) => b.damage - a.damage)
+      .slice(0, 3);
+
+    const mvp = topTowers[0] ?? null;
+
+    let primaryLeakEnemyId: EnemyId | null = null;
+    let primaryLeakCount = 0;
+    for (const [eid, cnt] of Object.entries(this.leakedByEnemy) as Array<[EnemyId, number]>) {
+      if (cnt > primaryLeakCount) {
+        primaryLeakCount = cnt;
+        primaryLeakEnemyId = eid;
+      }
+    }
+
+    let defeatTipKey = 'battle.tip.general';
+    if (primaryLeakEnemyId) {
+      const lSpec = ENEMIES[primaryLeakEnemyId];
+      if (lSpec.isFlying) defeatTipKey = 'battle.tip.air';
+      else if (lSpec.isBoss) defeatTipKey = 'battle.tip.boss';
+      else if (lSpec.armor >= 0.3) defeatTipKey = 'battle.tip.armor';
+      else if (lSpec.speed >= 2.8) defeatTipKey = 'battle.tip.swarm';
+    }
+
+    return {
+      mvpTowerId: mvp?.towerId ?? null,
+      mvpDamage: mvp?.damage ?? 0,
+      topTowers,
+      primaryLeakEnemyId,
+      primaryLeakCount,
+      firstLeakWave: this.firstLeakWave,
+      synergiesTriggered: this.synergiesTriggered,
+      defeatTipKey,
+    };
+  }
+
+  exportCheckpoint(meta?: { dailyDate?: string }): BattleCheckpointState {
+    const towers: BattleCheckpointState['towers'] = [];
+    const clearedStumps: string[] = [];
+    for (const s of this.slots.values()) {
+      const orig = this.level.slots.find((ls) => ls.id === s.id);
+      if (orig?.lockedByStump && !s.stumpLocked) {
+        clearedStumps.push(s.id);
+      }
+      if (s.tower) {
+        towers.push({
+          slotId: s.id,
+          towerId: s.tower.towerId,
+          tier: s.tower.tier,
+          branchId: s.tower.branchId,
+          priority: s.tower.priority,
+          totalSpent: s.tower.totalSpent,
+          totalDamage: s.tower.totalDamage,
+          kills: s.tower.kills,
+        });
+      }
+    }
+    const explodedBarrels = Array.from(this.barrels.values())
+      .filter((b) => b.exploded)
+      .map((b) => b.id);
+
+    return {
+      levelId: this.level.id,
+      ironMode: this.ironMode,
+      endlessMode: this.endlessMode,
+      ...(meta?.dailyDate ? { dailyDate: meta.dailyDate } : {}),
+      ...(this.mutatorId ? { mutatorId: this.mutatorId } : {}),
+      waveIndex: this.waveInProgress ? Math.max(-1, this.currentWaveIndex - 1) : this.currentWaveIndex,
+      gold: Math.round(this.gold),
+      baseHp: Math.max(1, Math.round(this.baseHp)),
+      maxBaseHp: Math.round(this.maxBaseHp),
+      heroLevel: this.hero.level,
+      heroXp: this.hero.xp,
+      towers,
+      clearedStumps,
+      explodedBarrels,
+      savedAt: Date.now(),
+    };
+  }
+
+  restoreCheckpoint(cp: BattleCheckpointState): void {
+    this.gold = Math.max(0, Math.round(cp.gold));
+    this.baseHp = Math.max(1, Math.min(this.maxBaseHp, Math.round(cp.baseHp)));
+    this.currentWaveIndex = Math.max(-1, cp.waveIndex);
+    this.waveInProgress = false;
+    this.waitingForFirstWave = this.currentWaveIndex < 0;
+    this.waveCountdown = this.currentWaveIndex < 0 ? 3.5 : 5.5;
+    this.enemies = [];
+    this.spawnQueue = [];
+    this.projectiles = [];
+    this.resinPools = [];
+    this.guards = [];
+
+    for (const sId of cp.clearedStumps) {
+      const slot = this.slots.get(sId);
+      if (slot) slot.stumpLocked = false;
+    }
+    for (const bId of cp.explodedBarrels) {
+      const barrel = this.barrels.get(bId);
+      if (barrel) barrel.exploded = true;
+    }
+    for (const t of cp.towers) {
+      const slot = this.slots.get(t.slotId);
+      if (!slot) continue;
+      slot.stumpLocked = false;
+      slot.tower = {
+        slotId: slot.id,
+        x: slot.x,
+        z: slot.z,
+        towerId: t.towerId,
+        tier: t.tier,
+        branchId: t.branchId,
+        totalSpent: t.totalSpent,
+        priority: t.priority,
+        cooldown: 0,
+        shotsFired: 0,
+        smokedTimer: 0,
+        angle: 0,
+        totalDamage: t.totalDamage ?? 0,
+        kills: t.kills ?? 0,
+      };
+      this.totalDamageByTower[t.towerId] = (this.totalDamageByTower[t.towerId] ?? 0) + (t.totalDamage ?? 0);
+      this.killsByTower[t.towerId] = (this.killsByTower[t.towerId] ?? 0) + (t.kills ?? 0);
+    }
+
+    const targetLevel = Math.max(1, Math.min(5, cp.heroLevel));
+    while (this.hero.level < targetLevel) {
+      this.hero.level += 1;
+      this.hero.maxHp = Math.round(this.hero.maxHp * 1.15);
+      this.hero.hp = this.hero.maxHp;
+    }
+    this.hero.xp = Math.max(0, cp.heroXp);
   }
 
   getChecksum(): number {

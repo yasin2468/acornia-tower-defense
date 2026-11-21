@@ -9,6 +9,14 @@ import {
   type BannerId,
 } from '../data/accessories.ts';
 import {
+  DAILY_CHALLENGE_GEMS,
+  DAILY_CHALLENGE_OAK,
+  LOGIN_REWARDS,
+  claimDailyLoginReward,
+  getDailyChallengeSpec,
+  getLoginCalendarStatus,
+} from '../data/daily.ts';
+import {
   ENEMIES,
   ENEMY_LIST,
   HEROES,
@@ -92,7 +100,7 @@ import {
   upgradeCard,
   upgradeTalent,
 } from '../services/ProgressionService.ts';
-import type { CardUnitId, SaveManager } from '../services/SaveManager.ts';
+import type { BattleCheckpointState, CardUnitId, SaveManager } from '../services/SaveManager.ts';
 import {
   AURA_ICON_URLS,
   BANNER_ICON_URLS,
@@ -139,6 +147,10 @@ interface NavBadges {
 export interface MetaViewCallbacks {
   onStartLevel: (levelId: number, ironMode: boolean) => void;
   onStartExpedition: () => void;
+  onResumeCheckpoint?: (checkpoint: BattleCheckpointState) => void;
+  onDiscardCheckpoint?: () => void;
+  onStartDailyChallenge?: () => void;
+  onStartEndlessMode?: () => void;
   onDevUnlock?: () => void;
   onRefresh: () => void;
 }
@@ -147,6 +159,7 @@ export class MetaView {
   activeTab: MetaTab = 'map';
   cardsSubTab: CardsSubTab = 'towers';
   journalSubTab: JournalSubTab = 'quests';
+  specialModeTab: 'expedition' | 'daily' | 'endless' = 'expedition';
   codexFilter: CodexFilter = 'all';
   confirmResetSave = false;
   selectedLevelId = 1;
@@ -252,7 +265,7 @@ export class MetaView {
     const totalCardActions = towersSub + heroesSub + talentsSub;
     const cards = totalCardActions > 0 ? String(totalCardActions) : '';
 
-    const pendingJournal = countPendingJournalClaims(save);
+    const pendingJournal = countPendingJournalClaims(save) + (getLoginCalendarStatus(save, nowMs).canClaimToday ? 1 : 0);
     const journal = pendingJournal > 0 ? String(pendingJournal) : '';
 
     const vipStatus = getVipDailyStatus(save, nowMs);
@@ -694,6 +707,27 @@ export class MetaView {
         ${regionJumpHtml}
       </div>
 
+      ${
+        save.activeBattleCheckpoint
+          ? `
+            <div class="resume-checkpoint-bar" id="resume-checkpoint-bar">
+              <div class="resume-cp-info">
+                <strong>${uiIcon('resume')} ${t(loc, 'map.resumeTitle')}</strong>
+                <span>${tParams(loc, 'map.resumeDesc', {
+                  level: save.activeBattleCheckpoint.levelId,
+                  wave: Math.max(1, save.activeBattleCheckpoint.waveIndex + 2),
+                  hp: Math.ceil(save.activeBattleCheckpoint.baseHp),
+                })}</span>
+              </div>
+              <div class="resume-cp-actions">
+                <button type="button" class="btn btn-sm btn-gold" id="btn-resume-checkpoint">${t(loc, 'map.resumeBtn')}</button>
+                <button type="button" class="btn btn-sm" id="btn-discard-checkpoint">${t(loc, 'map.discardBtn')}</button>
+              </div>
+            </div>
+          `
+          : ''
+      }
+
       <section class="parchment-drawer ${slideAnimClass} ${this.drawerCollapsed ? 'is-collapsed' : ''}" id="parchment-drawer">
         <button type="button" class="drawer-collapse-tab" id="btn-drawer-toggle" aria-label="${t(loc, 'map.toggleDrawer')}" aria-expanded="${!this.drawerCollapsed}">${this.drawerCollapsed ? '▲' : '▼'}</button>
         <span class="brass-corner tl" aria-hidden="true"></span>
@@ -778,15 +812,63 @@ export class MetaView {
   }
 
   private renderExpeditionModal(loc: Locale): string {
+    const modeBody =
+      this.specialModeTab === 'daily'
+        ? this.renderDailyChallengePanel(loc)
+        : this.specialModeTab === 'endless'
+          ? this.renderEndlessModePanel(loc)
+          : this.renderExpeditionPortal(loc);
     return `
       <div class="modal-backdrop" data-modal-backdrop="expedition">
         <div class="modal-card oak-modal-dark" role="dialog" aria-modal="true">
           <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-            <div style="font-size:16px; font-weight:900; color:#ffe17a;">${t(loc, 'rogue.title')}</div>
+            <div style="font-size:16px; font-weight:900; color:#ffe17a;">${t(loc, 'modes.specialTitle')}</div>
             <button class="btn btn-sm" id="btn-close-expedition" type="button">${t(loc, 'map.close')}</button>
           </div>
-          ${this.renderExpeditionPortal(loc)}
+          <div class="mode-tab-row" role="tablist">
+            <button type="button" class="cards-sub-btn ${this.specialModeTab === 'expedition' ? 'active' : ''}" data-special-mode-tab="expedition" role="tab">${t(loc, 'modes.tab.expedition')}</button>
+            <button type="button" class="cards-sub-btn ${this.specialModeTab === 'daily' ? 'active' : ''}" data-special-mode-tab="daily" role="tab">${uiIcon('flame')} ${t(loc, 'modes.tab.daily')}</button>
+            <button type="button" class="cards-sub-btn ${this.specialModeTab === 'endless' ? 'active' : ''}" data-special-mode-tab="endless" role="tab">${uiIcon('infinity')} ${t(loc, 'modes.tab.endless')}</button>
+          </div>
+          ${modeBody}
         </div>
+      </div>
+    `;
+  }
+
+  private renderDailyChallengePanel(loc: Locale): string {
+    const save = this.saveManager.get();
+    const spec = getDailyChallengeSpec();
+    const doneToday = save.completedDailyDates.includes(spec.dateKey);
+    return `
+      <div class="card-panel rogue-portal-card" id="daily-challenge-card">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+          <div style="font-size:14px; font-weight:900; color:#ffe17a;">${uiIcon('flame')} ${t(loc, 'daily.title')}</div>
+          <span class="pill-badge ${doneToday ? 'gold' : ''}">${spec.dateKey}</span>
+        </div>
+        <div style="font-size:11.5px; color:var(--text-muted);">${tParams(loc, 'daily.sub', { date: spec.dateKey, level: spec.levelId })}</div>
+        <div class="mutator-highlight-box">
+          <strong>${t(loc, spec.mutator.nameKey)}</strong>
+          <span>${t(loc, spec.mutator.descKey)}</span>
+        </div>
+        <div style="font-size:11.5px; font-weight:800; color:var(--accent-gold);">${tParams(loc, 'daily.reward', { oak: DAILY_CHALLENGE_OAK, gems: DAILY_CHALLENGE_GEMS })}</div>
+        <button class="btn ${doneToday ? 'btn-primary' : 'btn-gold'}" id="btn-start-daily" type="button">
+          ${doneToday ? t(loc, 'daily.completed') : t(loc, 'daily.play')}
+        </button>
+      </div>
+    `;
+  }
+
+  private renderEndlessModePanel(loc: Locale): string {
+    const save = this.saveManager.get();
+    return `
+      <div class="card-panel rogue-portal-card" id="endless-mode-card">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+          <div style="font-size:14px; font-weight:900; color:#ffe17a;">${uiIcon('infinity')} ${t(loc, 'endless.title')}</div>
+          <span class="pill-badge gold">${tParams(loc, 'endless.bestWave', { wave: save.endlessBestWave })}</span>
+        </div>
+        <div style="font-size:11.5px; color:var(--text-muted);">${t(loc, 'endless.sub')}</div>
+        <button class="btn btn-gold" id="btn-start-endless" type="button">${t(loc, 'endless.play')}</button>
       </div>
     `;
   }
@@ -1623,9 +1705,10 @@ export class MetaView {
 
   private renderJournalTab(loc: Locale): string {
     const save = this.saveManager.get();
+    const loginStatus = getLoginCalendarStatus(save);
     const questReadyCount = DAILY_QUESTS.filter(
       (q) => !save.dailyQuestsClaimed.includes(q.id) && (save.dailyQuestsProgress[q.metric] ?? 0) >= q.target,
-    ).length + (!save.dailyQuestBonusClaimed && save.dailyQuestsClaimed.length >= DAILY_QUESTS.length ? 1 : 0);
+    ).length + (!save.dailyQuestBonusClaimed && save.dailyQuestsClaimed.length >= DAILY_QUESTS.length ? 1 : 0) + (loginStatus.canClaimToday ? 1 : 0);
     const achReadyCount = ACHIEVEMENTS.filter(
       (a) => !save.claimedAchievementIds.includes(a.id) && a.measure(save) >= a.target,
     ).length;
@@ -1677,8 +1760,36 @@ export class MetaView {
         `;
       }).join('');
 
+      const loginDaysHtml = LOGIN_REWARDS.map((r) => {
+        const claimed =
+          (r.day <= loginStatus.streakDay && !loginStatus.canClaimToday) ||
+          r.day < loginStatus.nextClaimDay;
+        const isCurrent = loginStatus.canClaimToday && r.day === loginStatus.nextClaimDay;
+        const cardCount = r.cards?.reduce((sum, c) => sum + c.count, 0) ?? 0;
+        return `
+          <div class="login-day-cell ${claimed ? 'claimed' : ''} ${isCurrent ? 'current' : ''}">
+            <span class="login-day-num">${tParams(loc, 'login.day', { day: r.day })}</span>
+            ${r.oakCoins ? `<span class="login-day-reward">+${r.oakCoins} ${t(loc, 'cur.oak')}</span>` : ''}
+            ${r.gems ? `<span class="login-day-gem">+${r.gems} ${t(loc, 'cur.gem')}</span>` : ''}
+            ${cardCount > 0 ? `<span class="login-day-cards">${tParams(loc, 'login.cardsBadge', { count: cardCount })}</span>` : ''}
+          </div>
+        `;
+      }).join('');
+
       panelHtml = `
         <div id="journal-quests-panel" style="display:flex; flex-direction:column; gap:8px;">
+          <div class="card-panel login-streak-panel" id="login-streak-panel">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+              <div>
+                <div style="font-size:13.5px; font-weight:900; color:#ffe17a;">${uiIcon('calendar')} ${t(loc, 'login.title')}</div>
+                <div style="font-size:10.5px; color:var(--text-muted);">${t(loc, 'login.sub')}</div>
+              </div>
+              <button class="btn btn-sm ${loginStatus.canClaimToday ? 'btn-gold' : ''}" id="btn-claim-login" type="button" ${loginStatus.canClaimToday ? '' : 'disabled'}>
+                ${loginStatus.canClaimToday ? t(loc, 'login.claim') : t(loc, 'login.claimed')}
+              </button>
+            </div>
+            <div class="login-streak-grid">${loginDaysHtml}</div>
+          </div>
           <div class="card-panel quest-bonus-card">
             <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
               <div>
@@ -1974,6 +2085,18 @@ export class MetaView {
           <div style="display:flex; justify-content:space-between; align-items:center; font-size:13px; font-weight:700;">
             <span>${t(loc, 'settings.battery')}</span>
             <button class="game-switch ${s.batterySaver30Fps ? 'on' : ''}" id="chk-battery" type="button" aria-pressed="${s.batterySaver30Fps}">
+              <span class="game-switch-knob"></span>
+            </button>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; font-size:13px; font-weight:700;">
+            <span>${t(loc, 'settings.autoWave')}</span>
+            <button class="game-switch ${s.autoStartWaves ? 'on' : ''}" id="chk-auto-wave" type="button" aria-pressed="${s.autoStartWaves}">
+              <span class="game-switch-knob"></span>
+            </button>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; font-size:13px; font-weight:700;">
+            <span>${t(loc, 'settings.damageNumbers')}</span>
+            <button class="game-switch ${s.showDamageNumbers ? 'on' : ''}" id="chk-dmg-nums" type="button" aria-pressed="${s.showDamageNumbers}">
               <span class="game-switch-knob"></span>
             </button>
           </div>
@@ -2368,6 +2491,56 @@ export class MetaView {
       };
     }
 
+    container.querySelectorAll<HTMLElement>('[data-special-mode-tab]').forEach((btn) => {
+      btn.onclick = () => {
+        const tab = btn.dataset.specialModeTab as 'expedition' | 'daily' | 'endless' | undefined;
+        if (tab) {
+          this.specialModeTab = tab;
+          this.callbacks.onRefresh();
+        }
+      };
+    });
+
+    const startDailyBtn = container.querySelector<HTMLButtonElement>('#btn-start-daily');
+    if (startDailyBtn) {
+      startDailyBtn.onclick = () => {
+        this.unitPreview3D.dispose();
+        this.showExpeditionModal = false;
+        this.callbacks.onStartDailyChallenge?.();
+      };
+    }
+
+    const startEndlessBtn = container.querySelector<HTMLButtonElement>('#btn-start-endless');
+    if (startEndlessBtn) {
+      startEndlessBtn.onclick = () => {
+        this.unitPreview3D.dispose();
+        this.showExpeditionModal = false;
+        this.callbacks.onStartEndlessMode?.();
+      };
+    }
+
+    const resumeCpBtn = container.querySelector<HTMLButtonElement>('#btn-resume-checkpoint');
+    if (resumeCpBtn) {
+      resumeCpBtn.onclick = () => {
+        const cp = this.saveManager.get().activeBattleCheckpoint;
+        if (cp) {
+          this.unitPreview3D.dispose();
+          this.callbacks.onResumeCheckpoint?.(cp);
+        }
+      };
+    }
+
+    const discardCpBtn = container.querySelector<HTMLButtonElement>('#btn-discard-checkpoint');
+    if (discardCpBtn) {
+      discardCpBtn.onclick = () => {
+        this.saveManager.update((d) => {
+          d.activeBattleCheckpoint = null;
+        });
+        this.callbacks.onDiscardCheckpoint?.();
+        this.callbacks.onRefresh();
+      };
+    }
+
     container.querySelectorAll<HTMLElement>('[data-pick-relic]').forEach((btn) => {
       btn.onclick = () => {
         const rid = btn.dataset.pickRelic as RelicId;
@@ -2534,6 +2707,17 @@ export class MetaView {
       dqBonusBtn.onclick = () => {
         if (claimDailyQuestBonus(this.saveManager)) {
           this.statusNotice = t(loc, 'quest.claimedToast');
+        }
+        this.callbacks.onRefresh();
+      };
+    }
+
+    const claimLoginBtn = container.querySelector<HTMLButtonElement>('#btn-claim-login');
+    if (claimLoginBtn) {
+      claimLoginBtn.onclick = () => {
+        const res = claimDailyLoginReward(this.saveManager);
+        if (res.claimed) {
+          this.statusNotice = tParams(loc, 'login.toast', { day: res.day });
         }
         this.callbacks.onRefresh();
       };
@@ -2827,6 +3011,22 @@ export class MetaView {
     if (chkBattery) {
       chkBattery.onclick = () => {
         this.saveManager.update((d) => { d.settings.batterySaver30Fps = !d.settings.batterySaver30Fps; });
+        this.callbacks.onRefresh();
+      };
+    }
+
+    const chkAutoWave = container.querySelector<HTMLButtonElement>('#chk-auto-wave');
+    if (chkAutoWave) {
+      chkAutoWave.onclick = () => {
+        this.saveManager.update((d) => { d.settings.autoStartWaves = !d.settings.autoStartWaves; });
+        this.callbacks.onRefresh();
+      };
+    }
+
+    const chkDmgNums = container.querySelector<HTMLButtonElement>('#chk-dmg-nums');
+    if (chkDmgNums) {
+      chkDmgNums.onclick = () => {
+        this.saveManager.update((d) => { d.settings.showDamageNumbers = !d.settings.showDamageNumbers; });
         this.callbacks.onRefresh();
       };
     }

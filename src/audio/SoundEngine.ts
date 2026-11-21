@@ -434,7 +434,8 @@ export class SoundEngine {
   }
 
   playBuild(): void {
-    this.transient(0.05, 0.11, 110, 2);
+    this.transient(0.055, 0.12, 110, 2);
+    this.noiseBurst(1350, 'bandpass', 0.055, 0.09, 1.8, 0, 2);
     this.tone(140, 75, 0.09, 'triangle', 0.11, 0, 2);
     this.tone(330, 440, 0.1, 'triangle', 0.09, 0.03, 2, 0.03);
     this.tone(523, 659, 0.12, 'triangle', 0.08, 0.08, 2, 0.03);
@@ -735,5 +736,33 @@ export class SoundEngine {
       this.tone(1320, 660, 0.15, 'sine', 0.085, 0.05, 2);
     }
     this.duckMusic(0.55, 0.2);
+  }
+
+  /** Warm brass horn call + shield thud when summoning Oak Guards. */
+  playReinforcementsHorn(): void {
+    if (!this.throttle('reinforce_horn', 0.25)) return;
+    this.transient(0.07, 0.18, 92, 2);
+    this.tone(392, 392, 0.14, 'triangle', 0.1, 0, 2, 0.02);
+    this.tone(523, 523, 0.16, 'triangle', 0.11, 0.09, 2, 0.02);
+    this.tone(659, 784, 0.24, 'triangle', 0.11, 0.18, 2, 0.03);
+    this.duckMusic(0.5, 0.25);
+  }
+
+  /** Expressive character voice bark when rallying a hero. */
+  playHeroBark(heroId: HeroId): void {
+    if (!this.throttle('hero_bark', 0.45)) return;
+    if (heroId === 'kizil_kuyruk') {
+      this.tone(680, 960, 0.085, 'triangle', 0.07, 0, 1, 0.04);
+      this.tone(980, 740, 0.09, 'sine', 0.06, 0.07, 1, 0.04);
+    } else if (heroId === 'kaya_dis') {
+      this.tone(155, 92, 0.12, 'sawtooth', 0.07, 0, 1, 0.05);
+      this.noiseBurst(900, 'lowpass', 0.08, 0.07, 1.2, 0.01, 1);
+    } else if (heroId === 'ay_kurdu') {
+      this.tone(340, 560, 0.15, 'triangle', 0.075, 0, 1, 0.04);
+      this.tone(560, 440, 0.14, 'sine', 0.06, 0.11, 1, 0.04);
+    } else {
+      this.tone(185, 118, 0.13, 'triangle', 0.085, 0, 1, 0.04);
+      this.noiseBurst(750, 'lowpass', 0.09, 0.06, 1.1, 0, 1);
+    }
   }
 }

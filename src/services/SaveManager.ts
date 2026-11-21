@@ -1,7 +1,7 @@
 import type { AuraId, BannerId } from '../data/accessories.ts';
 import type { HeroClassId, HeroId } from '../data/enemies.ts';
 import { clampTalentRank, createInitialTalents, TALENT_BRANCHES, type TalentBranchId } from '../data/talents.ts';
-import type { HatId, TowerId } from '../data/towers.ts';
+import type { EvolutionBranchId, HatId, TargetingPriority, TowerId } from '../data/towers.ts';
 import { detectLocale, type Locale } from '../i18n/locales.ts';
 import { VIP_MONTHLY_DURATION_MS } from './CommercialServices.ts';
 
@@ -32,6 +32,43 @@ export interface ExpeditionRunState {
   pendingRelicChoices: RelicId[];
 }
 
+export type DailyMutatorId =
+  | 'fast_bots'
+  | 'armored_wave'
+  | 'air_and_frost'
+  | 'heavy_siege'
+  | 'no_sell'
+  | 'double_bounty';
+
+export interface BattleCheckpointTower {
+  slotId: string;
+  towerId: TowerId;
+  tier: 1 | 2 | 3;
+  branchId?: EvolutionBranchId;
+  priority: TargetingPriority;
+  totalSpent: number;
+  totalDamage: number;
+  kills: number;
+}
+
+export interface BattleCheckpointState {
+  levelId: number;
+  ironMode: boolean;
+  endlessMode: boolean;
+  dailyDate?: string;
+  mutatorId?: DailyMutatorId;
+  waveIndex: number;
+  gold: number;
+  baseHp: number;
+  maxBaseHp: number;
+  heroLevel: number;
+  heroXp: number;
+  towers: BattleCheckpointTower[];
+  clearedStumps: string[];
+  explodedBarrels: string[];
+  savedAt: number;
+}
+
 export interface SaveSettings {
   locale: Locale;
   soundEnabled: boolean;
@@ -39,6 +76,8 @@ export interface SaveSettings {
   hapticsEnabled: boolean;
   batterySaver30Fps: boolean;
   shakeStrength: number; // 0..100
+  autoStartWaves: boolean;
+  showDamageNumbers: boolean;
 }
 
 export interface SaveState {
@@ -92,6 +131,11 @@ export interface SaveState {
   dailyFreeChestsUsed: number;
   seenStoryIds: string[];
   tutorialDone: boolean;
+  loginStreakDay: number;
+  lastLoginClaimDate: string;
+  completedDailyDates: string[];
+  endlessBestWave: number;
+  activeBattleCheckpoint: BattleCheckpointState | null;
   settings: SaveSettings;
   checksum?: number;
 }
@@ -198,6 +242,11 @@ export function createInitialSave(nowMs = Date.now()): SaveState {
     dailyFreeChestsUsed: 0,
     seenStoryIds: [],
     tutorialDone: false,
+    loginStreakDay: 0,
+    lastLoginClaimDate: '',
+    completedDailyDates: [],
+    endlessBestWave: 0,
+    activeBattleCheckpoint: null,
     settings: {
       locale: detectLocale(),
       soundEnabled: true,
@@ -205,6 +254,8 @@ export function createInitialSave(nowMs = Date.now()): SaveState {
       hapticsEnabled: true,
       batterySaver30Fps: false,
       shakeStrength: 80,
+      autoStartWaves: false,
+      showDamageNumbers: true,
     },
   };
 }
@@ -280,6 +331,25 @@ export function migrateSave(parsed: Partial<SaveState>, nowMs = Date.now()): { s
     claimedSeasonFreeTiers: Array.isArray(parsed.claimedSeasonFreeTiers) ? parsed.claimedSeasonFreeTiers : [],
     claimedSeasonGoldTiers: Array.isArray(parsed.claimedSeasonGoldTiers) ? parsed.claimedSeasonGoldTiers : [],
     seenStoryIds: Array.isArray(parsed.seenStoryIds) ? Array.from(new Set(parsed.seenStoryIds)) : [],
+    completedDailyDates: Array.isArray(parsed.completedDailyDates)
+      ? Array.from(new Set(parsed.completedDailyDates.slice(-30)))
+      : [],
+    loginStreakDay:
+      typeof parsed.loginStreakDay === 'number' && Number.isFinite(parsed.loginStreakDay)
+        ? Math.max(0, Math.min(7, Math.floor(parsed.loginStreakDay)))
+        : 0,
+    lastLoginClaimDate: typeof parsed.lastLoginClaimDate === 'string' ? parsed.lastLoginClaimDate : '',
+    endlessBestWave:
+      typeof parsed.endlessBestWave === 'number' && Number.isFinite(parsed.endlessBestWave)
+        ? Math.max(0, Math.floor(parsed.endlessBestWave))
+        : 0,
+    activeBattleCheckpoint:
+      parsed.activeBattleCheckpoint &&
+      typeof parsed.activeBattleCheckpoint === 'object' &&
+      typeof parsed.activeBattleCheckpoint.levelId === 'number' &&
+      Array.isArray(parsed.activeBattleCheckpoint.towers)
+        ? parsed.activeBattleCheckpoint
+        : null,
   };
   state.vipExpiresAt =
     typeof state.vipExpiresAt === 'number' && Number.isFinite(state.vipExpiresAt)

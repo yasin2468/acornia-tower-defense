@@ -65,7 +65,7 @@ export interface BattleViewCallbacks {
 export class BattleView {
   selectedSlotId: string | null = null;
   previewTowerId: TowerId | null = null;
-  targetingSkill: 'rain' | 'hero_leap' | null = null;
+  targetingSkill: 'rain' | 'hero_leap' | 'guards' | null = null;
   targetingPoint: { x: number; z: number } = { x: 0, z: 0 };
   speedMultiplier: 1 | 2 | 3 = 1;
   speed2xUnlockedThisMatch = false;
@@ -98,6 +98,8 @@ export class BattleView {
   private magnetBtnEl: HTMLButtonElement | null = null;
   private magnetCdEl: HTMLElement | null = null;
   private magnetBuffEl: HTMLElement | null = null;
+  private guardsBtnEl: HTMLButtonElement | null = null;
+  private guardsCdEl: HTMLElement | null = null;
   private heroBtnEl: HTMLButtonElement | null = null;
   private heroCdEl: HTMLElement | null = null;
   private heroHpBarEl: HTMLElement | null = null;
@@ -204,6 +206,10 @@ export class BattleView {
     enemyId?: number,
     numericDamage?: number,
   ): void {
+    const showNums = this.saveManager.get().settings.showDamageNumbers ?? true;
+    if (!showNums && (kind === 'normal' || kind === 'heavy' || kind === 'resisted' || kind === 'crit')) {
+      return;
+    }
     if (enemyId !== undefined && numericDamage !== undefined && (kind === 'normal' || kind === 'heavy')) {
       for (let i = this.floatingDamages.length - 1; i >= 0; i--) {
         const cur = this.floatingDamages[i];
@@ -337,6 +343,10 @@ export class BattleView {
             <span class="hero-buff-pill" id="bw-magnet-buff" style="display:none;"></span>
             <span class="cd-badge" id="bw-magnet-cd" style="display:none;"></span>
           </button>
+          <button class="skill-medallion-btn guards-skill-btn" id="bw-skill-guards" title="${t(loc, 'skill.reinforcements')}${tParams(loc, 'skill.hotkeyHint', { key: '4' })}">
+            <span class="svg-ico" style="width:26px;height:26px;">${ICONS.guards}</span>
+            <span class="cd-badge" id="bw-guards-cd" style="display:none;"></span>
+          </button>
         </div>
       </div>
       <div id="bw-modal-host"></div>
@@ -375,6 +385,8 @@ export class BattleView {
     this.magnetBtnEl = container.querySelector('#bw-skill-magnet');
     this.magnetCdEl = container.querySelector('#bw-magnet-cd');
     this.magnetBuffEl = container.querySelector('#bw-magnet-buff');
+    this.guardsBtnEl = container.querySelector('#bw-skill-guards');
+    this.guardsCdEl = container.querySelector('#bw-guards-cd');
     this.modalHostEl = container.querySelector('#bw-modal-host');
     this.hudTopEl = container.querySelector('#bw-hud-top');
     this.hudBottomEl = container.querySelector('#bw-hud-bottom');
@@ -397,6 +409,9 @@ export class BattleView {
     if (this.targetingSkill === 'rain') {
       return { radius: 3.1, color: '#ff9f43', showLink: false };
     }
+    if (this.targetingSkill === 'guards') {
+      return { radius: 1.9, color: '#63e87f', showLink: false };
+    }
     if (sim.heroId === 'kizil_kuyruk') {
       return { radius: 3.6, color: '#44f0a6', showLink: true };
     }
@@ -411,6 +426,18 @@ export class BattleView {
     this.targetingSkill = this.targetingSkill === 'rain' ? null : 'rain';
     if (this.targetingSkill === 'rain') {
       this.seedTargetingPoint(sim, false);
+    }
+  }
+
+  triggerGuardsSkill(sim: SimulationEngine): void {
+    if (sim.reinforcementsCooldown > 0) return;
+    const loc = this.saveManager.get().settings.locale;
+    this.targetingSkill = this.targetingSkill === 'guards' ? null : 'guards';
+    if (this.targetingSkill === 'guards') {
+      this.seedTargetingPoint(sim, true);
+      this.showBanner(t(loc, 'skill.reinforcementsHint'), 2.4);
+    } else {
+      this.showBanner('', 0);
     }
   }
 
@@ -493,6 +520,9 @@ export class BattleView {
     if (this.magnetBtnEl) {
       this.magnetBtnEl.onclick = () => this.triggerMagnetSkill(sim);
     }
+    if (this.guardsBtnEl) {
+      this.guardsBtnEl.onclick = () => this.triggerGuardsSkill(sim);
+    }
     if (this.heroBtnEl) {
       this.heroBtnEl.onclick = () => this.triggerHeroSkill(sim);
     }
@@ -523,7 +553,7 @@ export class BattleView {
     const save = this.saveManager.get();
     const loc = save.settings.locale;
     const waveNum = Math.max(1, sim.currentWaveIndex + 1);
-    const totalWaves = sim.level.waves.length;
+    const totalWaves = sim.endlessMode ? '∞' : sim.totalWaveCount;
     const hpPct = Math.max(0, Math.min(100, (sim.baseHp / sim.maxBaseHp) * 100));
 
     const hide = this.promoMode && this.promoHideHud;
@@ -563,7 +593,7 @@ export class BattleView {
 
     if (this.wavePreviewEl) {
       const nextWave = !hide && !sim.waveInProgress && sim.status === 'playing'
-        ? sim.level.waves[sim.currentWaveIndex + 1]
+        ? sim.getWaveSpec(sim.currentWaveIndex + 1)
         : undefined;
       this.wavePreviewEl.style.display = nextWave ? 'flex' : 'none';
       if (nextWave) {
@@ -658,7 +688,7 @@ export class BattleView {
     }
 
     if (this.earlyBtnEl) {
-      const canCallEarly = !sim.waveInProgress && sim.currentWaveIndex + 1 < totalWaves;
+      const canCallEarly = !sim.waveInProgress && (sim.endlessMode || sim.currentWaveIndex + 1 < sim.totalWaveCount);
       this.earlyBtnEl.style.display = canCallEarly ? 'inline-flex' : 'none';
       if (canCallEarly) {
         if (sim.waitingForFirstWave) {
@@ -696,6 +726,15 @@ export class BattleView {
       if (sim.magnetActiveTimer > 0) {
         this.magnetBuffEl.textContent = tParams(loc, 'skill.buff.sec', { sec: Math.ceil(sim.magnetActiveTimer) });
       }
+    }
+    if (this.guardsBtnEl) {
+      this.guardsBtnEl.title = `${t(loc, 'skill.reinforcements')}${tParams(loc, 'skill.hotkeyHint', { key: '4' })}`;
+      this.guardsBtnEl.classList.toggle('active', this.targetingSkill === 'guards');
+      this.guardsBtnEl.classList.toggle('ready', sim.reinforcementsCooldown <= 0 && this.targetingSkill !== 'guards');
+    }
+    if (this.guardsCdEl) {
+      this.guardsCdEl.style.display = sim.reinforcementsCooldown > 0 ? 'flex' : 'none';
+      if (sim.reinforcementsCooldown > 0) this.guardsCdEl.textContent = `${Math.ceil(sim.reinforcementsCooldown)}`;
     }
     if (this.heroBtnEl) {
       const skillKey =
@@ -767,7 +806,7 @@ export class BattleView {
       .sort()
       .join(',');
     const allowedKey = sim.allowedTowers ? sim.allowedTowers.join(',') : 'all';
-    const contextKey = `${this.selectedSlotId ?? 'none'}|${this.previewTowerId ?? 'none'}|${selSlot?.stumpLocked ? 'stump' : selSlot?.tower ? `${selSlot.tower.towerId}_${selSlot.tower.tier}_${selSlot.tower.priority}` : 'empty'}|${sim.gold}|${this.tutorialPhase}|${smokedSlots}|${builtTypesKey}|${allowedKey}|${loc}`;
+    const contextKey = `${this.selectedSlotId ?? 'none'}|${this.previewTowerId ?? 'none'}|${selSlot?.stumpLocked ? 'stump' : selSlot?.tower ? `${selSlot.tower.towerId}_${selSlot.tower.tier}_${selSlot.tower.priority}` : 'empty'}|${sim.gold}|${this.tutorialPhase}|${smokedSlots}|${builtTypesKey}|${allowedKey}|${selSlot?.tower?.totalDamage ?? 0}|${selSlot?.tower?.kills ?? 0}|${sim.canSellTowers}|${loc}`;
 
     if (contextKey !== this.lastContextKey) {
       this.lastContextKey = contextKey;
@@ -778,7 +817,7 @@ export class BattleView {
       }
     }
 
-    const modalKey = `${this.paused}|${this.activeStoryBeat?.id ?? 'none'}|${sim.status}|${sim.reviveUsed}|${save.firstDefeatBundleBought}|${save.settings.soundEnabled}|${save.settings.musicEnabled}|${save.settings.hapticsEnabled}|${loc}`;
+    const modalKey = `${this.paused}|${this.activeStoryBeat?.id ?? 'none'}|${sim.status}|${sim.reviveUsed}|${save.firstDefeatBundleBought}|${save.settings.soundEnabled}|${save.settings.musicEnabled}|${save.settings.hapticsEnabled}|${save.settings.autoStartWaves}|${sim.currentWaveIndex}|${loc}`;
     if (modalKey !== this.lastModalKey && this.modalHostEl) {
       this.lastModalKey = modalKey;
       this.modalHostEl.innerHTML = this.buildModal(sim, loc);
@@ -1067,6 +1106,11 @@ export class BattleView {
     let statLine = `${t(loc, 'hud.damage')} ${curStats.damage} · ${t(loc, 'hud.rate')} ${curStats.fireRate} · ${t(loc, 'hud.range')} ${curStats.range}`;
     let bodyActionsHtml = '';
 
+    const sellBtnLabel = sim.canSellTowers
+      ? `${t(loc, 'hud.sellShort')} +${refund}${sim.waitingForFirstWave ? ` (${t(loc, 'hud.sellFreeTag')})` : ''}`
+      : t(loc, 'hud.noSellMutator');
+    const sellDisabledAttr = sim.canSellTowers ? '' : 'disabled';
+
     if (tw.tier === 1) {
       statLine = `${t(loc, 'hud.damage')} ${curStats.damage}→${spec.tier2.damage} · ${t(loc, 'hud.rate')} ${curStats.fireRate}→${spec.tier2.fireRate} · ${t(loc, 'hud.range')} ${curStats.range}→${spec.tier2.range}`;
       bodyActionsHtml = `
@@ -1075,8 +1119,8 @@ export class BattleView {
             <span class="svg-ico" style="width:16px;height:16px;">${ICONS.arrowUp}</span>
             <span>${t(loc, 'hud.upgrade')} (${spec.tier2.cost})</span>
           </button>
-          <button type="button" class="btn dock-sell-btn" id="btn-tower-sell">
-            ${t(loc, 'hud.sellShort')} +${refund}${sim.waitingForFirstWave ? ` (${t(loc, 'hud.sellFreeTag')})` : ''}
+          <button type="button" class="btn dock-sell-btn" id="btn-tower-sell" ${sellDisabledAttr}>
+            ${sellBtnLabel}
           </button>
         </div>
       `;
@@ -1098,8 +1142,8 @@ export class BattleView {
             .join('')}
         </div>
         <div class="dock-actions-row" style="margin-top:6px;">
-          <button type="button" class="btn dock-sell-btn" id="btn-tower-sell" style="width:100%;">
-            ${t(loc, 'hud.sellShort')} +${refund}${sim.waitingForFirstWave ? ` (${t(loc, 'hud.sellFreeTag')})` : ''}
+          <button type="button" class="btn dock-sell-btn" id="btn-tower-sell" style="width:100%;" ${sellDisabledAttr}>
+            ${sellBtnLabel}
           </button>
         </div>
       `;
@@ -1110,8 +1154,8 @@ export class BattleView {
       bodyActionsHtml = `
         <div class="dock-actions-row">
           <div class="dock-max-pill">★ ${t(loc, 'hud.maxTier')} ${synPills}</div>
-          <button type="button" class="btn dock-sell-btn" id="btn-tower-sell">
-            ${t(loc, 'hud.sellShort')} +${refund}${sim.waitingForFirstWave ? ` (${t(loc, 'hud.sellFreeTag')})` : ''}
+          <button type="button" class="btn dock-sell-btn" id="btn-tower-sell" ${sellDisabledAttr}>
+            ${sellBtnLabel}
           </button>
         </div>
       `;
@@ -1127,6 +1171,7 @@ export class BattleView {
               <span class="preview-target-pill ${spec.canHitAir ? 'air' : ''}">${spec.canHitAir ? `${uiIcon('wing')} ${t(loc, 'hud.targetAirGround')}` : `${uiIcon('shield')} ${t(loc, 'hud.targetGround')}`}</span>
             </div>
             <div style="font-size:11px; font-weight:800; color:var(--accent-green);">${statLine}</div>
+            <div class="tower-live-stats">${tParams(loc, 'hud.towerStats', { dmg: tw.totalDamage, kills: tw.kills })}</div>
             ${slot.runeSlot ? `<div class="rune-slot-inline">${t(loc, 'hud.runeSlotBadge')}</div>` : ''}
           </div>
           <button type="button" class="btn btn-sm" id="btn-cycle-prio">${t(loc, `priority.${tw.priority}`)}</button>
@@ -1277,6 +1322,60 @@ export class BattleView {
     `;
   }
 
+  private renderMatchSummaryHtml(sim: SimulationEngine, loc: Locale, isDefeat: boolean): string {
+    const summary = sim.getMatchSummary();
+    const maxDmg = summary.topTowers[0]?.damage || 1;
+    const mvpName = summary.mvpTowerId ? t(loc, TOWERS[summary.mvpTowerId].nameKey) : '—';
+    const barsHtml = summary.topTowers
+      .map((row) => {
+        const pct = Math.max(8, Math.round((row.damage / maxDmg) * 100));
+        return `
+          <div class="summary-bar-row">
+            <img class="summary-tower-thumb" src="${PORTRAIT_URLS[row.towerId]}" alt="${t(loc, TOWERS[row.towerId].nameKey)}" />
+            <div class="summary-bar-meta">
+              <div class="summary-bar-label">
+                <span>${t(loc, TOWERS[row.towerId].nameKey)}</span>
+                <span>${row.damage} · ${row.kills}</span>
+              </div>
+              <div class="summary-bar-track"><div class="summary-bar-fill" style="width:${pct}%"></div></div>
+            </div>
+          </div>
+        `;
+      })
+      .join('');
+
+    const leakSpec = summary.primaryLeakEnemyId ? ENEMIES[summary.primaryLeakEnemyId] : null;
+    const diagHtml = isDefeat
+      ? `
+        <div class="defeat-diagnosis-box">
+          ${
+            leakSpec && summary.primaryLeakEnemyId
+              ? `
+                <div class="defeat-leak-row">
+                  <img class="wp-enemy-thumb" src="${getEnemyBadgeUrl(summary.primaryLeakEnemyId, leakSpec.isBoss)}" alt="${t(loc, leakSpec.nameKey)}" />
+                  <span>${tParams(loc, 'battle.leakedBy', { name: t(loc, leakSpec.nameKey), count: summary.primaryLeakCount, wave: Math.max(1, summary.firstLeakWave) })}</span>
+                </div>
+              `
+              : ''
+          }
+          <div class="defeat-tip">${t(loc, summary.defeatTipKey)}</div>
+        </div>
+      `
+      : '';
+
+    return `
+      <div class="match-summary-box" id="match-summary-box">
+        <div class="match-summary-head">
+          <strong>${t(loc, 'battle.summaryTitle')}</strong>
+          <span>${tParams(loc, 'battle.synergiesCount', { count: summary.synergiesTriggered })}</span>
+        </div>
+        ${summary.mvpTowerId ? `<div class="match-mvp-line">${uiIcon('trophy')} ${tParams(loc, 'battle.mvpTower', { name: mvpName, dmg: summary.mvpDamage })}</div>` : ''}
+        ${barsHtml}
+        ${diagHtml}
+      </div>
+    `;
+  }
+
   private buildModal(sim: SimulationEngine, loc: Locale): string {
     if (this.paused && sim.status === 'playing') {
       const s = this.saveManager.get().settings;
@@ -1295,6 +1394,9 @@ export class BattleView {
                 </button>
                 <button type="button" class="btn btn-sm ${s.hapticsEnabled ? 'btn-primary' : ''}" id="btn-pause-haptics">
                   ${t(loc, 'settings.haptics')}: ${t(loc, s.hapticsEnabled ? 'hud.on' : 'hud.off')}
+                </button>
+                <button type="button" class="btn btn-sm ${s.autoStartWaves ? 'btn-primary' : ''}" id="btn-pause-autowave">
+                  ${t(loc, 'settings.autoWave')}: ${t(loc, s.autoStartWaves ? 'hud.on' : 'hud.off')}
                 </button>
               </div>
             </div>
@@ -1352,6 +1454,7 @@ export class BattleView {
           <div class="modal-card" role="dialog" aria-modal="true">
             <div style="font-size:20px; font-weight:800; color:var(--accent-gold);">${titleText}</div>
             <div style="font-size:13px; color:var(--text-muted);">${rewardLine}</div>
+            ${this.renderMatchSummaryHtml(sim, loc, false)}
             ${
               isGrandFinale
                 ? `
@@ -1376,7 +1479,11 @@ export class BattleView {
 
     if (sim.status === 'lost') {
       const save = this.saveManager.get();
-      const showFirstFailBundle = MONETIZATION_ENABLED && !save.firstDefeatBundleBought;
+      const isEndless = sim.endlessMode;
+      const survivedWaves = Math.max(0, sim.currentWaveIndex);
+      const endOak = Math.max(1, survivedWaves) * 28;
+      const endGems = Math.floor(Math.max(1, survivedWaves) / 3) * 4;
+      const showFirstFailBundle = !isEndless && MONETIZATION_ENABLED && !save.firstDefeatBundleBought;
       const failPrices = showFirstFailBundle ? getFailOfferPrices(this.remoteConfig.get()) : null;
       const priceParams = failPrices
         ? {
@@ -1388,8 +1495,10 @@ export class BattleView {
       return `
         <div class="modal-backdrop">
           <div class="modal-card" role="dialog" aria-modal="true">
-            <div style="font-size:19px; font-weight:800; color:var(--accent-red);">${t(loc, 'hud.defeat')}</div>
-            ${MONETIZATION_ENABLED && !sim.reviveUsed ? `<button class="btn btn-gold" id="btn-revive-ad">${t(loc, 'hud.reviveAd')}</button>` : ''}
+            <div style="font-size:19px; font-weight:800; color:${isEndless ? 'var(--accent-gold)' : 'var(--accent-red)'};">${isEndless ? t(loc, 'endless.gameoverTitle') : t(loc, 'hud.defeat')}</div>
+            ${isEndless ? `<div style="font-size:13px; color:var(--text-muted);">${tParams(loc, 'endless.survived', { wave: survivedWaves, oak: endOak, gems: endGems })}</div>` : ''}
+            ${this.renderMatchSummaryHtml(sim, loc, true)}
+            ${MONETIZATION_ENABLED && !isEndless && !sim.reviveUsed ? `<button class="btn btn-gold" id="btn-revive-ad">${t(loc, 'hud.reviveAd')}</button>` : ''}
             ${
               showFirstFailBundle && priceParams
                 ? `
@@ -1447,6 +1556,18 @@ export class BattleView {
     if (pauseHapticsBtn) {
       pauseHapticsBtn.onclick = () => {
         this.saveManager.update((d) => { d.settings.hapticsEnabled = !d.settings.hapticsEnabled; });
+        this.callbacks.onSettingsChanged?.();
+      };
+    }
+    const pauseAutoWaveBtn = host.querySelector<HTMLButtonElement>('#btn-pause-autowave');
+    if (pauseAutoWaveBtn) {
+      pauseAutoWaveBtn.onclick = () => {
+        let nextVal = false;
+        this.saveManager.update((d) => {
+          d.settings.autoStartWaves = !d.settings.autoStartWaves;
+          nextVal = d.settings.autoStartWaves;
+        });
+        sim.autoStartWaves = nextVal;
         this.callbacks.onSettingsChanged?.();
       };
     }

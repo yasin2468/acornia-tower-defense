@@ -14,6 +14,7 @@ export type GameCommandInput =
   | { type: 'CAST_HERO_ULTIMATE'; x?: number; z?: number }
   | { type: 'CAST_PINECONE_RAIN'; x: number; z: number }
   | { type: 'CAST_ACORN_MAGNET' }
+  | { type: 'CAST_REINFORCEMENTS'; x: number; z: number }
   | { type: 'CALL_WAVE_EARLY' }
   | { type: 'REVIVE_BASE' }
   | { type: 'COOP_GIFT_GOLD'; fromRole: 'p1' | 'p2'; amount: number }
