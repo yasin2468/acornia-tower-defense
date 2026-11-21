@@ -23,7 +23,17 @@ import type { NetworkService, SocialEmoteId } from '../services/NetworkService.t
 import type { SaveManager } from '../services/SaveManager.ts';
 import { ICONS, PORTRAIT_URLS, UI_ICON_URLS, getEnemyBadgeUrl, uiIcon } from './icons.ts';
 
-export type FloatingDamageKind = 'normal' | 'heavy' | 'resisted' | 'crit' | 'gold' | 'base' | 'skill' | 'combo';
+export type FloatingDamageKind =
+  | 'normal'
+  | 'heavy'
+  | 'resisted'
+  | 'crit'
+  | 'gold'
+  | 'base'
+  | 'skill'
+  | 'combo'
+  | 'status'
+  | 'multikill';
 
 export interface FloatingDamage {
   id: number;
@@ -210,6 +220,14 @@ export class BattleView {
     if (!showNums && (kind === 'normal' || kind === 'heavy' || kind === 'resisted' || kind === 'crit')) {
       return;
     }
+    if (kind === 'status' && enemyId !== undefined) {
+      for (let i = this.floatingDamages.length - 1; i >= 0; i--) {
+        const cur = this.floatingDamages[i];
+        if (cur.kind === 'status' && cur.enemyId === enemyId && cur.text === text && cur.maxLife - cur.life <= 0.85) {
+          return;
+        }
+      }
+    }
     if (enemyId !== undefined && numericDamage !== undefined && (kind === 'normal' || kind === 'heavy')) {
       for (let i = this.floatingDamages.length - 1; i >= 0; i--) {
         const cur = this.floatingDamages[i];
@@ -227,11 +245,11 @@ export class BattleView {
       }
     }
     const life =
-      kind === 'combo'
+      kind === 'combo' || kind === 'multikill'
         ? 1.25
         : kind === 'skill'
           ? 1.12
-          : kind === 'crit' || kind === 'base'
+          : kind === 'crit' || kind === 'base' || kind === 'status'
             ? 0.95
             : kind === 'heavy'
               ? 0.82
@@ -907,31 +925,39 @@ export class BattleView {
       const age = f.maxLife - f.life;
       const p = Math.max(0, Math.min(1, age / f.maxLife));
       const rise =
-        f.kind === 'combo'
-          ? 56
-          : f.kind === 'gold'
-            ? 44
-            : f.kind === 'skill'
-              ? 52
-              : f.kind === 'crit' || f.kind === 'base'
-                ? 46
-                : f.kind === 'heavy'
-                  ? 38
-                  : 30;
+        f.kind === 'multikill'
+          ? 64
+          : f.kind === 'combo'
+            ? 56
+            : f.kind === 'gold'
+              ? 44
+              : f.kind === 'skill'
+                ? 52
+                : f.kind === 'status'
+                  ? 48
+                  : f.kind === 'crit' || f.kind === 'base'
+                    ? 46
+                    : f.kind === 'heavy'
+                      ? 38
+                      : 30;
       const dy = easeOutCubic(p) * rise;
       const dx = f.driftX * (0.4 + p * 0.9);
       const peak =
-        f.kind === 'crit'
-          ? 1.75
-          : f.kind === 'base'
-            ? 1.7
-            : f.kind === 'combo'
-              ? 1.65
-              : f.kind === 'skill'
-                ? 1.55
-                : f.kind === 'heavy'
-                  ? 1.5
-                  : 1.35;
+        f.kind === 'multikill'
+          ? 1.85
+          : f.kind === 'crit'
+            ? 1.75
+            : f.kind === 'base'
+              ? 1.7
+              : f.kind === 'combo'
+                ? 1.65
+                : f.kind === 'skill'
+                  ? 1.55
+                  : f.kind === 'status'
+                    ? 1.45
+                    : f.kind === 'heavy'
+                      ? 1.5
+                      : 1.35;
       const sc = popScale(age, peak, f.kind === 'crit' ? 0.22 : 0.16);
       if (el.key !== f.id || el.text !== f.text || el.kind !== f.kind) {
         el.key = f.id;

@@ -97,6 +97,9 @@ let currentIsMultiMatch = false;
 let victoryRecorded = false;
 let lossRecorded = false;
 let multiOutcomeRecorded = false;
+let killStreakCount = 0;
+let lastKillAtMs = 0;
+let lastMultiKillAnnounced = 0;
 let pendingSeasonKills = 0;
 let simAccumulator = 0;
 
@@ -308,6 +311,9 @@ async function launchBattleSpec(
   victoryRecorded = false;
   lossRecorded = false;
   multiOutcomeRecorded = false;
+  killStreakCount = 0;
+  lastKillAtMs = 0;
+  lastMultiKillAnnounced = 0;
   pendingSeasonKills = 0;
   simAccumulator = 0;
   lastStatePingMs = 0;
@@ -545,7 +551,7 @@ function processBattleEvents(events: SimEvent[]): void {
         sound.playArmorBreak();
       }
     } else if (ev.type === 'ENEMY_HIT') {
-      sound.playHit(ev.isCrit, ev.armorBroken, Boolean(ev.heavy), Boolean(ev.resisted));
+      sound.playHit(ev.isCrit, ev.armorBroken, Boolean(ev.heavy), Boolean(ev.resisted), ev.impactKind);
       const isCritHit = ev.isCrit || ev.armorBroken;
       if (isCritHit) {
         juice.triggerHitStop(0.052, 0.06);
@@ -561,12 +567,43 @@ function processBattleEvents(events: SimEvent[]): void {
             ? 'heavy'
             : 'normal';
       const dmgText =
-        dmgKind === 'crit' ? `${ev.damage}!` : dmgKind === 'resisted' ? `(${ev.damage})` : `${ev.damage}`;
+        dmgKind === 'crit'
+          ? `${t(loc, 'combat.critTag')} ${ev.damage}!`
+          : dmgKind === 'resisted'
+            ? `(${ev.damage})`
+            : `${ev.damage}`;
       battleView.addFloatingDamage(ev.x, ev.z, dmgText, dmgKind, ev.enemyId, ev.damage);
+      if (ev.armorBroken) {
+        battleView.addFloatingDamage(ev.x, ev.z, t(loc, 'combat.armorBreak'), 'status', ev.enemyId);
+      } else if (ev.froze) {
+        battleView.addFloatingDamage(ev.x, ev.z, t(loc, 'combat.frozen'), 'status', ev.enemyId);
+      } else if (ev.stunned) {
+        battleView.addFloatingDamage(ev.x, ev.z, t(loc, 'combat.stunned'), 'status', ev.enemyId);
+      }
+    } else if (ev.type === 'GUARD_ATTACK') {
+      sound.playMeleeClash();
     } else if (ev.type === 'ENEMY_KILLED') {
+      const killNowMs = performance.now();
+      if (killNowMs - lastKillAtMs <= 550) {
+        killStreakCount += 1;
+      } else {
+        killStreakCount = 1;
+        lastMultiKillAnnounced = 0;
+      }
+      lastKillAtMs = killNowMs;
       pendingSeasonKills += 1;
-      sound.playScrapBreak();
-      sound.playCoin();
+      sound.playScrapBreak(killStreakCount);
+      sound.playCoin(killStreakCount);
+      if (killStreakCount >= 3 && killStreakCount > lastMultiKillAnnounced) {
+        lastMultiKillAnnounced = killStreakCount;
+        sound.playMultiKillChime(killStreakCount);
+        battleView.addFloatingDamage(
+          ev.x,
+          ev.z,
+          tParams(loc, 'combat.multiKill', { count: killStreakCount }),
+          'multikill',
+        );
+      }
       if (ev.isBoss) {
         juice.triggerHitStop(0.095, 0.05);
         haptics.impact('heavy');

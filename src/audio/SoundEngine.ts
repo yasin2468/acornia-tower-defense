@@ -1,6 +1,16 @@
 import type { HeroId } from '../data/enemies.ts';
 import type { SynergyComboId } from '../data/synergies.ts';
 
+/** Pentatonic pitch escalation table for rapid multi-kill ladders. */
+const KILL_STREAK_PITCH = [1.0, 1.08, 1.16, 1.25, 1.35, 1.48] as const;
+
+export function computeKillStreakPitch(streak: number): number {
+  const idx = Math.max(0, Math.min(KILL_STREAK_PITCH.length - 1, Math.floor(streak) - 1));
+  return KILL_STREAK_PITCH[idx] ?? 1.0;
+}
+
+export type AudioImpactKind = 'physical' | 'pierce' | 'frost' | 'acid' | 'electric' | 'melee';
+
 /** Random pitch multiplier in [1 - spread, 1 + spread] (default ±10 %). */
 export function randomizePitch(freq: number, spread = 0.1, rnd: () => number = Math.random): number {
   const s = Math.max(0, Math.min(0.5, spread));
@@ -533,7 +543,13 @@ export class SoundEngine {
     this.playHeroSlash(true);
   }
 
-  playHit(isCrit: boolean, isArmorBreak = false, heavy = false, resisted = false): void {
+  playHit(
+    isCrit: boolean,
+    isArmorBreak = false,
+    heavy = false,
+    resisted = false,
+    impactKind: AudioImpactKind = 'physical',
+  ): void {
     const important = isCrit || isArmorBreak || heavy;
     if (!this.throttle(important ? 'hit_crit' : resisted ? 'hit_resist' : 'hit', important ? 0.03 : 0.045)) return;
     if (resisted && !important) {
@@ -544,17 +560,37 @@ export class SoundEngine {
       return;
     }
     const pr: Priority = important ? 2 : 1;
-    // Layered impact: crisp transient click + low body thud + metallic crunch (+ crit chime)
+    // Layered impact: crisp transient click + low body thud + metallic crunch (+ crit chime + material color)
     this.transient(important ? 0.1 : 0.065, important ? 0.2 : 0.11, important ? 88 : 135, pr);
     this.tone(important ? 145 : 165, important ? 48 : 68, important ? 0.12 : 0.075, 'sine', important ? 0.2 : 0.11, 0, pr);
     this.noiseBurst(isCrit ? 2200 : 1400, 'bandpass', important ? 0.07 : 0.05, important ? 0.15 : 0.085, 1.5, 0, pr);
     this.tone(isCrit ? 520 : 290, isCrit ? 190 : 105, 0.075, important ? 'square' : 'triangle', important ? 0.1 : 0.065, 0, pr);
+
+    if (impactKind === 'frost') {
+      this.tone(2400, 3400, 0.065, 'sine', 0.045, 0, pr, 0.04);
+    } else if (impactKind === 'acid') {
+      this.noiseBurst(3100, 'bandpass', 0.08, 0.055, 2.4, 0, pr);
+    } else if (impactKind === 'electric') {
+      this.noiseBurst(3600, 'bandpass', 0.05, 0.05, 3.5, 0, pr);
+    } else if (impactKind === 'pierce') {
+      this.tone(960, 310, 0.06, 'sawtooth', 0.065, 0, pr);
+    } else if (impactKind === 'melee') {
+      this.tone(680, 260, 0.065, 'triangle', 0.075, 0, pr);
+    }
+
     if (isCrit || isArmorBreak) {
       this.tone(1120, 1680, 0.11, 'sine', 0.11, 0.01, pr, 0.04);
       this.duckMusic(0.35, 0.22);
     } else if (heavy) {
       this.duckMusic(0.55, 0.16);
     }
+  }
+
+  playMeleeClash(): void {
+    if (!this.throttle('melee_clash', 0.055)) return;
+    this.transient(0.06, 0.09, 140, 1);
+    this.tone(740, 290, 0.07, 'triangle', 0.08, 0, 1);
+    this.noiseBurst(2800, 'bandpass', 0.045, 0.06, 2.2, 0, 1);
   }
 
   playExplosion(heavy = false): void {
@@ -586,17 +622,27 @@ export class SoundEngine {
     this.noiseBurst(3800, 'bandpass', 0.11, 0.1, 2.2, 0.01, 2);
   }
 
-  playScrapBreak(): void {
+  playScrapBreak(streak = 1): void {
     if (!this.throttle('scrap', 0.04)) return;
+    const p = computeKillStreakPitch(streak);
     this.transient(0.05, 0.06, 130, 1);
-    this.noiseBurst(1550, 'bandpass', 0.09, 0.06, 2.0);
-    this.tone(320, 95, 0.11, 'square', 0.045);
+    this.noiseBurst(1550 * p, 'bandpass', 0.09, 0.06, 2.0);
+    this.tone(320 * p, 95 * p, 0.11, 'square', 0.045);
   }
 
-  playCoin(): void {
+  playCoin(streak = 1): void {
     if (!this.throttle('coin', 0.05)) return;
-    this.tone(988, 988, 0.055, 'sine', 0.045, 0, 1, 0.03);
-    this.tone(1319, 1319, 0.085, 'sine', 0.045, 0.045, 1, 0.03);
+    const p = computeKillStreakPitch(streak);
+    this.tone(988 * p, 988 * p, 0.055, 'sine', 0.045, 0, 1, 0.03);
+    this.tone(1319 * p, 1319 * p, 0.085, 'sine', 0.045, 0.045, 1, 0.03);
+  }
+
+  playMultiKillChime(count: number): void {
+    if (count < 3 || !this.throttle('multikill', 0.14)) return;
+    const p = Math.min(1.25, 1 + (count - 3) * 0.06);
+    this.tone(587 * p, 587 * p, 0.07, 'triangle', 0.07, 0, 2, 0.03);
+    this.tone(880 * p, 880 * p, 0.085, 'triangle', 0.075, 0.055, 2, 0.03);
+    this.tone(1175 * p, 1175 * p, 0.12, 'sine', 0.08, 0.11, 2, 0.03);
   }
 
   playBossSiren(): void {

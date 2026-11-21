@@ -968,9 +968,11 @@ export class SceneManager {
   >();
   private enemyFeel = new Map<number, EnemyFeel>();
   private towerPunch = new Map<string, TowerPunch>();
+  private towerAimYaw = new Map<string, number>();
   private pathPreviewGroup = new THREE.Group();
   private pathPreviewArrows: Array<{ mesh: THREE.Mesh; curve: THREE.CatmullRomCurve3; offset: number }> = [];
   private guardMeshes = new Map<number, THREE.Group>();
+  private guardSwings = new Map<number, { elapsed: number; ux: number; uz: number }>();
   private guardBodyMat = new THREE.MeshStandardMaterial({ color: '#3b8c47', roughness: 0.6 });
   private guardShieldMat = new THREE.MeshStandardMaterial({ color: '#ffd35c', roughness: 0.4, metalness: 0.35 });
   private guardSkinMat = new THREE.MeshStandardMaterial({ color: '#c48b55', roughness: 0.7 });
@@ -2217,6 +2219,8 @@ export class SceneManager {
     this.flyingShadowDiscs.count = 0;
     this.enemyFeel.clear();
     this.towerPunch.clear();
+    this.towerAimYaw.clear();
+    this.guardSwings.clear();
     for (const s of this.sparks) {
       s.active = false;
       s.mesh.visible = false;
@@ -2270,12 +2274,29 @@ export class SceneManager {
       let gMesh = this.guardMeshes.get(g.uid);
       if (!gMesh) {
         gMesh = this.createOakGuardMesh();
+        gMesh.rotation.order = 'YXZ';
         this.dynamicGroup.add(gMesh);
         this.guardMeshes.set(g.uid, gMesh);
       }
+      let lungeX = 0;
+      let lungeZ = 0;
+      let swingPitch = 0;
+      const swing = this.guardSwings.get(g.uid);
+      if (swing) {
+        swing.elapsed += realDt;
+        if (swing.elapsed >= 0.2) {
+          this.guardSwings.delete(g.uid);
+        } else {
+          const k = Math.sin((swing.elapsed / 0.2) * Math.PI);
+          const s = this.reducedMotion ? 0.4 : 1;
+          lungeX = swing.ux * 0.28 * k * s;
+          lungeZ = swing.uz * 0.28 * k * s;
+          swingPitch = 0.34 * k * s;
+        }
+      }
       const bob = Math.sin(this.animTime * 6 + g.uid) * 0.04;
-      gMesh.position.set(g.x, bob, g.z);
-      gMesh.rotation.y = g.facingAngle;
+      gMesh.position.set(g.x + lungeX, bob, g.z + lungeZ);
+      gMesh.rotation.set(swingPitch, g.facingAngle, 0);
       const lifeScale = g.life < 1.0 ? Math.max(0.2, g.life) : 1.0;
       gMesh.scale.setScalar(lifeScale);
     }
@@ -2283,6 +2304,7 @@ export class SceneManager {
       if (!activeGuardIds.has(gid)) {
         this.dynamicGroup.remove(gMesh);
         this.guardMeshes.delete(gid);
+        this.guardSwings.delete(gid);
       }
     }
 
@@ -2325,11 +2347,21 @@ export class SceneManager {
       const rigRef = this.towerRigs.get(slot.id)!.rig;
       const tAuraNode = rigRef.root.getObjectByName('TowerTier3Aura');
       if (tAuraNode) tAuraNode.rotation.y = this.animTime * 1.35;
-      rigRef.turretHead.rotation.y = slot.tower.angle;
+
+      const liveTarget = slot.tower.smokedTimer <= 0 ? sim.selectTarget(slot.tower) : null;
+      const desiredYaw = liveTarget
+        ? Math.atan2(liveTarget.x - slot.x, liveTarget.z - slot.z)
+        : slot.tower.angle;
+      const prevYaw = this.towerAimYaw.get(slot.id) ?? desiredYaw;
+      const yawDiff = Math.atan2(Math.sin(desiredYaw - prevYaw), Math.cos(desiredYaw - prevYaw));
+      const nextYaw = prevYaw + yawDiff * Math.min(1, realDt * 15);
+      this.towerAimYaw.set(slot.id, nextYaw);
+      rigRef.turretHead.rotation.y = nextYaw;
+
       updateTowerAnimation(rigRef, this.animTime, realDt);
       rigRef.root.scale.multiplyScalar(MOBILE_TOWER_SCALE);
 
-      // Defender recoil kick: keep stone tower base fixed on slot pad and tilt/dip upper turret only
+      // Defender recoil kick & pre-fire anticipation windup on heavy towers
       rigRef.root.position.set(slot.x, 0, slot.z);
       const punch = this.towerPunch.get(slot.id);
       if (punch) {
@@ -2346,7 +2378,20 @@ export class SceneManager {
           rigRef.turretHead.position.y = rigRef.baseTurretY - 0.03 * j.push * s;
         }
       } else {
-        rigRef.turretHead.rotation.x = 0;
+        const isHeavyWindup =
+          slot.tower.towerId === 'tortoise' ||
+          slot.tower.towerId === 'beaver' ||
+          slot.tower.towerId === 'hedgehog' ||
+          slot.tower.towerId === 'badger' ||
+          slot.tower.branchId === 'squirrel_sniper';
+        if (isHeavyWindup && liveTarget && slot.tower.cooldown > 0 && slot.tower.cooldown <= 0.16) {
+          const wind = 1 - slot.tower.cooldown / 0.16;
+          const s = this.reducedMotion ? 0.4 : 1;
+          rigRef.turretHead.rotation.x = 0.09 * wind * s;
+          rigRef.turretHead.scale.set(1 - 0.05 * wind * s, 1 + 0.06 * wind * s, 1 - 0.05 * wind * s);
+        } else {
+          rigRef.turretHead.rotation.x = 0;
+        }
         rigRef.turretHead.position.y = rigRef.baseTurretY;
       }
     }
@@ -2938,6 +2983,11 @@ export class SceneManager {
         const arcY = 1.2 + Math.sin(u * Math.PI) * 2.55;
         entry.mesh.position.set(p.x, arcY, p.z);
         entry.mesh.rotation.x += realDt * 12;
+        if (entry.mortar.ring) {
+          const ringScale = 1.12 - u * 0.22;
+          entry.mortar.ring.scale.setScalar(ringScale);
+          (entry.mortar.ring.material as THREE.MeshBasicMaterial).opacity = 0.22 + u * 0.5;
+        }
         entry.mortar.smokeAccum += realDt;
         if (entry.mortar.smokeAccum >= 0.045) {
           entry.mortar.smokeAccum = 0;
@@ -2952,13 +3002,23 @@ export class SceneManager {
           this.spawnParticles(p.x, arcY, p.z, wakeCol, 1, 0.35);
         }
       } else {
-        const heightY = 1.36 + (0.78 - 1.36) * u;
+        const arcPeak =
+          p.towerId === 'squirrel'
+            ? 0.58
+            : p.towerId === 'falcon'
+              ? 0.36
+              : p.towerId === 'hedgehog'
+                ? 0.24
+                : 0.18;
+        const heightY = 1.36 + (0.78 - 1.36) * u + Math.sin(u * Math.PI) * arcPeak;
         entry.mesh.position.set(p.x, heightY, p.z);
         if (p.towerId === 'owl' || p.towerId === 'lynx') {
           entry.mesh.rotation.y += realDt * (p.towerId === 'lynx' ? 18 : 14);
           entry.mesh.rotation.x += realDt * 10;
         } else {
-          entry.mesh.lookAt(p.targetX, 0.72, p.targetZ);
+          const u2 = Math.min(1, u + 0.08);
+          const nextY = 1.36 + (0.78 - 1.36) * u2 + Math.sin(u2 * Math.PI) * arcPeak;
+          entry.mesh.lookAt(p.x + entry.dirX * 0.45, nextY, p.z + entry.dirZ * 0.45);
         }
       }
       if (entry.trail) {
@@ -3471,12 +3531,28 @@ export class SceneManager {
           if (ev.isCrit || ev.armorBroken) {
             this.spawnShockRing(ev.x, ev.z, '#ffffff', 0.95, 0.15, 0.72);
             this.spawnShockRing(ev.x, ev.z, sparkHex, 1.55);
+            if (ev.isCrit) {
+              this.spawnSlashArc(ev.x, ev.z, 0.55, '#fff08a', 1.15);
+              this.spawnSlashArc(ev.x, ev.z, -0.95, '#ffaa2b', 1.05);
+              if (!this.reducedMotion) {
+                this.spawnFlashLight(ev.x, 1.1, ev.z, '#ffe066', 2.4, 3.8, 0.14);
+              }
+            }
             this.cameraCtrl.addTrauma(0.24);
             this.cameraCtrl.addZoomPunch(1.3);
           } else {
             this.cameraCtrl.addTrauma(0.085);
           }
         }
+      } else if (ev.type === 'GUARD_ATTACK') {
+        const gx = ev.targetX - ev.x;
+        const gz = ev.targetZ - ev.z;
+        const glen = Math.hypot(gx, gz) || 1;
+        const ux = gx / glen;
+        const uz = gz / glen;
+        this.guardSwings.set(ev.guardUid, { elapsed: 0, ux, uz });
+        this.spawnSlashArc(ev.targetX, ev.targetZ, Math.atan2(ux, uz), '#a8ff9e', 0.85);
+        this.spawnSparks(ev.targetX, 0.72, ev.targetZ, ux, 0.25, uz, '#ffe89a', 6, 7.2, 0.55);
       } else if (ev.type === 'ENEMY_KILLED') {
         const rig = this.enemyRigs.get(ev.enemyId);
         if (rig && (ev.dirX || ev.dirZ)) {

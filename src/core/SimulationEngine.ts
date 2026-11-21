@@ -68,6 +68,8 @@ export function computeSellRefund(totalSpent: number, refundRate = SELL_REFUND_R
   return Math.floor(totalSpent * refundRate);
 }
 
+export type ImpactKind = 'physical' | 'pierce' | 'frost' | 'acid' | 'electric' | 'melee';
+
 export type SimEvent =
   | { type: 'TOWER_BUILT'; slotId: string; towerId: TowerId; x: number; z: number }
   | { type: 'TOWER_UPGRADED'; slotId: string; level: 2 | 3; branchId?: EvolutionBranchId }
@@ -115,6 +117,9 @@ export type SimEvent =
       isCrit: boolean;
       isBoss: boolean;
       armorBroken: boolean;
+      froze?: boolean;
+      stunned?: boolean;
+      impactKind?: ImpactKind;
       dirX?: number;
       dirZ?: number;
       heavy?: boolean;
@@ -135,6 +140,7 @@ export type SimEvent =
   | { type: 'PINECONE_RAIN'; x: number; z: number; hits: number; radius: number }
   | { type: 'ACORN_MAGNET'; x: number; z: number; duration: number; hits?: number }
   | { type: 'REINFORCEMENTS_SUMMONED'; x: number; z: number; count: number }
+  | { type: 'GUARD_ATTACK'; guardUid: number; x: number; z: number; targetX: number; targetZ: number }
   | { type: 'BARREL_EXPLODED'; barrelId: string; x: number; z: number; hits: number }
   | { type: 'HERO_ATTACK'; x: number; z: number; targetX: number; targetZ: number; ranged?: boolean; heroId?: HeroId; isCrit?: boolean }
   | { type: 'HERO_CLAW_SHOCK'; x: number; z: number; hits: number; heroId?: HeroId; radius?: number; buffedSlotIds?: string[] }
@@ -1578,6 +1584,7 @@ export class SimulationEngine {
               dirX: rangedTarget.x - h.x,
               dirZ: rangedTarget.z - h.z,
               heavy: e.uid === rangedTarget.uid,
+              impactKind: 'acid',
             });
           }
         }
@@ -1620,6 +1627,7 @@ export class SimulationEngine {
                 dirX: e.x - h.x,
                 dirZ: e.z - h.z,
                 heavy: true,
+                impactKind: this.heroId === 'ay_kurdu' ? 'frost' : 'melee',
               });
             }
           }
@@ -1651,6 +1659,7 @@ export class SimulationEngine {
             dirX: target.x - h.x,
             dirZ: target.z - h.z,
             heavy: true,
+            impactKind: 'melee',
           });
           if (h.activeBuff === 'berserk') {
             const cleaveDmg = Math.max(1, Math.round(dmg * 0.45));
@@ -1661,6 +1670,7 @@ export class SimulationEngine {
                   dirX: other.x - h.x,
                   dirZ: other.z - h.z,
                   heavy: false,
+                  impactKind: 'melee',
                 });
               }
             }
@@ -1745,6 +1755,15 @@ export class SimulationEngine {
             dirX: target.x - g.x,
             dirZ: target.z - g.z,
             heavy: false,
+            impactKind: 'melee',
+          });
+          this.events.push({
+            type: 'GUARD_ATTACK',
+            guardUid: g.uid,
+            x: g.x,
+            z: g.z,
+            targetX: target.x,
+            targetZ: target.z,
           });
         }
         const incoming = blockers.reduce(
@@ -1912,6 +1931,35 @@ export class SimulationEngine {
     return base;
   }
 
+  predictEnemyPosition(enemy: EnemyInstance, lookaheadSec: number): { x: number; z: number } {
+    if (lookaheadSec <= 0 || enemy.stunTimer > 0 || enemy.engagedByHero || enemy.hp <= 0) {
+      return { x: enemy.x, z: enemy.z };
+    }
+    const activePath = enemy.lane === 1 && this.level.secondaryPath ? this.level.secondaryPath : this.level.path;
+    const effSpeed = enemy.speed * (enemy.slowTimer > 0 ? Math.max(0.25, 1 - enemy.slowPct) : 1);
+    let rem = effSpeed * lookaheadSec;
+    let cx = enemy.x;
+    let cz = enemy.z;
+    let wi = enemy.wpIndex;
+    while (rem > 0 && wi < activePath.length) {
+      const wp = activePath[wi];
+      const dx = wp.x - cx;
+      const dz = wp.z - cz;
+      const toGo = Math.hypot(dx, dz);
+      if (toGo > rem) {
+        cx += (dx / toGo) * rem;
+        cz += (dz / toGo) * rem;
+        rem = 0;
+      } else {
+        cx = wp.x;
+        cz = wp.z;
+        rem -= toGo;
+        wi += 1;
+      }
+    }
+    return { x: cx, z: cz };
+  }
+
   selectTarget(tower: TowerInstance): EnemyInstance | null {
     const spec = TOWERS[tower.towerId];
     const stats = this.getTowerStats(tower);
@@ -2061,9 +2109,17 @@ export class SimulationEngine {
           effectiveFireRate *= 1.12;
         }
       }
+      const projSpeed = stats.aoeRadius ? 11.5 : 17.5;
+      const leadPt = stats.aoeRadius
+        ? this.predictEnemyPosition(
+            target,
+            Math.min(0.65, (Math.hypot(target.x - tower.x, target.z - tower.z) / projSpeed) * 0.78),
+          )
+        : { x: target.x, z: target.z };
+
       tower.cooldown = 1 / effectiveFireRate;
       tower.shotsFired += 1;
-      tower.angle = Math.atan2(target.x - tower.x, target.z - tower.z);
+      tower.angle = Math.atan2(leadPt.x - tower.x, leadPt.z - tower.z);
 
       const cardMult = cardLevelMultiplier(this.cardLevels[tower.towerId]);
       const globalBonus = 1 + this.towerDamageBonusPct + this.talentMods.towerDamagePct;
@@ -2172,9 +2228,9 @@ export class SimulationEngine {
           x: tower.x,
           z: tower.z,
           targetUid: target.uid,
-          targetX: target.x,
-          targetZ: target.z,
-          speed: stats.aoeRadius ? 11.5 : 17.5,
+          targetX: leadPt.x,
+          targetZ: leadPt.z,
+          speed: projSpeed,
           damage: dmg,
           stats,
           isCrit,
@@ -2187,8 +2243,8 @@ export class SimulationEngine {
           branchId: tower.branchId,
           fromX: tower.x,
           fromZ: tower.z,
-          toX: target.x,
-          toZ: target.z,
+          toX: leadPt.x,
+          toZ: leadPt.z,
           targetIds: [target.uid],
           isAoe: Boolean(stats.aoeRadius),
           isCrit,
@@ -2201,10 +2257,28 @@ export class SimulationEngine {
   private updateProjectiles(dt: number): void {
     const active: ProjectileInstance[] = [];
     for (const p of this.projectiles) {
-      const target = this.enemies.find((e) => e.uid === p.targetUid && e.hp > 0);
+      let target = this.enemies.find((e) => e.uid === p.targetUid && e.hp > 0);
       if (target && !p.stats.aoeRadius) {
         p.targetX = target.x;
         p.targetZ = target.z;
+      } else if (!target && !p.stats.aoeRadius) {
+        const spec = TOWERS[p.towerId];
+        const allowGroundedAir = Boolean(this.mutatorSpec?.groundedAirTargets);
+        const fallback = this.enemies
+          .filter(
+            (e) =>
+              e.hp > 0 &&
+              (!e.isFlying || spec.canHitAir || allowGroundedAir) &&
+              (e.isFlying || spec.canHitGround) &&
+              Math.hypot(e.x - p.targetX, e.z - p.targetZ) <= 2.1,
+          )
+          .sort((a, b) => b.progress - a.progress || a.uid - b.uid)[0];
+        if (fallback) {
+          target = fallback;
+          p.targetUid = fallback.uid;
+          p.targetX = fallback.x;
+          p.targetZ = fallback.z;
+        }
       }
 
       const dx = p.targetX - p.x;
@@ -2471,7 +2545,17 @@ export class SimulationEngine {
     stats: TowerTierStats,
     isCrit: boolean,
     isFourthShot: boolean,
-    hitMeta?: { dirX?: number; dirZ?: number; heavy?: boolean; towerId?: TowerId; branchId?: EvolutionBranchId; slotId?: string },
+    hitMeta?: {
+      dirX?: number;
+      dirZ?: number;
+      heavy?: boolean;
+      towerId?: TowerId;
+      branchId?: EvolutionBranchId;
+      slotId?: string;
+      froze?: boolean;
+      stunned?: boolean;
+      impactKind?: ImpactKind;
+    },
   ): { armorBroken: boolean; stunned: boolean; froze: boolean } {
     let dmg = rawDamage;
     if (enemy.isBoss && stats.bossBonusPct) {
@@ -2533,7 +2617,23 @@ export class SimulationEngine {
       enemy.resinPrimeTimer = Math.max(enemy.resinPrimeTimer, 3.2 * primeDurMult);
     }
 
-    this.damageEnemy(enemy, dmg, pierce, isCrit, false, armorBroken, hitMeta);
+    const impactKind: ImpactKind =
+      froze || tId === 'lynx' || bId === 'owl_glacier'
+        ? 'frost'
+        : tId === 'owl' || bId === 'falcon_tempest'
+          ? 'electric'
+          : tId === 'badger'
+            ? 'acid'
+            : tId === 'hedgehog' || pierce >= 0.45
+              ? 'pierce'
+              : 'physical';
+
+    this.damageEnemy(enemy, dmg, pierce, isCrit, false, armorBroken, {
+      ...hitMeta,
+      froze,
+      stunned,
+      impactKind,
+    });
     return { armorBroken, stunned, froze };
   }
 
@@ -2544,7 +2644,16 @@ export class SimulationEngine {
     isCrit: boolean,
     suppressEvents = false,
     armorBroken = false,
-    hitMeta?: { dirX?: number; dirZ?: number; heavy?: boolean; towerId?: TowerId; slotId?: string },
+    hitMeta?: {
+      dirX?: number;
+      dirZ?: number;
+      heavy?: boolean;
+      towerId?: TowerId;
+      slotId?: string;
+      froze?: boolean;
+      stunned?: boolean;
+      impactKind?: ImpactKind;
+    },
   ): void {
     if (enemy.hp <= 0) return;
 
@@ -2576,6 +2685,9 @@ export class SimulationEngine {
         isCrit,
         isBoss: enemy.isBoss,
         armorBroken,
+        ...(hitMeta?.froze ? { froze: true } : {}),
+        ...(hitMeta?.stunned ? { stunned: true } : {}),
+        ...(hitMeta?.impactKind ? { impactKind: hitMeta.impactKind } : {}),
         dirX: hitMeta?.dirX,
         dirZ: hitMeta?.dirZ,
         heavy: hitMeta?.heavy,

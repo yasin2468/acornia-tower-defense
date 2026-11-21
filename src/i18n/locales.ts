@@ -809,6 +809,11 @@ const DICT: Record<Locale, Record<string, string>> = {
     'endless.survived': '{wave} dalga dayanıldı · +{oak} Palamut · +{gems} Zümrüt',
     'settings.autoWave': 'Otomatik Dalga Başlat',
     'settings.damageNumbers': 'Hasar Sayılarını Göster',
+    'combat.armorBreak': 'ZIRH KIRILDI!',
+    'combat.frozen': 'DONDU!',
+    'combat.stunned': 'SERSEMLEDİ!',
+    'combat.multiKill': '×{count} İMHA!',
+    'combat.critTag': 'KRİTİK!',
   },
   en: {
     'app.title': 'Acorn Bastion',
@@ -1618,6 +1623,11 @@ const DICT: Record<Locale, Record<string, string>> = {
     'endless.survived': 'Survived {wave} waves · +{oak} Acorns · +{gems} Gems',
     'settings.autoWave': 'Auto-Start Waves',
     'settings.damageNumbers': 'Show Damage Numbers',
+    'combat.armorBreak': 'ARMOR BROKEN!',
+    'combat.frozen': 'FROZEN!',
+    'combat.stunned': 'STUNNED!',
+    'combat.multiKill': '×{count} KO!',
+    'combat.critTag': 'CRIT!',
   },
 };
 
