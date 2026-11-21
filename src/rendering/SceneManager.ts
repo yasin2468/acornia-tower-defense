@@ -2658,8 +2658,9 @@ export class SceneManager {
       if (nextWp) {
         rig.body.rotation.y = Math.atan2(nextWp.x - e.x, nextWp.z - e.z);
       }
-      const walkDt = e.engagedByHero || e.stunTimer > 0 ? 0 : simDt;
-      updateEnemyAnimation(rig, this.animTime, walkDt, realDt, e.uid, e.engagedByHero);
+      const halted = e.blockedByGuard || e.stunTimer > 0;
+      const walkDt = halted ? 0 : simDt;
+      updateEnemyAnimation(rig, this.animTime, walkDt, realDt, e.uid, e.blockedByGuard);
 
       // Directional knockback + backward pitch snap/wobble applied on the root (render-only)
       feel.joltElapsed += realDt;
@@ -3506,6 +3507,12 @@ export class SceneManager {
             isBoss: ev.isBoss,
             reducedMotion: this.reducedMotion,
           });
+          if (ev.impactKind === 'melee' && !ev.isCrit && !ev.armorBroken) {
+            kb.dx *= 0.55;
+            kb.dz *= 0.55;
+            kb.distance *= 0.55;
+            kb.tiltRad *= 0.7;
+          }
           const stillStrong = feel.joltElapsed < HIT_JOLT_DURATION * 0.35 && Math.hypot(feel.kx, feel.kz) > kb.distance;
           if (!stillStrong && kb.distance > 0) {
             feel.kx = kb.dx;

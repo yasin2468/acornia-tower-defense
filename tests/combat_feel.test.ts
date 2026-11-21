@@ -159,4 +159,90 @@ describe('Combat & Hit-Mechanics Overhaul (Öngörü, Hedef Değişimi, Malzeme 
     };
     assert.equal(replay(), replay(), 'Mermi öngörüsü ve hedef değişimi determinizmi bozmamalıdır');
   });
+
+  it('Oynanan kahraman vuruşları gelen düşmanları durdurmaz; Meşe Muhafızları geçici bloklar', () => {
+    // 1. Boz Pençe yakın dövüşü ve saldırısı hareketli düşmanı durdurmaz
+    const sim = new SimulationEngine(LEVELS[0], { seed: 501, heroId: 'boz_pence' });
+    const pt = LEVELS[0].path[2];
+    sim.hero.x = pt.x;
+    sim.hero.z = pt.z;
+    sim.hero.targetX = pt.x;
+    sim.hero.targetZ = pt.z;
+
+    const runner = sim.spawnEnemy('scout_bot', 500, 2.3, 5, {
+      x: pt.x + 0.5,
+      z: pt.z,
+      wpIndex: 3,
+      progress: 5,
+    });
+    const startProg = runner.progress;
+    let sawHeroMeleeHit = false;
+    let sawHeavyBasicHit = false;
+
+    for (let i = 0; i < 45; i++) {
+      sim.step(FIXED_DT);
+      for (const ev of sim.drainEvents()) {
+        if (ev.type === 'ENEMY_HIT' && ev.enemyId === runner.uid && ev.impactKind === 'melee') {
+          sawHeroMeleeHit = true;
+          if (ev.heavy) sawHeavyBasicHit = true;
+        }
+      }
+    }
+    assert.equal(runner.engagedByHero, true, 'Kahraman yakınındaki robotu çatışma hedefine almalı');
+    assert.equal(sawHeroMeleeHit, true, 'Kahraman hareket halindeki robota vurabilmeli');
+    assert.equal(sawHeavyBasicHit, false, 'Rutin kahraman vuruşları heavy/hit-stop tetiklememeli');
+    assert.equal(runner.stunTimer, 0, 'Rutin kahraman vuruşu düşmanı sersemletip durdurmamalı');
+    assert.ok(runner.progress > startProg + 1.1, `Düşman ilerlemeyi sürdürmeli (${runner.progress.toFixed(2)})`);
+
+    // 2. engagedByHero düşman için topçu/havan öngörüsü hâlâ ileri nokta hesaplar; blockedByGuard sabit kalır
+    const predictedEngaged = sim.predictEnemyPosition(runner, 0.5);
+    assert.ok(Math.hypot(predictedEngaged.x - runner.x, predictedEngaged.z - runner.z) > 0.5);
+
+    // 3. Kaya Diş otomatik sarsıntısı (clawShock) da sert stun yerine yalnızca yavaşlatır
+    const simBoar = new SimulationEngine(LEVELS[0], { seed: 502, heroId: 'kaya_dis' });
+    const pt2 = LEVELS[0].path[2];
+    simBoar.hero.x = pt2.x;
+    simBoar.hero.z = pt2.z;
+    simBoar.hero.targetX = pt2.x;
+    simBoar.hero.targetZ = pt2.z;
+    simBoar.hero.clawShockCooldown = 0;
+    const boarTarget = simBoar.spawnEnemy('shield_loader', 600, 1.8, 8, {
+      x: pt2.x + 0.4,
+      z: pt2.z,
+      wpIndex: 3,
+      progress: 5,
+    });
+    simBoar.step(FIXED_DT);
+    assert.ok(
+      simBoar.drainEvents().some((e) => e.type === 'HERO_CLAW_SHOCK'),
+      'Kaya Diş otomatik Pençe Şoku tetiklenmeli',
+    );
+    assert.equal(boarTarget.stunTimer, 0, 'Kaya Diş otomatik Pençe Şoku düşmanı dondurmamalı');
+    assert.ok(boarTarget.slowPct >= 0.3, 'Kaya Diş otomatik şoku yalnızca yavaşlatmalı');
+    const progAfterShock = boarTarget.progress;
+    for (let i = 0; i < 20; i++) simBoar.step(FIXED_DT);
+    assert.ok(boarTarget.progress > progAfterShock + 0.3, 'Yavaşlayan düşman yürümeye devam etmeli');
+
+    // 4. Meşe Muhafızları hâlâ yolu geçici bloklar (blockedByGuard = true)
+    const simGuards = new SimulationEngine(LEVELS[0], { seed: 503 });
+    simGuards.hero.dead = true;
+    simGuards.hero.respawnTimer = 999;
+    const gPt = LEVELS[0].path[2];
+    simGuards.dispatch({ type: 'CAST_REINFORCEMENTS', x: gPt.x, z: gPt.z }, 'p1', 0);
+    simGuards.step(FIXED_DT);
+    const guardTarget = simGuards.spawnEnemy('scout_bot', 300, 2.3, 5, {
+      x: simGuards.guards[0].x,
+      z: simGuards.guards[0].z,
+      wpIndex: 3,
+      progress: 6,
+    });
+    const gpStart = guardTarget.progress;
+    for (let i = 0; i < 15; i++) simGuards.step(FIXED_DT);
+    assert.equal(guardTarget.blockedByGuard, true, 'Meşe Muhafızları temas ettiği robotu durdurabilmeli');
+    assert.ok(guardTarget.progress - gpStart < 0.05);
+    assert.deepEqual(simGuards.predictEnemyPosition(guardTarget, 0.5), {
+      x: guardTarget.x,
+      z: guardTarget.z,
+    });
+  });
 });

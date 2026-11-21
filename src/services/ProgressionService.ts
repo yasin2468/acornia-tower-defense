@@ -255,8 +255,8 @@ export function getJournalCatalog(locale: Locale = 'tr'): JournalEntry[] {
     descKey: h.descKey,
     tacticKey: `codex.tactic.hero.${h.id}`,
     statSummary: isTr
-      ? `Can ${h.maxHp} · Hasar ${h.damage} · Engel ${h.blockCap}`
-      : `HP ${h.maxHp} · DMG ${h.damage} · BLK ${h.blockCap}`,
+      ? `Can ${h.maxHp} · Hasar ${h.damage} · Hedef ${h.blockCap}`
+      : `HP ${h.maxHp} · DMG ${h.damage} · TGT ${h.blockCap}`,
   }));
   const enemies: JournalEntry[] = ENEMY_LIST.map((e) => ({
     id: e.id,

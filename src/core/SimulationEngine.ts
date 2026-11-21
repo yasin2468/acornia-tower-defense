@@ -240,6 +240,7 @@ export interface EnemyInstance {
   armorHalved: boolean;
   phase2Triggered: boolean;
   engagedByHero: boolean;
+  blockedByGuard: boolean;
   lane?: 0 | 1;
   frostPrimeTimer: number;
   acidPrimeTimer: number;
@@ -1344,6 +1345,7 @@ export class SimulationEngine {
       armorHalved: false,
       phase2Triggered: false,
       engagedByHero: false,
+      blockedByGuard: false,
       lane,
       frostPrimeTimer: 0,
       acidPrimeTimer: 0,
@@ -1430,9 +1432,11 @@ export class SimulationEngine {
         destZ = kiteSafe.z;
       }
     } else if (h.repositionTimer <= 0 && nearbyGround.length > 0 && !heroSpec.isRanged) {
-      const lead = nearbyGround[0];
-      destX = Math.hypot(lead.x - h.x, lead.z - h.z) > 0.78 ? lead.x : h.x;
-      destZ = Math.hypot(lead.x - h.x, lead.z - h.z) > 0.78 ? lead.z : h.z;
+      const lead = nearbyGround.find((e) => Math.hypot(e.x - h.targetX, e.z - h.targetZ) <= HERO_LEASH_RANGE);
+      if (lead) {
+        destX = Math.hypot(lead.x - h.x, lead.z - h.z) > 0.55 ? lead.x : h.x;
+        destZ = Math.hypot(lead.x - h.x, lead.z - h.z) > 0.55 ? lead.z : h.z;
+      }
     } else if (!heroSpec.isRanged) {
       const chaseTarget = this.enemies
         .filter(
@@ -1617,8 +1621,9 @@ export class SimulationEngine {
             if (!e.isFlying && e.hp > 0 && Math.hypot(e.x - h.x, e.z - h.z) <= shockRadius) {
               hits += 1;
               if (this.heroId === 'kaya_dis') {
-                e.stunTimer = Math.max(e.stunTimer, 0.7);
-                this.pushEnemyBack(e, 0.9);
+                e.slowPct = Math.max(e.slowPct, 0.35);
+                e.slowTimer = Math.max(e.slowTimer, 1.8 * this.talentMods.statusDurationMult);
+                this.pushEnemyBack(e, 0.45);
               } else if (this.heroId === 'ay_kurdu') {
                 e.slowPct = Math.max(e.slowPct, 0.35);
                 e.slowTimer = Math.max(e.slowTimer, 2.4 * this.talentMods.statusDurationMult);
@@ -1626,7 +1631,7 @@ export class SimulationEngine {
               this.damageEnemy(e, shockDmg, this.heroId === 'ay_kurdu' ? 0.25 : 0.2, false, false, false, {
                 dirX: e.x - h.x,
                 dirZ: e.z - h.z,
-                heavy: true,
+                heavy: false,
                 impactKind: this.heroId === 'ay_kurdu' ? 'frost' : 'melee',
               });
             }
@@ -1658,7 +1663,7 @@ export class SimulationEngine {
           this.damageEnemy(target, dmg, 0.15, false, false, false, {
             dirX: target.x - h.x,
             dirZ: target.z - h.z,
-            heavy: true,
+            heavy: false,
             impactKind: 'melee',
           });
           if (h.activeBuff === 'berserk') {
@@ -1694,7 +1699,9 @@ export class SimulationEngine {
           (acc, e) =>
             acc + (e.isBoss ? 16 + e.baseDamage * 0.14 : Math.max(4.5, Math.min(14.5, 2.5 + e.baseDamage * 0.38))),
           0,
-        ) * dmgTakenScale;
+        ) *
+        dmgTakenScale *
+        0.72;
       h.hp -= incomingDps * dt;
       if (h.hp <= 0) {
         h.hp = 0;
@@ -1730,6 +1737,7 @@ export class SimulationEngine {
   }
 
   private updateGuards(dt: number): void {
+    for (const e of this.enemies) e.blockedByGuard = false;
     if (this.guards.length === 0) return;
     const aliveGuards: GuardUnit[] = [];
     for (const g of this.guards) {
@@ -1738,12 +1746,12 @@ export class SimulationEngine {
       if (g.attackCooldown > 0) g.attackCooldown = Math.max(0, g.attackCooldown - dt);
 
       const blockers = this.enemies
-        .filter((e) => !e.isFlying && !e.engagedByHero && e.hp > 0 && Math.hypot(e.x - g.x, e.z - g.z) <= 1.45)
+        .filter((e) => !e.isFlying && !e.blockedByGuard && e.hp > 0 && Math.hypot(e.x - g.x, e.z - g.z) <= 1.45)
         .sort((a, b) => b.progress - a.progress)
         .slice(0, 2);
 
       for (const e of blockers) {
-        e.engagedByHero = true;
+        e.blockedByGuard = true;
       }
 
       if (blockers.length > 0) {
@@ -1830,7 +1838,7 @@ export class SimulationEngine {
         continue;
       }
 
-      if (e.engagedByHero) {
+      if (e.blockedByGuard) {
         survivors.push(e);
         continue;
       }
@@ -1932,7 +1940,7 @@ export class SimulationEngine {
   }
 
   predictEnemyPosition(enemy: EnemyInstance, lookaheadSec: number): { x: number; z: number } {
-    if (lookaheadSec <= 0 || enemy.stunTimer > 0 || enemy.engagedByHero || enemy.hp <= 0) {
+    if (lookaheadSec <= 0 || enemy.stunTimer > 0 || enemy.blockedByGuard || enemy.hp <= 0) {
       return { x: enemy.x, z: enemy.z };
     }
     const activePath = enemy.lane === 1 && this.level.secondaryPath ? this.level.secondaryPath : this.level.path;

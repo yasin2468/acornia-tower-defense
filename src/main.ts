@@ -634,7 +634,6 @@ function processBattleEvents(events: SimEvent[]): void {
       juice.triggerMicroHitStop(0.04, 0.08);
       sound.playExplosion(true);
     } else if (ev.type === 'HERO_CLAW_SHOCK') {
-      juice.triggerMicroHitStop(0.035, 0.1);
       const hId = ev.heroId ?? activeSim?.heroId ?? 'boz_pence';
       if (hId === 'ay_kurdu') {
         sound.playHeroAttack('ay_kurdu');
@@ -649,9 +648,6 @@ function processBattleEvents(events: SimEvent[]): void {
     } else if (ev.type === 'HERO_ATTACK') {
       const hId = ev.heroId ?? activeSim?.heroId ?? 'boz_pence';
       sound.playHeroAttack(hId);
-      if (!ev.ranged) {
-        juice.triggerMicroHitStop(0.024, 0.12);
-      }
     } else if (ev.type === 'HERO_ULTIMATE') {
       juice.triggerMicroHitStop(0.042, 0.08);
       sound.playHeroUltimate(ev.variant);
