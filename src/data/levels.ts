@@ -66,7 +66,21 @@ export type StageConceptId =
   | 'golden_canopy_causeway'
   | 'crystal_crown_labyrinth'
   | 'aurora_warden_bridge'
-  | 'eternal_oak_sanctum';
+  | 'eternal_oak_sanctum'
+  | 'rootstorm_gate'
+  | 'amber_thunder_ravine'
+  | 'glacier_prism_pass'
+  | 'stormforge_bastion'
+  | 'aether_crystal_vault'
+  | 'chrono_gear_foundry'
+  | 'sunspire_canyon_bridge'
+  | 'froststar_observatory'
+  | 'aether_overlord_keep'
+  | 'ancient_crown_canopy'
+  | 'starroot_abyss'
+  | 'celestial_frost_bridge'
+  | 'iron_eclipse_crucible'
+  | 'sovereign_oak_throne';
 
 export interface LevelSpec {
   id: number;
@@ -1249,11 +1263,164 @@ const BASE_LEVELS: LevelSpec[] = [
   },
 ];
 
+type GeometryTemplate = Pick<
+  LevelSpec,
+  'path' | 'secondaryPath' | 'slots' | 'lanterns' | 'heroStart' | 'barrels' | 'iceZones'
+>;
+
+const TPL_TWINSWITCH_9: GeometryTemplate = {
+  path: [
+    { x: 0, z: 8.2 },
+    { x: -3.5, z: 7.2 },
+    { x: -3.5, z: 2.6 },
+    { x: 3.5, z: 2.6 },
+    { x: 3.5, z: -2.6 },
+    { x: -3.5, z: -2.6 },
+    { x: -3.5, z: -7.2 },
+    { x: 0, z: -7.8 },
+  ],
+  slots: [
+    { id: 'slot_1', x: -1.5, z: 5.0 },
+    { id: 'slot_2', x: 0.6, z: 5.0 },
+    { id: 'slot_3', x: 2.7, z: 5.0 },
+    { id: 'slot_4', x: -2.8, z: 0.0 },
+    { id: 'slot_5', x: -0.6, z: 0.0, runeSlot: true },
+    { id: 'slot_6', x: 1.5, z: 0.0, runeSlot: true },
+    { id: 'slot_7', x: -1.5, z: -5.0 },
+    { id: 'slot_8', x: 0.6, z: -5.0, lockedByStump: true, stumpClearCost: 110 },
+    { id: 'slot_9', x: 2.7, z: -5.0, lockedByStump: true, stumpClearCost: 120 },
+  ],
+  barrels: [
+    { id: 'barrel_1', x: -0.5, z: 3.65 },
+    { id: 'barrel_2', x: -0.5, z: -3.65 },
+  ],
+  lanterns: [
+    { x: -4.5, z: 5.2 },
+    { x: 4.5, z: 0.0 },
+    { x: -4.5, z: -5.2 },
+  ],
+  heroStart: { x: 0, z: -7.7 },
+};
+
+const TPL_DUAL_FORTRESS_10: GeometryTemplate = {
+  path: [
+    { x: -3.8, z: 9.0 },
+    { x: -3.8, z: 2.0 },
+    { x: -3.8, z: -5.4 },
+    { x: -2.3, z: -7.8 },
+    { x: 0, z: -8.9 },
+  ],
+  secondaryPath: [
+    { x: 3.8, z: 9.0 },
+    { x: 3.8, z: 2.0 },
+    { x: 3.8, z: -5.4 },
+    { x: 2.3, z: -7.8 },
+    { x: 0, z: -8.9 },
+  ],
+  slots: [
+    { id: 'slot_1', x: -1.6, z: 6.4 },
+    { id: 'slot_2', x: 1.6, z: 6.4 },
+    { id: 'slot_3', x: 0, z: 4.5, runeSlot: true },
+    { id: 'slot_4', x: -1.6, z: 2.6 },
+    { id: 'slot_5', x: 1.6, z: 2.6 },
+    { id: 'slot_6', x: 0, z: 0.7, runeSlot: true },
+    { id: 'slot_7', x: -1.6, z: -1.2 },
+    { id: 'slot_8', x: 1.6, z: -1.2 },
+    { id: 'slot_9', x: -1.55, z: -3.4, lockedByStump: true, stumpClearCost: 115 },
+    { id: 'slot_10', x: 1.55, z: -3.4, lockedByStump: true, stumpClearCost: 115 },
+  ],
+  barrels: [
+    { id: 'barrel_1', x: -2.65, z: 0.7 },
+    { id: 'barrel_2', x: 2.65, z: 0.7 },
+  ],
+  lanterns: [
+    { x: -4.8, z: 6.2 },
+    { x: 4.8, z: 6.2 },
+    { x: -4.8, z: -0.5 },
+    { x: 4.8, z: -0.5 },
+  ],
+  heroStart: { x: 0, z: -8.6 },
+};
+
+const TPL_GRAND_BASTION_11: GeometryTemplate = {
+  path: [
+    { x: -3.8, z: 9.0 },
+    { x: -3.8, z: 2.0 },
+    { x: -3.8, z: -5.4 },
+    { x: -2.3, z: -7.8 },
+    { x: 0, z: -8.9 },
+  ],
+  secondaryPath: [
+    { x: 3.8, z: 9.0 },
+    { x: 3.8, z: 2.0 },
+    { x: 3.8, z: -5.4 },
+    { x: 2.3, z: -7.8 },
+    { x: 0, z: -8.9 },
+  ],
+  slots: [
+    { id: 'slot_1', x: -1.6, z: 6.5 },
+    { id: 'slot_2', x: 1.6, z: 6.5 },
+    { id: 'slot_3', x: 0, z: 4.6 },
+    { id: 'slot_4', x: -1.6, z: 2.7 },
+    { id: 'slot_5', x: 1.6, z: 2.7 },
+    { id: 'slot_6', x: 0, z: 0.8, runeSlot: true },
+    { id: 'slot_7', x: -1.6, z: -1.1, runeSlot: true },
+    { id: 'slot_8', x: 1.6, z: -1.1, runeSlot: true },
+    { id: 'slot_9', x: 0, z: -3.0, runeSlot: true },
+    { id: 'slot_10', x: -1.6, z: -4.9, lockedByStump: true, stumpClearCost: 125 },
+    { id: 'slot_11', x: 1.6, z: -4.9, lockedByStump: true, stumpClearCost: 125 },
+  ],
+  barrels: [
+    { id: 'barrel_1', x: -2.65, z: 0.8 },
+    { id: 'barrel_2', x: 2.65, z: 0.8 },
+  ],
+  lanterns: [
+    { x: -4.8, z: 6.2 },
+    { x: 4.8, z: 6.2 },
+    { x: -4.8, z: -0.5 },
+    { x: 4.8, z: -0.5 },
+  ],
+  heroStart: { x: 0, z: -8.6 },
+};
+
+const TPL_SOVEREIGN_SANCTUM_12: GeometryTemplate = {
+  ...TPL_GRAND_BASTION_11,
+  slots: [
+    ...TPL_GRAND_BASTION_11.slots,
+    { id: 'slot_12', x: 0, z: -6.5, runeSlot: true },
+  ],
+};
+
+const EXTRA_WAVE_13: WaveSpec = {
+  waveNumber: 13,
+  clearBonus: 565,
+  announceEnemy: 'cryo_colossus',
+  groups: [
+    { enemyId: 'crystal_golem', count: 16, spacing: 0.72, hpOverride: 650, bountyOverride: 24 },
+    { enemyId: 'tesla_strider', count: 26, spacing: 0.44, hpOverride: 395, bountyOverride: 15 },
+    { enemyId: 'ember_bomber', count: 28, spacing: 0.22, hpOverride: 235, bountyOverride: 10 },
+    { enemyId: 'cryo_colossus', count: 1, spacing: 1.5, hpOverride: 6700, bountyOverride: 220 },
+  ],
+};
+
+const EXTRA_WAVE_14: WaveSpec = {
+  waveNumber: 14,
+  clearBonus: 660,
+  announceEnemy: 'magma_overlord',
+  groups: [
+    { enemyId: 'crystal_golem', count: 16, spacing: 0.7, hpOverride: 690, bountyOverride: 25 },
+    { enemyId: 'tesla_strider', count: 28, spacing: 0.42, hpOverride: 415, bountyOverride: 16 },
+    { enemyId: 'ember_bomber', count: 30, spacing: 0.21, hpOverride: 245, bountyOverride: 11 },
+    { enemyId: 'magma_overlord', count: 1, spacing: 1.5, hpOverride: 9200, bountyOverride: 280 },
+  ],
+};
+
 function cloneGeometryMirrored(
-  tpl: LevelSpec,
+  tpl: GeometryTemplate,
   mirrorX: boolean,
   extraRunes: string[] = [],
-): Pick<LevelSpec, 'path' | 'secondaryPath' | 'slots' | 'lanterns' | 'heroStart' | 'barrels' | 'iceZones'> {
+  stumpBonus = 5,
+): GeometryTemplate {
   const fx = (x: number) => (mirrorX ? (x === 0 ? 0 : -x) : x);
   const flipVec = (v: Vec2): Vec2 => ({ x: fx(v.x), z: v.z });
   return {
@@ -1263,7 +1430,7 @@ function cloneGeometryMirrored(
       ...s,
       x: fx(s.x),
       runeSlot: Boolean(s.runeSlot || extraRunes.includes(s.id)),
-      stumpClearCost: s.stumpClearCost ? s.stumpClearCost + 5 : undefined,
+      stumpClearCost: s.stumpClearCost ? s.stumpClearCost + stumpBonus : undefined,
     })),
     lanterns: tpl.lanterns.map(flipVec),
     heroStart: flipVec(tpl.heroStart),
@@ -1277,8 +1444,10 @@ function buildScaledWaves(
   hpMult: number,
   bonusMult: number,
   enemySwaps: Partial<Record<EnemyId, EnemyId>> = {},
+  bountyMult = 1.12,
+  extraWaves: WaveSpec[] = [],
 ): WaveSpec[] {
-  return baseWaves.map((w) => ({
+  return [...baseWaves, ...extraWaves].map((w) => ({
     waveNumber: w.waveNumber,
     clearBonus: Math.round(w.clearBonus * bonusMult),
     announceEnemy: w.announceEnemy ? (enemySwaps[w.announceEnemy] ?? w.announceEnemy) : undefined,
@@ -1287,7 +1456,7 @@ function buildScaledWaves(
       enemyId: enemySwaps[g.enemyId] ?? g.enemyId,
       hpOverride: g.hpOverride !== undefined ? Math.round(g.hpOverride * hpMult) : undefined,
       bountyOverride:
-        g.bountyOverride !== undefined ? Math.round(g.bountyOverride * 1.12) : undefined,
+        g.bountyOverride !== undefined ? Math.round(g.bountyOverride * bountyMult) : undefined,
     })),
   }));
 }
@@ -1302,6 +1471,7 @@ function createExtendedLevels(base: LevelSpec[]): LevelSpec[] {
     regionKey: string;
     concept: StageConceptId;
     tplId: number;
+    customGeom?: GeometryTemplate;
     mirrorX: boolean;
     extraRunes: string[];
     isBossStage?: boolean;
@@ -1310,6 +1480,8 @@ function createExtendedLevels(base: LevelSpec[]): LevelSpec[] {
     killZoneMeters: number;
     hpMult: number;
     bonusMult: number;
+    bountyMult?: number;
+    extraWaves?: WaveSpec[];
     addBarrels?: Array<{ id: string; x: number; z: number }>;
     swaps?: Partial<Record<EnemyId, EnemyId>>;
   }> = [
@@ -1622,10 +1794,261 @@ function createExtendedLevels(base: LevelSpec[]): LevelSpec[] {
       hpMult: 3.4,
       bonusMult: 3.98,
     },
+    // BÖLÜM XI — KÖKFIRTINA BOĞAZI (37–40)
+    {
+      id: 37,
+      biome: 'forest',
+      regionKey: 'map.region.rootstorm',
+      concept: 'rootstorm_gate',
+      tplId: 16,
+      customGeom: TPL_TWINSWITCH_9,
+      mirrorX: false,
+      extraRunes: [],
+      mapPin: { xPct: 99.55, yPct: 40 },
+      startGold: 1680,
+      killZoneMeters: 25.0,
+      hpMult: 3.58,
+      bonusMult: 4.22,
+      bountyMult: 1.24,
+      swaps: { swarm_saw: 'turbo_hopper' },
+    },
+    {
+      id: 38,
+      biome: 'canyon',
+      regionKey: 'map.region.rootstorm',
+      concept: 'amber_thunder_ravine',
+      tplId: 16,
+      customGeom: TPL_TWINSWITCH_9,
+      mirrorX: true,
+      extraRunes: ['slot_1'],
+      mapPin: { xPct: 99.6, yPct: 40 },
+      startGold: 1750,
+      killZoneMeters: 25.2,
+      hpMult: 3.76,
+      bonusMult: 4.44,
+      bountyMult: 1.24,
+      swaps: { hover_drone: 'repair_drone' },
+    },
+    {
+      id: 39,
+      biome: 'snow',
+      regionKey: 'map.region.rootstorm',
+      concept: 'glacier_prism_pass',
+      tplId: 16,
+      customGeom: TPL_DUAL_FORTRESS_10,
+      mirrorX: false,
+      extraRunes: ['slot_1'],
+      mapPin: { xPct: 99.65, yPct: 40 },
+      startGold: 1830,
+      killZoneMeters: 25.5,
+      hpMult: 3.96,
+      bonusMult: 4.68,
+      bountyMult: 1.24,
+      swaps: { turbo_hopper: 'frost_warden' },
+    },
+    {
+      id: 40,
+      biome: 'foundry',
+      regionKey: 'map.region.rootstorm',
+      concept: 'stormforge_bastion',
+      tplId: 16,
+      customGeom: TPL_DUAL_FORTRESS_10,
+      mirrorX: true,
+      extraRunes: ['slot_1', 'slot_10'],
+      isBossStage: true,
+      mapPin: { xPct: 99.7, yPct: 40 },
+      startGold: 1940,
+      killZoneMeters: 26.0,
+      hpMult: 4.18,
+      bonusMult: 4.94,
+      bountyMult: 1.24,
+      swaps: { cryo_colossus: 'magma_overlord' },
+    },
+    // BÖLÜM XII — ETİR ÇARK KALESİ (41–45)
+    {
+      id: 41,
+      biome: 'cavern',
+      regionKey: 'map.region.aether',
+      concept: 'aether_crystal_vault',
+      tplId: 16,
+      customGeom: TPL_DUAL_FORTRESS_10,
+      mirrorX: false,
+      extraRunes: ['slot_2', 'slot_3'],
+      mapPin: { xPct: 99.75, yPct: 40 },
+      startGold: 2020,
+      killZoneMeters: 26.2,
+      hpMult: 4.4,
+      bonusMult: 5.2,
+      bountyMult: 1.24,
+      swaps: { shield_loader: 'crystal_golem' },
+    },
+    {
+      id: 42,
+      biome: 'foundry',
+      regionKey: 'map.region.aether',
+      concept: 'chrono_gear_foundry',
+      tplId: 16,
+      customGeom: TPL_DUAL_FORTRESS_10,
+      mirrorX: true,
+      extraRunes: ['slot_2', 'slot_3'],
+      mapPin: { xPct: 99.8, yPct: 40 },
+      startGold: 2110,
+      killZoneMeters: 26.5,
+      hpMult: 4.64,
+      bonusMult: 5.48,
+      bountyMult: 1.24,
+      swaps: { swarm_saw: 'ember_bomber' },
+    },
+    {
+      id: 43,
+      biome: 'canyon',
+      regionKey: 'map.region.aether',
+      concept: 'sunspire_canyon_bridge',
+      tplId: 16,
+      customGeom: TPL_GRAND_BASTION_11,
+      mirrorX: false,
+      extraRunes: [],
+      mapPin: { xPct: 99.85, yPct: 40 },
+      startGold: 2200,
+      killZoneMeters: 26.8,
+      hpMult: 4.88,
+      bonusMult: 5.76,
+      bountyMult: 1.24,
+      swaps: { chomp_brute: 'tesla_strider' },
+    },
+    {
+      id: 44,
+      biome: 'snow',
+      regionKey: 'map.region.aether',
+      concept: 'froststar_observatory',
+      tplId: 16,
+      customGeom: TPL_GRAND_BASTION_11,
+      mirrorX: true,
+      extraRunes: ['slot_3'],
+      mapPin: { xPct: 99.88, yPct: 40 },
+      startGold: 2300,
+      killZoneMeters: 27.0,
+      hpMult: 5.14,
+      bonusMult: 6.08,
+      bountyMult: 1.24,
+      swaps: { hover_drone: 'frost_warden' },
+    },
+    {
+      id: 45,
+      biome: 'foundry',
+      regionKey: 'map.region.aether',
+      concept: 'aether_overlord_keep',
+      tplId: 16,
+      customGeom: TPL_GRAND_BASTION_11,
+      mirrorX: false,
+      extraRunes: ['slot_3'],
+      isBossStage: true,
+      mapPin: { xPct: 99.9, yPct: 40 },
+      startGold: 2420,
+      killZoneMeters: 27.5,
+      hpMult: 5.42,
+      bonusMult: 6.42,
+      bountyMult: 1.36,
+      extraWaves: [EXTRA_WAVE_13],
+      swaps: { repair_drone: 'tesla_strider' },
+    },
+    // BÖLÜM XIII — ULU MEŞE TAHTI (46–50)
+    {
+      id: 46,
+      biome: 'forest',
+      regionKey: 'map.region.sovereign_oak',
+      concept: 'ancient_crown_canopy',
+      tplId: 16,
+      customGeom: TPL_GRAND_BASTION_11,
+      mirrorX: true,
+      extraRunes: ['slot_3'],
+      mapPin: { xPct: 99.92, yPct: 40 },
+      startGold: 2520,
+      killZoneMeters: 27.8,
+      hpMult: 5.68,
+      bonusMult: 6.72,
+      bountyMult: 1.36,
+      extraWaves: [EXTRA_WAVE_13],
+      swaps: { swarm_saw: 'ember_bomber' },
+    },
+    {
+      id: 47,
+      biome: 'cavern',
+      regionKey: 'map.region.sovereign_oak',
+      concept: 'starroot_abyss',
+      tplId: 16,
+      customGeom: TPL_GRAND_BASTION_11,
+      mirrorX: false,
+      extraRunes: ['slot_1', 'slot_2'],
+      mapPin: { xPct: 99.94, yPct: 40 },
+      startGold: 2630,
+      killZoneMeters: 28.0,
+      hpMult: 5.95,
+      bonusMult: 7.04,
+      bountyMult: 1.36,
+      extraWaves: [EXTRA_WAVE_13],
+      swaps: { turbo_hopper: 'crystal_golem' },
+    },
+    {
+      id: 48,
+      biome: 'snow',
+      regionKey: 'map.region.sovereign_oak',
+      concept: 'celestial_frost_bridge',
+      tplId: 16,
+      customGeom: TPL_GRAND_BASTION_11,
+      mirrorX: true,
+      extraRunes: ['slot_1', 'slot_2'],
+      mapPin: { xPct: 99.96, yPct: 40 },
+      startGold: 2740,
+      killZoneMeters: 28.2,
+      hpMult: 6.22,
+      bonusMult: 7.36,
+      bountyMult: 1.36,
+      extraWaves: [EXTRA_WAVE_13],
+      swaps: { hover_drone: 'frost_warden' },
+    },
+    {
+      id: 49,
+      biome: 'foundry',
+      regionKey: 'map.region.sovereign_oak',
+      concept: 'iron_eclipse_crucible',
+      tplId: 16,
+      customGeom: TPL_GRAND_BASTION_11,
+      mirrorX: false,
+      extraRunes: ['slot_1', 'slot_2', 'slot_3'],
+      mapPin: { xPct: 99.98, yPct: 40 },
+      startGold: 2860,
+      killZoneMeters: 28.5,
+      hpMult: 6.5,
+      bonusMult: 7.7,
+      bountyMult: 1.36,
+      extraWaves: [EXTRA_WAVE_13],
+      swaps: { chomp_brute: 'tesla_strider' },
+    },
+    {
+      id: 50,
+      biome: 'forest',
+      regionKey: 'map.region.sovereign_oak',
+      concept: 'sovereign_oak_throne',
+      tplId: 16,
+      customGeom: TPL_SOVEREIGN_SANCTUM_12,
+      mirrorX: false,
+      extraRunes: ['slot_1', 'slot_2', 'slot_3', 'slot_12'],
+      isBossStage: true,
+      mapPin: { xPct: 100, yPct: 40 },
+      startGold: 3000,
+      killZoneMeters: 29.0,
+      hpMult: 6.8,
+      bonusMult: 8.1,
+      bountyMult: 1.36,
+      extraWaves: [EXTRA_WAVE_13, EXTRA_WAVE_14],
+    },
   ];
 
   return defs.map((d) => {
-    const geom = cloneGeometryMirrored(byId(d.tplId), d.mirrorX, d.extraRunes);
+    const geom = d.customGeom
+      ? cloneGeometryMirrored(d.customGeom, d.mirrorX, d.extraRunes, 0)
+      : cloneGeometryMirrored(byId(d.tplId), d.mirrorX, d.extraRunes, 5);
     return {
       id: d.id,
       biome: d.biome,
@@ -1640,7 +2063,14 @@ function createExtendedLevels(base: LevelSpec[]): LevelSpec[] {
       killZoneMeters: d.killZoneMeters,
       ...geom,
       ...(d.addBarrels ? { barrels: d.addBarrels } : {}),
-      waves: buildScaledWaves(waveTpl, d.hpMult, d.bonusMult, d.swaps),
+      waves: buildScaledWaves(
+        waveTpl,
+        d.hpMult,
+        d.bonusMult,
+        d.swaps,
+        d.bountyMult ?? 1.12,
+        d.extraWaves ?? [],
+      ),
     };
   });
 }

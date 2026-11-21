@@ -187,7 +187,7 @@ describe('UI-1 — Ulu Mese Parsomeni menu ve boyama ozel oak UI varliklari', ()
       );
 
       const pinMatches = [...container.innerHTML.matchAll(/class="stage-pin[^"]*"\s+style="left:\s*([\d.]+)%;\s*top:\s*([\d.]+)%;"/g)];
-      assert.equal(pinMatches.length, 36, '36 yatay kalkan pini render edilmeli');
+      assert.equal(pinMatches.length, 50, '50 yatay kalkan pini render edilmeli');
       let prevX = -1;
       for (const m of pinMatches) {
         const xPct = Number(m[1]);
@@ -198,9 +198,9 @@ describe('UI-1 — Ulu Mese Parsomeni menu ve boyama ozel oak UI varliklari', ()
       }
 
       const jumpChips = [...container.innerHTML.matchAll(/data-jump-region="(\d+)"/g)].map((m) => Number(m[1]));
-      assert.deepEqual(jumpChips, [1, 4, 7, 10, 13, 17, 21, 25, 29, 33], '10 bölge hızlı atlama çipi render edilmeli');
+      assert.deepEqual(jumpChips, [1, 4, 7, 10, 13, 17, 21, 25, 29, 33, 37, 41, 46], '13 bölge hızlı atlama çipi render edilmeli');
       const bannerMatches = [...container.innerHTML.matchAll(/class="biome-region-banner/g)];
-      assert.equal(bannerMatches.length, 10, '10 bölge afişi render edilmeli');
+      assert.equal(bannerMatches.length, 13, '13 bölge afişi render edilmeli');
 
       view.showPatrolModal = true;
       renderInto();

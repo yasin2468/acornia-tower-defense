@@ -432,6 +432,163 @@ export const STAGE_LIGHTING_THEMES: Record<StageConceptId, StageAtmosphere> = {
     cliffTint: '#f0c869',
     canopyTint: '#5ce07f',
   },
+  // BÖLÜM XI — KÖKFIRTINA BOĞAZI (37–40)
+  rootstorm_gate: {
+    bg: '#26443a',
+    fog: '#355c4e',
+    hemiSky: '#bfffdf',
+    hemiGround: '#152922',
+    sunColor: '#e4fff2',
+    sunIntensity: 1.48,
+    border: '#499e7d',
+    cliffTint: '#65bf9b',
+    canopyTint: '#47db8c',
+  },
+  amber_thunder_ravine: {
+    bg: '#59331e',
+    fog: '#734429',
+    hemiSky: '#ffd99e',
+    hemiGround: '#331c0f',
+    sunColor: '#ffe0ad',
+    sunIntensity: 1.54,
+    border: '#bd6d38',
+    cliffTint: '#db874d',
+    canopyTint: '#ff9642',
+  },
+  glacier_prism_pass: {
+    bg: '#264761',
+    fog: '#356080',
+    hemiSky: '#ccf4ff',
+    hemiGround: '#162d3d',
+    sunColor: '#e6f9ff',
+    sunIntensity: 1.56,
+    border: '#5fa4c7',
+    cliffTint: '#85c6e8',
+    canopyTint: '#78e6ff',
+  },
+  stormforge_bastion: {
+    bg: '#3d2226',
+    fog: '#542f34',
+    hemiSky: '#ffc299',
+    hemiGround: '#241114',
+    sunColor: '#ffcca8',
+    sunIntensity: 1.48,
+    border: '#9e473c',
+    cliffTint: '#c25f52',
+    canopyTint: '#ff6e42',
+  },
+  // BÖLÜM XII — ETİR ÇARK KALESİ (41–45)
+  aether_crystal_vault: {
+    bg: '#2c234d',
+    fog: '#3d3169',
+    hemiSky: '#d4c2ff',
+    hemiGround: '#18122e',
+    sunColor: '#e5d9ff',
+    sunIntensity: 1.36,
+    border: '#7259b5',
+    cliffTint: '#997edb',
+    canopyTint: '#a67dff',
+  },
+  chrono_gear_foundry: {
+    bg: '#4a3624',
+    fog: '#634932',
+    hemiSky: '#ffe3b3',
+    hemiGround: '#2b1f14',
+    sunColor: '#ffebbf',
+    sunIntensity: 1.46,
+    border: '#ab8046',
+    cliffTint: '#cf9e5d',
+    canopyTint: '#ffb94d',
+  },
+  sunspire_canyon_bridge: {
+    bg: '#694022',
+    fog: '#85532e',
+    hemiSky: '#ffe6ad',
+    hemiGround: '#3d2311',
+    sunColor: '#ffebb8',
+    sunIntensity: 1.62,
+    border: '#cc883d',
+    cliffTint: '#eba659',
+    canopyTint: '#ffd059',
+  },
+  froststar_observatory: {
+    bg: '#223359',
+    fog: '#304778',
+    hemiSky: '#c7e2ff',
+    hemiGround: '#131d36',
+    sunColor: '#e0efff',
+    sunIntensity: 1.5,
+    border: '#5e88cf',
+    cliffTint: '#85adf0',
+    canopyTint: '#80c4ff',
+  },
+  aether_overlord_keep: {
+    bg: '#331d3d',
+    fog: '#472854',
+    hemiSky: '#ffc9e8',
+    hemiGround: '#1c0f24',
+    sunColor: '#ffd9ed',
+    sunIntensity: 1.52,
+    border: '#99478c',
+    cliffTint: '#bf65b0',
+    canopyTint: '#ff66b8',
+  },
+  // BÖLÜM XIII — ULU MEŞE TAHTI (46–50)
+  ancient_crown_canopy: {
+    bg: '#425222',
+    fog: '#586e2e',
+    hemiSky: '#f7ffb8',
+    hemiGround: '#252e12',
+    sunColor: '#fcffc7',
+    sunIntensity: 1.58,
+    border: '#99ad3d',
+    cliffTint: '#bad15a',
+    canopyTint: '#6ee062',
+  },
+  starroot_abyss: {
+    bg: '#223845',
+    fog: '#2f4e61',
+    hemiSky: '#b5f5ff',
+    hemiGround: '#122129',
+    sunColor: '#d4faff',
+    sunIntensity: 1.44,
+    border: '#448fa8',
+    cliffTint: '#63b4cf',
+    canopyTint: '#4ff2d2',
+  },
+  celestial_frost_bridge: {
+    bg: '#325270',
+    fog: '#436c91',
+    hemiSky: '#dff4ff',
+    hemiGround: '#1c3042',
+    sunColor: '#f0faff',
+    sunIntensity: 1.64,
+    border: '#78b2db',
+    cliffTint: '#9ed2f7',
+    canopyTint: '#99eeff',
+  },
+  iron_eclipse_crucible: {
+    bg: '#3b1e1b',
+    fog: '#522a25',
+    hemiSky: '#ffbfa3',
+    hemiGround: '#21100e',
+    sunColor: '#ffd1bd',
+    sunIntensity: 1.5,
+    border: '#a64232',
+    cliffTint: '#cc5d4b',
+    canopyTint: '#ff6036',
+  },
+  sovereign_oak_throne: {
+    bg: '#40481e',
+    fog: '#576128',
+    hemiSky: '#fff2b2',
+    hemiGround: '#24290f',
+    sunColor: '#fff5c2',
+    sunIntensity: 1.68,
+    border: '#e0af38',
+    cliffTint: '#f7d06b',
+    canopyTint: '#62eb82',
+  },
 };
 
 function collectRoadSamples(curves: THREE.CatmullRomCurve3[]): Array<{ x: number; z: number; tx: number; tz: number }> {
@@ -810,6 +967,56 @@ function buildTeslaSpire(): { root: THREE.Group; ringA: THREE.Mesh; ringB: THREE
   root.add(ringB);
 
   return { root, ringA, ringB };
+}
+
+function buildCrystalObelisk(stoneHex: string, gemHex: string, glowHex: string): {
+  root: THREE.Group;
+  crystal: THREE.Mesh;
+} {
+  const root = new THREE.Group();
+  const baseMat = new THREE.MeshStandardMaterial({ color: stoneHex, roughness: 0.72, metalness: 0.25 });
+  const gemMat = new THREE.MeshStandardMaterial({
+    color: gemHex,
+    emissive: glowHex,
+    emissiveIntensity: 0.95,
+    roughness: 0.16,
+    metalness: 0.2,
+  });
+  const plinth = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.44, 0.6, 6), baseMat);
+  plinth.position.y = 0.3;
+  plinth.castShadow = true;
+  root.add(plinth);
+  const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.34, 0), gemMat);
+  crystal.scale.set(0.85, 1.5, 0.85);
+  crystal.position.y = 1.25;
+  root.add(crystal);
+  return { root, crystal };
+}
+
+function addThemedChannel(
+  group: THREE.Group,
+  curves: THREE.CatmullRomCurve3[],
+  pulseMats: StagePulseMat[],
+  pts: Array<[number, number]>,
+  width: number,
+  colorHex: string,
+  emissiveHex: string,
+  bankHex: string,
+  deckHex: string,
+  railHex: string,
+  amp = 0.2,
+): void {
+  const flowMat = new THREE.MeshStandardMaterial({
+    color: colorHex,
+    emissive: emissiveHex,
+    emissiveIntensity: 0.72,
+    roughness: 0.18,
+    metalness: 0.2,
+  });
+  const bankMat = new THREE.MeshStandardMaterial({ color: bankHex, roughness: 0.78 });
+  pulseMats.push({ mat: flowMat, base: 0.72, amp, speed: 2.4 });
+  group.add(buildWaterwayRibbon(pts, width, 0.015, flowMat, bankMat, 0.38));
+  placeBridgesOverCurve(pts, curves, deckHex, railHex, group);
 }
 
 export function buildStageConcept(level: LevelSpec, curves: THREE.CatmullRomCurve3[]): StageConceptBuildResult {
@@ -1896,6 +2103,351 @@ export function buildStageConcept(level: LevelSpec, curves: THREE.CatmullRomCurv
       group.add(spire.root);
       animatedProps.push({ obj: spire.ringA, axis: 'y', speed: 3.3 });
       animatedProps.push({ obj: spire.ringB, axis: 'y', speed: -2.7 });
+    }
+  } else if (c === 'rootstorm_gate') {
+    addThemedChannel(
+      group,
+      curves,
+      pulseMats,
+      [[-11.5, 4.4], [0, 3.6], [11.5, 4.4]],
+      1.35,
+      '#2dd4bf',
+      '#0f766e',
+      '#284d3f',
+      '#5c4728',
+      '#a8ffd6',
+    );
+    for (const [ox, oz] of [[-4.85, 6.2], [4.85, 6.2], [-4.85, -3.4], [4.85, -3.4]] as Array<[number, number]>) {
+      if (!isClearPropPos(ox, oz, level, roadSamples, 1.0, 0.9)) continue;
+      const ob = buildCrystalObelisk('#2b4a3e', '#5ef28e', '#16a34a');
+      ob.root.position.set(ox, 0, oz);
+      group.add(ob.root);
+      animatedProps.push({ obj: ob.crystal, axis: 'y', speed: 1.4 });
+    }
+  } else if (c === 'amber_thunder_ravine') {
+    addThemedChannel(
+      group,
+      curves,
+      pulseMats,
+      [[-11.5, -1.6], [0, 0.2], [11.5, -1.6]],
+      1.4,
+      '#ffaa44',
+      '#d95d16',
+      '#59331c',
+      '#78472a',
+      '#ffd18c',
+    );
+    for (const [ax, az] of [[-4.9, 2.2], [4.9, 2.2]] as Array<[number, number]>) {
+      if (!isClearPropPos(ax, az, level, roadSamples, 1.0, 0.9)) continue;
+      const arch = buildSandstoneArch(1.4, 1.6, '#b8683a');
+      arch.position.set(ax, 0, az);
+      group.add(arch);
+    }
+  } else if (c === 'glacier_prism_pass') {
+    addThemedChannel(
+      group,
+      curves,
+      pulseMats,
+      [[-11.5, 2.5], [0, 0.9], [11.5, 2.5]],
+      1.45,
+      '#70e1ff',
+      '#1e90c9',
+      '#2d4c63',
+      '#698ca8',
+      '#d6f7ff',
+    );
+    for (const [px, pz] of [[-4.85, 4.4], [4.85, 4.4], [-4.85, -5.0], [4.85, -5.0]] as Array<[number, number]>) {
+      if (!isClearPropPos(px, pz, level, roadSamples, 1.0, 0.9)) continue;
+      const ob = buildCrystalObelisk('#4b6d8a', '#9bf0ff', '#38bdf8');
+      ob.root.position.set(px, 0, pz);
+      group.add(ob.root);
+      animatedProps.push({ obj: ob.crystal, axis: 'y', speed: 1.9 });
+    }
+  } else if (c === 'stormforge_bastion') {
+    addThemedChannel(
+      group,
+      curves,
+      pulseMats,
+      [[-11.5, -6.9], [0, -6.9], [11.5, -6.9]],
+      1.4,
+      '#ff6e36',
+      '#cc2b16',
+      '#3b2121',
+      '#4f322e',
+      '#ffa470',
+      0.28,
+    );
+    for (const [gx, gz, spd] of [[-4.85, 4.4, 1.1], [4.85, -1.8, -1.1]] as Array<[number, number, number]>) {
+      const gear = buildGearMesh(0.95, 10, 0.14, '#8f5939');
+      gear.position.set(gx, 0.08, gz);
+      group.add(gear);
+      animatedProps.push({ obj: gear, axis: 'y', speed: spd });
+    }
+    for (const [tx, tz] of [[-4.85, -4.4], [4.85, 4.4]] as Array<[number, number]>) {
+      if (!isClearPropPos(tx, tz, level, roadSamples, 1.0, 0.9)) continue;
+      const spire = buildTeslaSpire();
+      spire.root.position.set(tx, 0, tz);
+      group.add(spire.root);
+      animatedProps.push({ obj: spire.ringA, axis: 'y', speed: 2.9 });
+      animatedProps.push({ obj: spire.ringB, axis: 'y', speed: -2.4 });
+    }
+  } else if (c === 'aether_crystal_vault') {
+    addThemedChannel(
+      group,
+      curves,
+      pulseMats,
+      [[-11.5, 2.2], [0, 2.0], [11.5, 2.2]],
+      1.3,
+      '#b78aff',
+      '#6d28d9',
+      '#312457',
+      '#58428c',
+      '#e2ccff',
+    );
+    for (const [cx, cz] of [[-4.85, 4.6], [4.85, 4.6], [-4.85, -4.4], [4.85, -4.4]] as Array<[number, number]>) {
+      if (!isClearPropPos(cx, cz, level, roadSamples, 1.0, 0.9)) continue;
+      const ob = buildCrystalObelisk('#3d2f63', '#c89eff', '#9333ea');
+      ob.root.position.set(cx, 0, cz);
+      group.add(ob.root);
+      animatedProps.push({ obj: ob.crystal, axis: 'y', speed: 2.1 });
+    }
+  } else if (c === 'chrono_gear_foundry') {
+    addThemedChannel(
+      group,
+      curves,
+      pulseMats,
+      [[-11.5, -0.2], [0, -0.2], [11.5, -0.2]],
+      1.35,
+      '#ffb94d',
+      '#b45309',
+      '#47311d',
+      '#785630',
+      '#ffe19c',
+    );
+    const gearPalette = [
+      { r: 1.15, teeth: 12, x: -4.9, z: 4.4, col: '#b88342', spd: 0.75 },
+      { r: 0.95, teeth: 10, x: 4.9, z: 4.4, col: '#9e6c32', spd: -0.95 },
+      { r: 1.05, teeth: 11, x: 4.9, z: -4.4, col: '#cf974c', spd: 0.85 },
+    ];
+    for (const gSpec of gearPalette) {
+      const g = buildGearMesh(gSpec.r, gSpec.teeth, 0.14, gSpec.col);
+      g.position.set(gSpec.x, 0.08, gSpec.z);
+      group.add(g);
+      animatedProps.push({ obj: g, axis: 'y', speed: gSpec.spd });
+    }
+    if (isClearPropPos(-4.85, -4.4, level, roadSamples, 1.0, 0.9)) {
+      const rig = buildDrillRig();
+      rig.root.position.set(-4.85, 0, -4.4);
+      group.add(rig.root);
+      animatedProps.push({ obj: rig.bit, axis: 'y', speed: 3.4 });
+    }
+  } else if (c === 'sunspire_canyon_bridge') {
+    addThemedChannel(
+      group,
+      curves,
+      pulseMats,
+      [[-11.5, 0.6], [0, -0.2], [11.5, 0.6]],
+      1.45,
+      '#ffd166',
+      '#c2781d',
+      '#6b3f1d',
+      '#995e2e',
+      '#fff0b8',
+    );
+    for (const [wx, wz] of [[-4.95, 5.2], [4.95, -4.8]] as Array<[number, number]>) {
+      if (!isClearPropPos(wx, wz, level, roadSamples, 1.0, 0.9)) continue;
+      const mill = buildWindmill('#ffe299');
+      mill.root.position.set(wx, 0, wz);
+      group.add(mill.root);
+      animatedProps.push({ obj: mill.hub, axis: 'z', speed: 1.55 });
+    }
+  } else if (c === 'froststar_observatory') {
+    addThemedChannel(
+      group,
+      curves,
+      pulseMats,
+      [[-11.5, 3.0], [0, 0.8], [11.5, 3.0]],
+      1.35,
+      '#80c8ff',
+      '#2563eb',
+      '#21335c',
+      '#486599',
+      '#d9eeff',
+    );
+    const haloMat = new THREE.MeshStandardMaterial({ color: '#9ed2ff', metalness: 0.72, roughness: 0.25 });
+    const starRing = new THREE.Mesh(new THREE.TorusGeometry(2.3, 0.055, 8, 36), haloMat);
+    starRing.rotation.x = Math.PI / 2;
+    starRing.position.set(0, 0.06, 1.6);
+    group.add(starRing);
+    animatedProps.push({ obj: starRing, axis: 'z', speed: 0.55 });
+    for (const [tx, tz] of [[-4.85, 5.4], [4.85, -4.8]] as Array<[number, number]>) {
+      if (!isClearPropPos(tx, tz, level, roadSamples, 1.0, 0.9)) continue;
+      const spire = buildTeslaSpire();
+      spire.root.position.set(tx, 0, tz);
+      group.add(spire.root);
+      animatedProps.push({ obj: spire.ringA, axis: 'y', speed: 2.8 });
+      animatedProps.push({ obj: spire.ringB, axis: 'y', speed: -2.2 });
+    }
+  } else if (c === 'aether_overlord_keep') {
+    addThemedChannel(
+      group,
+      curves,
+      pulseMats,
+      [[-11.5, -6.8], [0, -6.8], [11.5, -6.8]],
+      1.5,
+      '#ff66c4',
+      '#9d174d',
+      '#3a1e47',
+      '#613375',
+      '#ffc2ea',
+      0.3,
+    );
+    for (const [tx, tz] of [[-4.85, 5.6], [4.85, 5.6], [-4.85, -4.4], [4.85, -4.4]] as Array<[number, number]>) {
+      if (!isClearPropPos(tx, tz, level, roadSamples, 1.0, 0.9)) continue;
+      const spire = buildTeslaSpire();
+      spire.root.position.set(tx, 0, tz);
+      group.add(spire.root);
+      animatedProps.push({ obj: spire.ringA, axis: 'y', speed: 3.4 });
+      animatedProps.push({ obj: spire.ringB, axis: 'y', speed: -2.9 });
+    }
+  } else if (c === 'ancient_crown_canopy') {
+    addThemedChannel(
+      group,
+      curves,
+      pulseMats,
+      [[-11.5, 4.8], [0, 3.2], [11.5, 4.8]],
+      1.4,
+      '#6ee062',
+      '#15803d',
+      '#3e4f21',
+      '#6b7a34',
+      '#d9ff99',
+    );
+    for (const [cx, cz] of [[-4.85, -1.6], [4.85, -1.6]] as Array<[number, number]>) {
+      if (!isClearPropPos(cx, cz, level, roadSamples, 1.0, 0.9)) continue;
+      const ob = buildCrystalObelisk('#4f5c28', '#c8ff6b', '#4d7c0f');
+      ob.root.position.set(cx, 0, cz);
+      group.add(ob.root);
+      animatedProps.push({ obj: ob.crystal, axis: 'y', speed: 1.5 });
+    }
+  } else if (c === 'starroot_abyss') {
+    addThemedChannel(
+      group,
+      curves,
+      pulseMats,
+      [[-11.5, -1.4], [0, -1.4], [11.5, -1.4]],
+      1.45,
+      '#4ff2d2',
+      '#0f766e',
+      '#1e3340',
+      '#365b6e',
+      '#b8fff0',
+    );
+    for (const [cx, cz] of [[-4.85, 5.6], [4.85, 5.6], [-4.85, -4.4], [4.85, -4.4]] as Array<[number, number]>) {
+      if (!isClearPropPos(cx, cz, level, roadSamples, 1.0, 0.9)) continue;
+      const ob = buildCrystalObelisk('#24414f', '#5effdf', '#0d9488');
+      ob.root.position.set(cx, 0, cz);
+      group.add(ob.root);
+      animatedProps.push({ obj: ob.crystal, axis: 'y', speed: 2.0 });
+    }
+  } else if (c === 'celestial_frost_bridge') {
+    addThemedChannel(
+      group,
+      curves,
+      pulseMats,
+      [[-11.5, 4.4], [0, 3.6], [11.5, 4.4]],
+      1.3,
+      '#99eeff',
+      '#0284c7',
+      '#2d4d6b',
+      '#5882a8',
+      '#e6f9ff',
+    );
+    addThemedChannel(
+      group,
+      curves,
+      pulseMats,
+      [[-11.5, -4.4], [0, -4.4], [11.5, -4.4]],
+      1.3,
+      '#99eeff',
+      '#0284c7',
+      '#2d4d6b',
+      '#5882a8',
+      '#e6f9ff',
+    );
+    for (const [cx, cz] of [[-4.85, 0.0], [4.85, 0.0]] as Array<[number, number]>) {
+      if (!isClearPropPos(cx, cz, level, roadSamples, 1.0, 0.9)) continue;
+      const ob = buildCrystalObelisk('#395c7d', '#c7f5ff', '#38bdf8');
+      ob.root.position.set(cx, 0, cz);
+      group.add(ob.root);
+      animatedProps.push({ obj: ob.crystal, axis: 'y', speed: 2.2 });
+    }
+  } else if (c === 'iron_eclipse_crucible') {
+    addThemedChannel(
+      group,
+      curves,
+      pulseMats,
+      [[-11.5, -6.9], [0, -6.9], [11.5, -6.9]],
+      1.55,
+      '#ff6036',
+      '#b91c1c',
+      '#361c1a',
+      '#592e29',
+      '#ffb199',
+      0.32,
+    );
+    for (const [dx, dz] of [[-4.85, 4.8], [4.85, 4.8]] as Array<[number, number]>) {
+      if (!isClearPropPos(dx, dz, level, roadSamples, 1.0, 0.9)) continue;
+      const rig = buildDrillRig();
+      rig.root.position.set(dx, 0, dz);
+      group.add(rig.root);
+      animatedProps.push({ obj: rig.bit, axis: 'y', speed: 3.6 });
+    }
+    for (const [gx, gz, spd] of [[-4.9, -2.0, 1.15], [4.9, -2.0, -1.15]] as Array<[number, number, number]>) {
+      const g = buildGearMesh(0.9, 10, 0.14, '#7d4436');
+      g.position.set(gx, 0.08, gz);
+      group.add(g);
+      animatedProps.push({ obj: g, axis: 'y', speed: spd });
+    }
+  } else if (c === 'sovereign_oak_throne') {
+    const sovereignFlowMat = new THREE.MeshStandardMaterial({
+      color: '#ffe885',
+      emissive: '#d99a1e',
+      emissiveIntensity: 1.05,
+      roughness: 0.16,
+      metalness: 0.4,
+    });
+    const goldMat = new THREE.MeshStandardMaterial({ color: '#f2c14e', metalness: 0.8, roughness: 0.22 });
+    pulseMats.push({ mat: sovereignFlowMat, base: 1.05, amp: 0.3, speed: 3.0 });
+
+    const moat = new THREE.Mesh(new THREE.PlaneGeometry(15, 1.45), sovereignFlowMat);
+    moat.rotation.x = -Math.PI / 2;
+    moat.position.set(0, 0.014, -7.2);
+    group.add(moat);
+    group.add(buildBridgeAt(0, -7.2, 0, '#614615', '#ffefad', 2.0));
+
+    for (const [rad, spd] of [[2.35, 0.48], [1.65, -0.68], [0.95, 0.92]] as Array<[number, number]>) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(rad, 0.055, 8, 40), goldMat);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.set(0, 0.06, 1.6);
+      group.add(ring);
+      animatedProps.push({ obj: ring, axis: 'z', speed: spd });
+    }
+
+    for (const [cx, cz] of [[-4.85, 5.4], [4.85, 5.4]] as Array<[number, number]>) {
+      if (!isClearPropPos(cx, cz, level, roadSamples, 1.0, 0.9)) continue;
+      const crown = buildCrystalObelisk('#4f5c20', '#62eb82', '#16a34a');
+      crown.root.position.set(cx, 0, cz);
+      group.add(crown.root);
+      animatedProps.push({ obj: crown.crystal, axis: 'y', speed: 2.3 });
+    }
+    for (const [tx, tz] of [[-4.85, -3.4], [4.85, -3.4]] as Array<[number, number]>) {
+      if (!isClearPropPos(tx, tz, level, roadSamples, 1.0, 0.9)) continue;
+      const spire = buildTeslaSpire();
+      spire.root.position.set(tx, 0, tz);
+      group.add(spire.root);
+      animatedProps.push({ obj: spire.ringA, axis: 'y', speed: 3.6 });
+      animatedProps.push({ obj: spire.ringB, axis: 'y', speed: -3.1 });
     }
   }
 

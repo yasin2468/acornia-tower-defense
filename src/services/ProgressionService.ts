@@ -77,7 +77,9 @@ export function calculateAfkAccumulation(save: SaveState, nowMs = Date.now()): A
   const capHours = isVipActive(save, nowMs) ? 16 : 8;
   const elapsedMs = Math.max(0, nowMs - save.afkLastClaimAt);
   const hoursElapsed = Math.min(capHours, elapsedMs / (3600 * 1000));
-  const oakCoins = Math.floor(hoursElapsed * AFK_OAK_PER_HOUR);
+  const clearedStages = Object.values(save.levelStars).filter((st) => st > 0).length;
+  const hourlyOak = AFK_OAK_PER_HOUR + Math.floor(clearedStages / 5) * 4;
+  const oakCoins = Math.floor(hoursElapsed * hourlyOak);
   const shards = Math.floor(hoursElapsed / 2);
   return {
     hoursElapsed: Number(hoursElapsed.toFixed(1)),
@@ -559,6 +561,24 @@ export const ACHIEVEMENTS: readonly AchievementSpec[] = [
     rewardGems: 200,
     unlockHat: 'crown',
     measure: (s) => ((s.levelStars[36] ?? 0) > 0 ? 1 : 0),
+  },
+  {
+    id: 'ach_stars_150',
+    titleKey: 'ach.stars_150.title',
+    descKey: 'ach.stars_150.desc',
+    target: 150,
+    rewardOak: 480,
+    rewardGems: 90,
+    measure: (s) => computeTotalEarnedStars(s.levelStars, s.ironCleared),
+  },
+  {
+    id: 'ach_clear_50',
+    titleKey: 'ach.clear_50.title',
+    descKey: 'ach.clear_50.desc',
+    target: 1,
+    rewardOak: 800,
+    rewardGems: 150,
+    measure: (s) => ((s.levelStars[50] ?? 0) > 0 ? 1 : 0),
   },
 ];
 

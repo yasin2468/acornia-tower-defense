@@ -88,7 +88,7 @@ export interface TowerSpec {
 }
 
 export const SELL_REFUND_RATE = 0.6;
-export const CARD_MAX_LEVEL = 15;
+export const CARD_MAX_LEVEL = 20;
 export const CARD_DAMAGE_PER_LEVEL = 0.08;
 
 export function cardLevelMultiplier(cardLevel: number): number {

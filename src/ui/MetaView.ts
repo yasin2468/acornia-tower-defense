@@ -121,16 +121,19 @@ export type JournalSubTab = 'quests' | 'achievements' | 'codex';
 export type CodexFilter = 'all' | 'tower' | 'hero' | 'enemy';
 
 export const MAP_REGIONS = [
-  { firstStage: 1, lastStage: 3, range: '1–3', biome: 'forest' as const, labelKey: 'map.biome.forest', xPct: 5.87 },
-  { firstStage: 4, lastStage: 6, range: '4–6', biome: 'canyon' as const, labelKey: 'map.biome.canyon', xPct: 13.90 },
-  { firstStage: 7, lastStage: 9, range: '7–9', biome: 'cavern' as const, labelKey: 'map.biome.cavern', xPct: 21.92 },
-  { firstStage: 10, lastStage: 12, range: '10–12', biome: 'snow' as const, labelKey: 'map.biome.snow', xPct: 29.94 },
-  { firstStage: 13, lastStage: 16, range: '13–16', biome: 'foundry' as const, labelKey: 'map.biome.foundry', xPct: 39.30 },
-  { firstStage: 17, lastStage: 20, range: '17–20', biome: 'forest' as const, labelKey: 'map.region.shadowfen', xPct: 50.00 },
-  { firstStage: 21, lastStage: 24, range: '21–24', biome: 'cavern' as const, labelKey: 'map.region.astral', xPct: 60.70 },
-  { firstStage: 25, lastStage: 28, range: '25–28', biome: 'snow' as const, labelKey: 'map.region.skyridge', xPct: 71.39 },
-  { firstStage: 29, lastStage: 32, range: '29–32', biome: 'foundry' as const, labelKey: 'map.region.caldera', xPct: 82.09 },
-  { firstStage: 33, lastStage: 36, range: '33–36', biome: 'forest' as const, labelKey: 'map.region.eternal_oak', xPct: 92.79 },
+  { firstStage: 1, lastStage: 3, range: '1–3', biome: 'forest' as const, labelKey: 'map.biome.forest', xPct: 4.34 },
+  { firstStage: 4, lastStage: 6, range: '4–6', biome: 'canyon' as const, labelKey: 'map.biome.canyon', xPct: 10.17 },
+  { firstStage: 7, lastStage: 9, range: '7–9', biome: 'cavern' as const, labelKey: 'map.biome.cavern', xPct: 16.00 },
+  { firstStage: 10, lastStage: 12, range: '10–12', biome: 'snow' as const, labelKey: 'map.biome.snow', xPct: 21.83 },
+  { firstStage: 13, lastStage: 16, range: '13–16', biome: 'foundry' as const, labelKey: 'map.biome.foundry', xPct: 28.63 },
+  { firstStage: 17, lastStage: 20, range: '17–20', biome: 'forest' as const, labelKey: 'map.region.shadowfen', xPct: 36.40 },
+  { firstStage: 21, lastStage: 24, range: '21–24', biome: 'cavern' as const, labelKey: 'map.region.astral', xPct: 44.17 },
+  { firstStage: 25, lastStage: 28, range: '25–28', biome: 'snow' as const, labelKey: 'map.region.skyridge', xPct: 51.94 },
+  { firstStage: 29, lastStage: 32, range: '29–32', biome: 'foundry' as const, labelKey: 'map.region.caldera', xPct: 59.71 },
+  { firstStage: 33, lastStage: 36, range: '33–36', biome: 'forest' as const, labelKey: 'map.region.eternal_oak', xPct: 67.49 },
+  { firstStage: 37, lastStage: 40, range: '37–40', biome: 'canyon' as const, labelKey: 'map.region.rootstorm', xPct: 75.26 },
+  { firstStage: 41, lastStage: 45, range: '41–45', biome: 'cavern' as const, labelKey: 'map.region.aether', xPct: 84.00 },
+  { firstStage: 46, lastStage: 50, range: '46–50', biome: 'forest' as const, labelKey: 'map.region.sovereign_oak', xPct: 93.71 },
 ] as const;
 
 interface NavBadges {
@@ -408,8 +411,8 @@ export class MetaView {
   }
 
   private computeMapPanPct(xPct: number): number {
-    // Track width is 780% of viewport: center target xPct at 50% viewport (6.4103%), clamped to [0, -87.1795]%.
-    return Math.max(-87.1795, Math.min(0, 6.4103 - xPct));
+    // Track width is 1080% of viewport: center target xPct at 50% viewport (4.6296%), clamped to [-90.7407, 0]%.
+    return Math.max(-90.7407, Math.min(0, 4.6296 - xPct));
   }
 
   private getStageUniqueEnemies(level: LevelSpec): EnemyId[] {
@@ -518,9 +521,11 @@ export class MetaView {
       39.5, 35.0, 41.5, 35.5, 41.0, 34.5, 41.5, 35.5, 40.5, 35.0, 41.0, 34.5,
       41.0, 35.5, 41.5, 35.0, 40.5, 34.5, 41.5, 35.5, 41.0, 35.0, 41.0, 35.5,
       40.5, 35.0, 41.5, 34.5, 41.0, 35.5, 41.5, 35.0, 40.5, 35.0, 41.0, 35.5,
+      41.0, 34.8, 41.5, 35.2, 40.8, 34.6, 41.4, 35.4, 40.6, 35.0, 41.5, 34.8,
+      41.0, 35.5,
     ];
     const OAK_HORIZ_TRAIL: ReadonlyArray<{ xPct: number; yPct: number }> = Y_WAVE.map((yPct, idx) => ({
-      xPct: Number((3.2 + idx * 2.6743).toFixed(2)),
+      xPct: Number((2.4 + idx * (95.2 / 49)).toFixed(2)),
       yPct,
     }));
 
@@ -654,6 +659,9 @@ export class MetaView {
             <div class="map-horiz-bg-tile tile-v6" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
             <div class="map-horiz-bg-tile tile-v7" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
             <div class="map-horiz-bg-tile tile-v8" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
+            <div class="map-horiz-bg-tile tile-v9" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
+            <div class="map-horiz-bg-tile tile-v10" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
+            <div class="map-horiz-bg-tile tile-v11" style="background-image: url('${OAK_UI_URLS.worldMap}');"></div>
             <div class="map-biome-wash"></div>
             <div class="map-seam-mist"></div>
           </div>
@@ -2343,7 +2351,7 @@ export class MetaView {
       let dragging = false;
       let moved = false;
 
-      const clampPan = (val: number): number => Math.max(-87.1795, Math.min(0, val));
+      const clampPan = (val: number): number => Math.max(-90.7407, Math.min(0, val));
 
       mapViewport.onpointerdown = (ev: PointerEvent) => {
         const tgt = ev.target as HTMLElement | null;
@@ -2367,7 +2375,7 @@ export class MetaView {
           this.suppressNextMapClick = true;
           track.classList.add('is-dragging');
         }
-        const trackW = track.getBoundingClientRect?.().width || (mapViewport.clientWidth * 7.8) || 3042;
+        const trackW = track.getBoundingClientRect?.().width || (mapViewport.clientWidth * 10.8) || 4212;
         const nextPan = clampPan(startPan + (dx / trackW) * 100);
         track.style.transform = `translate3d(${nextPan.toFixed(4)}%, 0, 0)`;
         this.prevMapPanPct = nextPan;

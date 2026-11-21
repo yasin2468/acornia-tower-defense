@@ -480,6 +480,160 @@ const MEADOW_PALETTES: Record<TextureKey, MeadowPalette> = {
     fleckLight: 'rgba(255, 244, 176, 0.34)',
     fleckDark: 'rgba(22, 26, 10, 0.26)',
   },
+  // 37. Rootstorm Gate
+  rootstorm_gate: {
+    gradInner: '#365e4e',
+    gradMid: '#27473a',
+    gradOuter: '#172c24',
+    patchA: 'rgba(94, 242, 142, 0.24)',
+    patchB: 'rgba(45, 212, 191, 0.22)',
+    patchC: 'rgba(14, 30, 24, 0.32)',
+    fleckLight: 'rgba(186, 255, 219, 0.28)',
+    fleckDark: 'rgba(10, 22, 18, 0.28)',
+  },
+  // 38. Amber Thunder Ravine
+  amber_thunder_ravine: {
+    gradInner: '#784626',
+    gradMid: '#59321b',
+    gradOuter: '#381e0f',
+    patchA: 'rgba(255, 174, 68, 0.26)',
+    patchB: 'rgba(217, 106, 56, 0.24)',
+    patchC: 'rgba(34, 16, 8, 0.32)',
+    fleckLight: 'rgba(255, 219, 148, 0.30)',
+    fleckDark: 'rgba(28, 12, 6, 0.28)',
+  },
+  // 39. Glacier Prism Pass
+  glacier_prism_pass: {
+    gradInner: '#38688a',
+    gradMid: '#284d69',
+    gradOuter: '#183247',
+    patchA: 'rgba(128, 229, 255, 0.26)',
+    patchB: 'rgba(94, 180, 230, 0.24)',
+    patchC: 'rgba(14, 30, 46, 0.30)',
+    fleckLight: 'rgba(214, 247, 255, 0.34)',
+    fleckDark: 'rgba(12, 24, 38, 0.26)',
+  },
+  // 40. Stormforge Bastion
+  stormforge_bastion: {
+    gradInner: '#542e32',
+    gradMid: '#3d2023',
+    gradOuter: '#241113',
+    patchA: 'rgba(255, 110, 54, 0.28)',
+    patchB: 'rgba(184, 72, 64, 0.24)',
+    patchC: 'rgba(22, 10, 12, 0.36)',
+    fleckLight: 'rgba(255, 188, 148, 0.28)',
+    fleckDark: 'rgba(18, 8, 10, 0.32)',
+  },
+  // 41. Aether Crystal Vault
+  aether_crystal_vault: {
+    gradInner: '#3f326e',
+    gradMid: '#2e2454',
+    gradOuter: '#1c1536',
+    patchA: 'rgba(183, 138, 255, 0.26)',
+    patchB: 'rgba(114, 89, 181, 0.24)',
+    patchC: 'rgba(18, 12, 34, 0.34)',
+    fleckLight: 'rgba(226, 204, 255, 0.30)',
+    fleckDark: 'rgba(14, 10, 28, 0.30)',
+  },
+  // 42. Chrono Gear Foundry
+  chrono_gear_foundry: {
+    gradInner: '#63482d',
+    gradMid: '#4a3520',
+    gradOuter: '#2e2012',
+    patchA: 'rgba(255, 185, 77, 0.26)',
+    patchB: 'rgba(171, 128, 70, 0.24)',
+    patchC: 'rgba(28, 18, 10, 0.34)',
+    fleckLight: 'rgba(255, 225, 156, 0.30)',
+    fleckDark: 'rgba(22, 14, 8, 0.30)',
+  },
+  // 43. Sunspire Canyon Bridge
+  sunspire_canyon_bridge: {
+    gradInner: '#8a552b',
+    gradMid: '#693f1e',
+    gradOuter: '#422610',
+    patchA: 'rgba(255, 209, 102, 0.28)',
+    patchB: 'rgba(235, 166, 89, 0.24)',
+    patchC: 'rgba(42, 22, 10, 0.30)',
+    fleckLight: 'rgba(255, 240, 184, 0.34)',
+    fleckDark: 'rgba(34, 18, 8, 0.26)',
+  },
+  // 44. Froststar Observatory
+  froststar_observatory: {
+    gradInner: '#304778',
+    gradMid: '#223359',
+    gradOuter: '#141f38',
+    patchA: 'rgba(128, 200, 255, 0.26)',
+    patchB: 'rgba(94, 136, 207, 0.24)',
+    patchC: 'rgba(12, 18, 36, 0.32)',
+    fleckLight: 'rgba(217, 238, 255, 0.32)',
+    fleckDark: 'rgba(10, 15, 30, 0.28)',
+  },
+  // 45. Aether Overlord Keep
+  aether_overlord_keep: {
+    gradInner: '#472854',
+    gradMid: '#331c3d',
+    gradOuter: '#1e0f24',
+    patchA: 'rgba(255, 102, 196, 0.26)',
+    patchB: 'rgba(153, 71, 140, 0.26)',
+    patchC: 'rgba(20, 10, 24, 0.36)',
+    fleckLight: 'rgba(255, 194, 234, 0.30)',
+    fleckDark: 'rgba(16, 8, 20, 0.32)',
+  },
+  // 46. Ancient Crown Canopy
+  ancient_crown_canopy: {
+    gradInner: '#586e2e',
+    gradMid: '#425222',
+    gradOuter: '#283313',
+    patchA: 'rgba(154, 230, 92, 0.26)',
+    patchB: 'rgba(186, 209, 90, 0.24)',
+    patchC: 'rgba(24, 32, 12, 0.30)',
+    fleckLight: 'rgba(235, 255, 168, 0.32)',
+    fleckDark: 'rgba(20, 26, 10, 0.26)',
+  },
+  // 47. Starroot Abyss
+  starroot_abyss: {
+    gradInner: '#2e4e61',
+    gradMid: '#213847',
+    gradOuter: '#13222c',
+    patchA: 'rgba(79, 242, 210, 0.26)',
+    patchB: 'rgba(68, 143, 168, 0.24)',
+    patchC: 'rgba(12, 22, 28, 0.32)',
+    fleckLight: 'rgba(184, 255, 240, 0.30)',
+    fleckDark: 'rgba(10, 18, 24, 0.28)',
+  },
+  // 48. Celestial Frost Bridge
+  celestial_frost_bridge: {
+    gradInner: '#456f96',
+    gradMid: '#335473',
+    gradOuter: '#1e354a',
+    patchA: 'rgba(153, 238, 255, 0.28)',
+    patchB: 'rgba(120, 178, 219, 0.24)',
+    patchC: 'rgba(18, 32, 46, 0.30)',
+    fleckLight: 'rgba(230, 249, 255, 0.36)',
+    fleckDark: 'rgba(14, 26, 38, 0.24)',
+  },
+  // 49. Iron Eclipse Crucible
+  iron_eclipse_crucible: {
+    gradInner: '#522a25',
+    gradMid: '#3b1d19',
+    gradOuter: '#22100d',
+    patchA: 'rgba(255, 96, 54, 0.28)',
+    patchB: 'rgba(166, 66, 50, 0.24)',
+    patchC: 'rgba(22, 10, 8, 0.36)',
+    fleckLight: 'rgba(255, 177, 153, 0.30)',
+    fleckDark: 'rgba(18, 8, 6, 0.32)',
+  },
+  // 50. Sovereign Oak Throne
+  sovereign_oak_throne: {
+    gradInner: '#5d6628',
+    gradMid: '#444b1c',
+    gradOuter: '#282c0f',
+    patchA: 'rgba(255, 232, 133, 0.30)',
+    patchB: 'rgba(98, 235, 130, 0.26)',
+    patchC: 'rgba(24, 28, 10, 0.30)',
+    fleckLight: 'rgba(255, 246, 186, 0.36)',
+    fleckDark: 'rgba(20, 24, 8, 0.26)',
+  },
 };
 
 const ROAD_PALETTES: Record<TextureKey, RoadPalette> = {
@@ -524,6 +678,20 @@ const ROAD_PALETTES: Record<TextureKey, RoadPalette> = {
   crystal_crown_labyrinth: { mortar: '#4f3a7a', stones: ['#bfa6eb', '#ad92db', '#cfb8f5', '#9b80cc'] },
   aurora_warden_bridge: { mortar: '#326378', stones: ['#9cdbe6', '#88cad6', '#b0eaf4', '#74b8c4'] },
   eternal_oak_sanctum: { mortar: '#595e22', stones: ['#e8de94', '#d9ce80', '#f5eca6', '#c9be6e'] },
+  rootstorm_gate: { mortar: '#2b5946', stones: ['#9be3bf', '#88d1ad', '#b2f0d1', '#75bf9b'] },
+  amber_thunder_ravine: { mortar: '#754120', stones: ['#e3ac76', '#d49963', '#f0be8b', '#c28752'] },
+  glacier_prism_pass: { mortar: '#3a668a', stones: ['#bde8fa', '#aad8f0', '#d1f2ff', '#98c6e0'] },
+  stormforge_bastion: { mortar: '#522222', stones: ['#a66f68', '#945d56', '#b8817a', '#824c46'] },
+  aether_crystal_vault: { mortar: '#413275', stones: ['#b8a8eb', '#a696dc', '#cabcf5', '#9483cc'] },
+  chrono_gear_foundry: { mortar: '#664928', stones: ['#cfab76', '#bd9762', '#debd8a', '#ab8550'] },
+  sunspire_canyon_bridge: { mortar: '#8f5922', stones: ['#f0cb8b', '#e3b974', '#f7daa1', '#d4a761'] },
+  froststar_observatory: { mortar: '#2e497a', stones: ['#a6c7f0', '#94b5e0', '#b8d7f7', '#82a3cf'] },
+  aether_overlord_keep: { mortar: '#4a214d', stones: ['#b37aad', '#a1699b', '#c48dbf', '#8f5889'] },
+  ancient_crown_canopy: { mortar: '#4d6122', stones: ['#cde08b', '#bcce77', '#dced9f', '#aab965'] },
+  starroot_abyss: { mortar: '#224757', stones: ['#8ed4d9', '#7ac2c7', '#a3e4e8', '#68b0b5'] },
+  celestial_frost_bridge: { mortar: '#446b91', stones: ['#d4ecfa', '#c2def0', '#e6f5ff', '#b0cee0'] },
+  iron_eclipse_crucible: { mortar: '#52211b', stones: ['#a8685c', '#96564a', '#ba7a6e', '#84463b'] },
+  sovereign_oak_throne: { mortar: '#665b1c', stones: ['#f2df85', '#e3ce70', '#ffeba0', '#d4be5d'] },
 };
 
 /** Stage-concept-themed valley ground texture so every stage looks immediately distinct. */

@@ -28,13 +28,13 @@ function makeMockStorage() {
 }
 
 describe('v1.0.0 A-Z Lansman Hazırlığı (Hikâye, Yaşam Döngüsü, İade, Yedekleme, Kapılar)', () => {
-  it('10 bölge başlangıç hikâyesi, Boss başlıkları (20/24/28/32/36) ve Bölüm 36 Büyük Finali eksiksizdir', () => {
-    assert.ok(CAMPAIGN_STORY_BEATS.length >= 17);
-    for (const chFirst of [1, 4, 7, 10, 13, 17, 21, 25, 29, 33]) {
+  it('13 bölge başlangıç hikâyesi, Boss başlıkları (20/24/28/32/36/40/45/50) ve Bölüm 50 Büyük Finali eksiksizdir', () => {
+    assert.ok(CAMPAIGN_STORY_BEATS.length >= 23);
+    for (const chFirst of [1, 4, 7, 10, 13, 17, 21, 25, 29, 33, 37, 41, 46]) {
       const beat = getStoryBeatForLevel(chFirst);
       assert.ok(beat, `Bölüm ${chFirst} başlangıç hikâyesi eksik`);
     }
-    for (const bossLvl of [20, 24, 28, 32, 36]) {
+    for (const bossLvl of [20, 24, 28, 32, 36, 40, 45, 50]) {
       const key = getBossDisplayNameKey(bossLvl, 'enemy.magma_overlord.name');
       assert.equal(key, `boss.title.${bossLvl}`);
     }
@@ -103,7 +103,7 @@ describe('v1.0.0 A-Z Lansman Hazırlığı (Hikâye, Yaşam Döngüsü, İade, Y
     assert.equal(sim.getTowerSellRefund(50), 30);
   });
 
-  it('BattleView hikâye kartı, Pause ses anahtarları, Sonraki Bölüm CTA ve Bölüm 36 Final kutusu üretir', () => {
+  it('BattleView hikâye kartı, Pause ses anahtarları, Sonraki Bölüm CTA ve Bölüm 50 Final kutusu üretir', () => {
     const g = globalThis as Record<string, unknown>;
     const hadStorage = 'localStorage' in g;
     const prevStorage = g.localStorage;
@@ -162,12 +162,12 @@ describe('v1.0.0 A-Z Lansman Hazırlığı (Hikâye, Yaşam Döngüsü, İade, Y
       assert.ok(modalHost.innerHTML.includes('id="btn-next-level"'));
       assert.ok(!modalHost.innerHTML.includes('id="btn-double-reward"'));
 
-      // 4. Bölüm 36 zaferinde Büyük Final kutlaması görünür ve Sonraki Bölüm olmaz
-      bv.resetForLevel(36);
+      // 4. Bölüm 50 zaferinde Büyük Final kutlaması görünür ve Sonraki Bölüm olmaz
+      bv.resetForLevel(50);
       bv.activeStoryBeat = null;
-      const sim36 = new SimulationEngine(LEVELS[35], { seed: 3636, waitForFirstWave: false });
-      sim36.status = 'won';
-      bv.render(container, sim36, fakeScene);
+      const sim50 = new SimulationEngine(LEVELS[49], { seed: 5050, waitForFirstWave: false });
+      sim50.status = 'won';
+      bv.render(container, sim50, fakeScene);
       assert.ok(modalHost.innerHTML.includes('id="campaign-finale-card"'));
       assert.ok(!modalHost.innerHTML.includes('id="btn-next-level"'));
     } finally {
@@ -207,7 +207,7 @@ describe('v1.0.0 A-Z Lansman Hazırlığı (Hikâye, Yaşam Döngüsü, İade, Y
       assert.equal(sm2.get().levelStars[36], 3);
       assert.ok(sm2.get().seenStoryIds.includes('story_ch1'));
 
-      for (const achId of ['ach_stars_60', 'ach_stars_100', 'ach_kills_1000', 'ach_clear_36']) {
+      for (const achId of ['ach_stars_60', 'ach_stars_100', 'ach_kills_1000', 'ach_clear_36', 'ach_stars_150', 'ach_clear_50']) {
         assert.ok(ACHIEVEMENTS.some((a) => a.id === achId), `${achId} eksik`);
       }
 

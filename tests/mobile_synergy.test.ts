@@ -391,10 +391,22 @@ describe('Mobil Menü Detay Çekmecesi & 2×4 Savaş Tepsisi', () => {
       const r32 = computeVictoryRewards(32, 3, false);
       const r35 = computeVictoryRewards(35, 3, false);
       const r36 = computeVictoryRewards(36, 3, false);
+      const r39 = computeVictoryRewards(39, 3, false);
+      const r40 = computeVictoryRewards(40, 3, false);
+      const r44 = computeVictoryRewards(44, 3, false);
+      const r45 = computeVictoryRewards(45, 3, false);
+      const r49 = computeVictoryRewards(49, 3, false);
+      const r50 = computeVictoryRewards(50, 3, false);
       assert.ok(r36.oak > r24.oak && r36.gems > r24.gems, '36. bölüm ödülü 24. bölümden yüksek olmalı');
+      assert.ok(r50.oak > r36.oak && r50.gems > r36.gems, '50. bölüm final ödülü 36. bölümden yüksek olmalı');
       assert.ok(r28.oak - r27.oak >= 40, '28. bölüm boss bonusu almalı');
       assert.ok(r32.oak - r31.oak >= 40, '32. bölüm boss bonusu almalı');
       assert.ok(r36.oak - r35.oak >= 40, '36. bölüm boss bonusu almalı');
+      assert.ok(r40.oak - r39.oak >= 40, '40. bölüm boss bonusu almalı');
+      assert.ok(r45.oak - r44.oak >= 40, '45. bölüm boss bonusu almalı');
+      assert.ok(r50.oak - r49.oak >= 90, '50. bölüm final + boss bonusu almalı');
+      assert.equal(LEVELS[49].waves.length, 14, '50. bölüm 14 dalga olmalı');
+      assert.equal(LEVELS[49].slots.length, 12, '50. bölüm 12 kule yuvası sunmalı');
     } finally {
       if (hadStorage) g.localStorage = prevStorage;
       else delete g.localStorage;

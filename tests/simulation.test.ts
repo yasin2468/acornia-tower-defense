@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { FIXED_DT, SimulationEngine } from '../src/core/SimulationEngine.ts';
 import { BEAR_HERO_SPEC, ENEMY_LIST, HERO_CLASSES, resolveHeroVisualVariant } from '../src/data/enemies.ts';
 import { LEVELS, isLevelUnlocked } from '../src/data/levels.ts';
-import { cardLevelMultiplier } from '../src/data/towers.ts';
+import { CARD_MAX_LEVEL, cardLevelMultiplier } from '../src/data/towers.ts';
 import { calculateAfkAccumulation } from '../src/services/ProgressionService.ts';
 import { createInitialSave } from '../src/services/SaveManager.ts';
 
@@ -73,14 +73,23 @@ describe('Palamut Kalesi deterministic simulation & economy', () => {
     sim.step(FIXED_DT);
     assert.equal(sim.gold, 250); // +75 (60% of 125)
 
+    assert.equal(CARD_MAX_LEVEL, 20);
     assert.equal(cardLevelMultiplier(1), 1.0);
     assert.ok(Math.abs(cardLevelMultiplier(15) - 2.12) < 1e-9);
+    assert.ok(Math.abs(cardLevelMultiplier(20) - 2.52) < 1e-9);
 
     const now = 1_700_000_000_000;
     const freeSave = createInitialSave(now);
     freeSave.afkLastClaimAt = now - 20 * 3600 * 1000;
-    assert.equal(calculateAfkAccumulation(freeSave, now).capHours, 8);
-    assert.equal(calculateAfkAccumulation(freeSave, now).hoursElapsed, 8);
+    const freshAfk = calculateAfkAccumulation(freeSave, now);
+    assert.equal(freshAfk.capHours, 8);
+    assert.equal(freshAfk.hoursElapsed, 8);
+
+    const progressedSave = createInitialSave(now);
+    progressedSave.afkLastClaimAt = now - 20 * 3600 * 1000;
+    for (let id = 1; id <= 50; id++) progressedSave.levelStars[id] = 3;
+    const lateAfk = calculateAfkAccumulation(progressedSave, now);
+    assert.ok(lateAfk.oakCoins > freshAfk.oakCoins, '50 bölüm tamamlama AFK devriye saatlik palamutu artırmalı');
 
     freeSave.vipTier = 'monthly';
     freeSave.vipExpiresAt = now + 30 * 24 * 3600 * 1000;
@@ -113,13 +122,13 @@ describe('Palamut Kalesi deterministic simulation & economy', () => {
     assert.equal(sim.slots.get('slot_1')!.tower!.smokedTimer, 0);
   });
 
-  it('validates 36 campaign levels across 5 biomes with clean road/slot clearances', () => {
-    assert.equal(LEVELS.length, 36);
-    assert.equal(LEVELS.filter((l) => l.biome === 'forest').length, 8, 'biome forest');
-    assert.equal(LEVELS.filter((l) => l.biome === 'canyon').length, 6, 'biome canyon');
-    assert.equal(LEVELS.filter((l) => l.biome === 'cavern').length, 6, 'biome cavern');
-    assert.equal(LEVELS.filter((l) => l.biome === 'snow').length, 7, 'biome snow');
-    assert.equal(LEVELS.filter((l) => l.biome === 'foundry').length, 9, 'biome foundry');
+  it('validates 50 campaign levels across 5 biomes with clean road/slot clearances', () => {
+    assert.equal(LEVELS.length, 50);
+    assert.equal(LEVELS.filter((l) => l.biome === 'forest').length, 11, 'biome forest');
+    assert.equal(LEVELS.filter((l) => l.biome === 'canyon').length, 8, 'biome canyon');
+    assert.equal(LEVELS.filter((l) => l.biome === 'cavern').length, 8, 'biome cavern');
+    assert.equal(LEVELS.filter((l) => l.biome === 'snow').length, 10, 'biome snow');
+    assert.equal(LEVELS.filter((l) => l.biome === 'foundry').length, 13, 'biome foundry');
 
     assert.equal(isLevelUnlocked(1, {}), true);
     assert.equal(isLevelUnlocked(2, {}), false);
@@ -127,8 +136,8 @@ describe('Palamut Kalesi deterministic simulation & economy', () => {
     assert.equal(isLevelUnlocked(10, {}), false);
     assert.equal(isLevelUnlocked(11, {}), false);
     assert.equal(isLevelUnlocked(11, { 10: 2 }), true);
-    assert.equal(isLevelUnlocked(36, {}), false);
-    assert.equal(isLevelUnlocked(36, { 35: 1 }), true);
+    assert.equal(isLevelUnlocked(50, {}), false);
+    assert.equal(isLevelUnlocked(50, { 49: 1 }), true);
 
     const distSeg = (px: number, pz: number, ax: number, az: number, bx: number, bz: number) => {
       const vx = bx - ax;

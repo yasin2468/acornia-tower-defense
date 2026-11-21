@@ -192,7 +192,10 @@ export const DAILY_MUTATOR_LIST: readonly DailyMutatorSpec[] = Object.values(DAI
 export const DAILY_CHALLENGE_OAK = 180;
 export const DAILY_CHALLENGE_GEMS = 25;
 
-const DAILY_STAGE_POOL = [4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 17, 18, 19, 21, 22, 23, 25, 26, 27];
+const DAILY_STAGE_POOL = [
+  4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 17, 18, 19, 21, 22, 23, 25, 26, 27, 29, 30, 31, 33, 34, 35,
+  37, 38, 39, 41, 42, 43, 46, 47, 48, 49,
+];
 
 function hashDateString(dateKey: string): number {
   let h = 2166136261;

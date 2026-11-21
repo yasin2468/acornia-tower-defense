@@ -180,7 +180,7 @@ export class BattleView {
     this.floatPool = [];
     this.lastTutorialHtml = '';
     const save = this.saveManager.get();
-    const beat = !this.promoMode && levelId <= 36 ? getStoryBeatForLevel(levelId) : null;
+    const beat = !this.promoMode && levelId <= LEVELS.length ? getStoryBeatForLevel(levelId) : null;
     this.activeStoryBeat = beat && !save.seenStoryIds?.includes(beat.id) ? beat : null;
     this.tutorialPhase = levelId === 1 && !save.tutorialDone ? 'build_tower' : 'done';
     this.mountedRoot = null;

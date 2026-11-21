@@ -291,8 +291,8 @@ describe('Paket 4 — Hazırlık fazı, erken dalga bonusu ve üst HUD uyumu', (
   });
 });
 
-describe('Paket 5 — 16 benzersiz bölüm konsepti, 3B sahne kurgusu ve TR/EN yerelleştirme eşliği', () => {
-  it('36 bölümün her biri benzersiz konsept, 3B sahne nesnesi ve TR/EN çeviri anahtarlarına sahiptir', () => {
+describe('Paket 5 — 50 benzersiz bölüm konsepti, 3B sahne kurgusu ve TR/EN yerelleştirme eşliği', () => {
+  it('50 bölümün her biri benzersiz konsept, 3B sahne nesnesi ve TR/EN çeviri anahtarlarına sahiptir', () => {
     const concepts = new Set<string>();
     for (const lvl of LEVELS) {
       concepts.add(lvl.concept);
@@ -321,6 +321,6 @@ describe('Paket 5 — 16 benzersiz bölüm konsepti, 3B sahne kurgusu ve TR/EN y
         assert.notEqual(t(loc, sKey), sKey, `${loc} eksik: ${sKey}`);
       }
     }
-    assert.equal(concepts.size, 36, '36 bölümün konsept kimlikleri birbirinden tamamen farklı olmalı');
+    assert.equal(concepts.size, 50, '50 bölümün konsept kimlikleri birbirinden tamamen farklı olmalı');
   });
 });

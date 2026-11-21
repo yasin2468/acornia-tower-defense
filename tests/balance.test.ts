@@ -17,8 +17,8 @@ const ORIG_LEVEL_TOTAL_HP = [
 ];
 
 describe('Dengе ve kabul kriterleri (DEGISIKLIK-2026-11-18)', () => {
-  it('D1: 36 seviyede dalga HP katları 1.09-1.21 bandında, monoton artan, ilk 12 seviyede toplam ±%10 korunmuş', () => {
-    assert.equal(LEVELS.length, 36);
+  it('D1: 50 seviyede dalga HP katları 1.09-1.21 bandında, monoton artan, ilk 12 seviyede toplam ±%10 korunmuş', () => {
+    assert.equal(LEVELS.length, 50);
     for (const lvl of LEVELS) {
       const totals = lvl.waves.map(waveHpTotal);
       assert.ok(totals.length >= 7, `L${lvl.id} dalga sayisi`);
