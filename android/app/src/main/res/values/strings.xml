@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Oakward</string>
-    <string name="title_activity_main">Oakward</string>
+    <string name="app_name">Acornia</string>
+    <string name="title_activity_main">Acornia</string>
     <string name="package_name">com.palamutkalesi.app</string>
     <string name="custom_url_scheme">com.palamutkalesi.app</string>
 </resources>

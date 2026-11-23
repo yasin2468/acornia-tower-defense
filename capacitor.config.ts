@@ -1,6 +1,6 @@
 const config = {
   appId: 'com.palamutkalesi.app',
-  appName: 'Oakward',
+  appName: 'Acornia',
   webDir: 'dist',
   server: {
     androidScheme: 'https',

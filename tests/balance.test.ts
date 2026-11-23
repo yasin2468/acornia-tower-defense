@@ -220,7 +220,7 @@ describe('i18n parite ve gomulu metin gerilemesi (K4)', () => {
     const mainSrc = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
     const battleSrc = readFileSync(new URL('../src/ui/BattleView.ts', import.meta.url), 'utf8');
     const metaSrc = readFileSync(new URL('../src/ui/MetaView.ts', import.meta.url), 'utf8');
-    assert.ok(!mainSrc.includes('PALAMUT KALESİ') && !mainSrc.includes('>OAKWARD<'), 'main.ts loading.title gomulu');
+    assert.ok(!mainSrc.includes('PALAMUT KALESİ') && !mainSrc.includes('>ACORNIA<'), 'main.ts loading.title gomulu');
     assert.ok(!mainSrc.includes('3D Modeller Yükleniyor'), 'main.ts loading.models gomulu');
     assert.ok(!battleSrc.includes('>SAT<') && !battleSrc.includes('SAT +'), 'BattleView SAT gomulu');
     assert.ok(!battleSrc.includes('HUD Aç') && !battleSrc.includes('HUD Gizle'), 'BattleView HUD metni gomulu');

@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://oakwardgame.com/sitemap.xml
+Sitemap: https://acorniagame.com/sitemap.xml

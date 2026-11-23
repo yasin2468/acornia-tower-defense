@@ -2,7 +2,7 @@ export type Locale = 'tr' | 'en';
 
 const DICT: Record<Locale, Record<string, string>> = {
   tr: {
-    'app.title': 'Oakward: Kule Savunması',
+    'app.title': 'Acornia: Kule Savunması',
     'app.subtitle': '3B Orman Strateji',
     'nav.map': 'Harita',
     'nav.multi': 'Arkadaş',
@@ -232,7 +232,7 @@ const DICT: Record<Locale, Record<string, string>> = {
     'multi.createRoom': 'Oda Oluştur & Paylaş',
     'multi.quickMatch': 'Hızlı Eşleşme',
     'promo.title': 'Sahne Çekim Modu',
-    'loading.title': 'OAKWARD',
+    'loading.title': 'ACORNIA',
     'loading.subtitle': '3B Orman Kule Savunması',
     'loading.models': '3D Modeller Yükleniyor...',
     'boot.errorTitle': 'Bir Hata Oluştu',
@@ -439,7 +439,7 @@ const DICT: Record<Locale, Record<string, string>> = {
     'cards.sub.heroes': 'Kahramanlar',
     'cards.sub.accessories': 'Aksesuar',
     'cards.sub.talents': 'Yetenekler',
-    'app.titleLine1': 'OAKWARD',
+    'app.titleLine1': 'ACORNIA',
     'app.titleLine2': 'Kule Savunması',
     'map.afk.line1': 'Devriye',
     'map.afk.line2': 'Sandığı',
@@ -889,7 +889,7 @@ const DICT: Record<Locale, Record<string, string>> = {
     'combat.critTag': 'KRİTİK!',
   },
   en: {
-    'app.title': 'Oakward: Tower Defense',
+    'app.title': 'Acornia: Tower Defense',
     'app.subtitle': '3D Woodland Strategy',
     'nav.map': 'Map',
     'nav.multi': 'Co-op/PvP',
@@ -1119,7 +1119,7 @@ const DICT: Record<Locale, Record<string, string>> = {
     'multi.createRoom': 'Create Room & Share',
     'multi.quickMatch': 'Quick Match',
     'promo.title': 'Showcase Capture Mode',
-    'loading.title': 'OAKWARD',
+    'loading.title': 'ACORNIA',
     'loading.subtitle': '3D Woodland Tower Defense',
     'loading.models': 'Loading 3D Models...',
     'boot.errorTitle': 'Something Went Wrong',
@@ -1326,7 +1326,7 @@ const DICT: Record<Locale, Record<string, string>> = {
     'cards.sub.heroes': 'Heroes',
     'cards.sub.accessories': 'Gear',
     'cards.sub.talents': 'Talents',
-    'app.titleLine1': 'OAKWARD',
+    'app.titleLine1': 'ACORNIA',
     'app.titleLine2': 'Tower Defense',
     'map.afk.line1': 'Patrol',
     'map.afk.line2': 'Chest',

@@ -1,7 +1,7 @@
-# App Review Notes — Oakward: Tower Defense (v1.0.0)
+# App Review Notes — Acornia: Tower Defense (v1.0.0)
 
 ## App Summary
-**Oakward: Tower Defense** (Turkish title: **Oakward: Kule Savunması**) is an offline-first 3D woodland tower defense strategy game designed for portrait mobile play.
+**Acornia: Tower Defense** (Turkish title: **Acornia: Kule Savunması**) is an offline-first 3D woodland tower defense strategy game designed for portrait mobile play.
 
 ## Demo Account & Login
 - **No login or account required:** The app launches directly into the playable world map without authentication.
@@ -14,6 +14,6 @@
 4. **Local Data & Reset:** All progress stays locally on the device (`localStorage`). Reviewers and players can export backup codes or erase all local progress inside Settings (top-right gear icon) via **Reset Save**, plus view the bundled **Privacy Policy** (`privacy-policy.html`) and **Support** (`support.html`) links.
 
 ## Contact Information
-- Support Email: `support@oakwardgame.com`
-- Privacy Policy: `https://oakwardgame.com/privacy-policy.html`
-- Support URL: `https://oakwardgame.com/support.html`
+- Support Email: `support@acorniagame.com`
+- Privacy Policy: `https://acorniagame.com/privacy-policy.html`
+- Support URL: `https://acorniagame.com/support.html`
