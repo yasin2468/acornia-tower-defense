@@ -1,0 +1,1 @@
+Initial 1.0.0 release featuring all 50 campaign stages, 8 towers with 16 evolutions, 4 playable heroes, Iron Mode, Daily Challenges, Endless Siege, and the Lost Forest Expedition.

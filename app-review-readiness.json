@@ -1,0 +1,20 @@
+{
+  "build": "1.0.0 (1)",
+  "checked_on": "2026-11-23",
+  "enforce": false,
+  "checks": {
+    "demo_account": "n/a",
+    "live_backend": "n/a",
+    "review_notes": "pass",
+    "screenshots_match_build": "todo",
+    "account_deletion_device_test": "n/a",
+    "privacy_labels_match_runtime": "todo",
+    "iap_reachable_by_reviewer": "n/a"
+  },
+  "notes": {
+    "demo_account": "Offline single-player v1.0.0; no login or user accounts exist (ONLINE_ARENA_ENABLED=false).",
+    "live_backend": "Game runs 100% client-side offline; all assets are bundled in the app.",
+    "account_deletion_device_test": "No user account is created or stored on any server; local device progress can be cleared in Settings -> Reset Save.",
+    "iap_reachable_by_reviewer": "No real-money IAPs or third-party ad SDKs are active in v1.0.0 (MONETIZATION_ENABLED=false)."
+  }
+}

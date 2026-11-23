@@ -5,3 +5,8 @@ scripts/__pycache__/
 *.log
 .DS_Store
 tmp/
+ios/App/Pods/
+android/.gradle/
+android/app/build/
+android/build/
+RELEASE-READINESS-REPORT.md

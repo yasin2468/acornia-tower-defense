@@ -431,8 +431,18 @@ export class SaveManager {
     }
   }
 
+  clearLocalStorage(): void {
+    if (typeof localStorage === 'undefined') return;
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // Ignore storage removal errors in restricted environments
+    }
+  }
+
   reset(nowMs = Date.now(), preserveSettings = true): SaveState {
     const prevSettings = this.state.settings;
+    this.clearLocalStorage();
     const fresh = createInitialSave(nowMs);
     if (preserveSettings) {
       fresh.settings = { ...prevSettings };

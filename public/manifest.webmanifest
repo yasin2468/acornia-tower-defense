@@ -1,7 +1,7 @@
 {
-  "name": "Palamut Kalesi",
-  "short_name": "Palamut",
-  "description": "Orman hayvanları vs hurda robotlar — 3D mobil kule savunma oyunu",
+  "name": "Oakward: Tower Defense",
+  "short_name": "Oakward",
+  "description": "Offline 3D woodland tower defense strategy game across 50 stages, 8 towers, and 4 heroes.",
   "start_url": "./",
   "display": "standalone",
   "orientation": "portrait",

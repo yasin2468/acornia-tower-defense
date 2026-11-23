@@ -58,7 +58,7 @@ export class NetworkService {
       const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       this.wsUrl = `${proto}//${window.location.host}/ws`;
     } else {
-      this.wsUrl = 'ws://localhost:8789/ws';
+      this.wsUrl = '';
     }
   }
 
@@ -80,6 +80,7 @@ export class NetworkService {
   }
 
   connect(timeoutMs = 1500): Promise<boolean> {
+    if (!this.wsUrl) return Promise.resolve(false);
     if (this.ws && this.ws.readyState === 1) return Promise.resolve(true);
     if (typeof WebSocket !== 'function') return Promise.resolve(false);
     if (this.connectPromise) return this.connectPromise;

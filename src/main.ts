@@ -51,7 +51,7 @@ import {
 import { SaveManager, type BattleCheckpointState, type DailyMutatorId } from './services/SaveManager.ts';
 import { BattleView } from './ui/BattleView.ts';
 import { MetaView } from './ui/MetaView.ts';
-import { UI_ICON_URLS } from './ui/icons.ts';
+import { OAK_UI_URLS } from './ui/icons.ts';
 
 const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
 const uiRoot = document.getElementById('ui-root') as HTMLElement;
@@ -1172,13 +1172,19 @@ function frame(nowMs: number): void {
 function renderLoadingSplash(pct: number): void {
   const loc = saveManager.get().settings.locale;
   uiRoot.innerHTML = `
-    <div class="loading-splash">
-      <img class="loading-emblem" src="${UI_ICON_URLS.castleShield}" alt="${t(loc, 'app.title')}" />
-      <div class="loading-title">${t(loc, 'loading.title')}</div>
-      <div class="loading-track">
-        <div class="loading-fill" style="width:${pct}%"></div>
+    <div class="loading-splash" style="background-image: url('${OAK_UI_URLS.splashBg}');">
+      <div class="loading-splash-scrim" aria-hidden="true"></div>
+      <div class="loading-splash-content">
+        <div class="loading-emblem-frame">
+          <img class="loading-emblem" src="${OAK_UI_URLS.logoOakward}" alt="${t(loc, 'app.title')}" />
+        </div>
+        <div class="loading-title">${t(loc, 'loading.title')}</div>
+        <div class="loading-tagline">${t(loc, 'loading.subtitle')}</div>
+        <div class="loading-track">
+          <div class="loading-fill" style="width:${pct}%"></div>
+        </div>
+        <div class="loading-sub">${t(loc, 'loading.models')} ${pct}%</div>
       </div>
-      <div class="loading-sub">${t(loc, 'loading.models')} ${pct}%</div>
     </div>
   `;
 }
@@ -1187,11 +1193,16 @@ function renderBootError(err: unknown): void {
   const loc = saveManager.get().settings.locale;
   const errName = err instanceof Error ? err.name : 'UnknownError';
   uiRoot.innerHTML = `
-    <div class="loading-splash">
-      <img class="loading-emblem" src="${UI_ICON_URLS.castleShield}" alt="${t(loc, 'app.title')}" />
-      <div class="loading-title">${t(loc, 'boot.errorTitle')}</div>
-      <div class="loading-sub">${t(loc, 'boot.errorMessage')} (${errName})</div>
-      <button class="btn btn-primary" id="btn-boot-retry">${t(loc, 'boot.retry')}</button>
+    <div class="loading-splash" style="background-image: url('${OAK_UI_URLS.splashBg}');">
+      <div class="loading-splash-scrim" aria-hidden="true"></div>
+      <div class="loading-splash-content">
+        <div class="loading-emblem-frame">
+          <img class="loading-emblem" src="${OAK_UI_URLS.logoOakward}" alt="${t(loc, 'app.title')}" />
+        </div>
+        <div class="loading-title">${t(loc, 'boot.errorTitle')}</div>
+        <div class="loading-sub">${t(loc, 'boot.errorMessage')} (${errName})</div>
+        <button class="btn btn-primary" id="btn-boot-retry">${t(loc, 'boot.retry')}</button>
+      </div>
     </div>
   `;
   uiRoot.querySelector<HTMLButtonElement>('#btn-boot-retry')?.addEventListener('click', () => {
@@ -1199,8 +1210,28 @@ function renderBootError(err: unknown): void {
   });
 }
 
+type NativeCapGlobal = {
+  Capacitor?: {
+    isNativePlatform?: () => boolean;
+    Plugins?: {
+      StatusBar?: {
+        setStyle?: (opts: { style: string }) => Promise<void> | void;
+        setBackgroundColor?: (opts: { color: string }) => Promise<void> | void;
+      };
+      SplashScreen?: {
+        hide?: () => Promise<void> | void;
+      };
+    };
+  };
+};
+
 async function boot(): Promise<void> {
   try {
+    const cap = (globalThis as NativeCapGlobal).Capacitor;
+    if (cap?.isNativePlatform?.()) {
+      void cap.Plugins?.StatusBar?.setStyle?.({ style: 'DARK' });
+      void cap.Plugins?.StatusBar?.setBackgroundColor?.({ color: '#1a0f07' });
+    }
     renderLoadingSplash(5);
     await preloadBootModels((loaded, total) => {
       const pct = Math.max(8, Math.round((loaded / total) * 100));
@@ -1229,6 +1260,9 @@ async function boot(): Promise<void> {
       });
     } else {
       renderMeta();
+    }
+    if (cap?.isNativePlatform?.()) {
+      void cap.Plugins?.SplashScreen?.hide?.();
     }
     if (import.meta.env.PROD && 'serviceWorker' in navigator) {
       void navigator.serviceWorker.register('./sw.js').catch(() => {});

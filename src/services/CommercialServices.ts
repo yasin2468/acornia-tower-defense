@@ -252,15 +252,19 @@ export class HapticsService {
       return true;
     }
 
-    const capHaptics = (
+    const cap = (
       globalThis as {
-        Capacitor?: { Plugins?: { Haptics?: { impact?: (opts: { style: string }) => void } } };
+        Capacitor?: {
+          isNativePlatform?: () => boolean;
+          Plugins?: { Haptics?: { impact?: (opts: { style: string }) => Promise<void> | void } };
+        };
       }
-    ).Capacitor?.Plugins?.Haptics;
-    if (capHaptics?.impact) {
+    ).Capacitor;
+    const capHaptics = cap?.Plugins?.Haptics;
+    if (capHaptics?.impact && (cap?.isNativePlatform?.() ?? true)) {
       const capStyle = style === 'heavy' ? 'HEAVY' : style === 'medium' ? 'MEDIUM' : 'LIGHT';
       try {
-        capHaptics.impact({ style: capStyle });
+        void capHaptics.impact({ style: capStyle });
         return true;
       } catch {
         // Fall through to Web Vibration API

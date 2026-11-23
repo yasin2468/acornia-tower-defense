@@ -75,6 +75,8 @@ export const UI_ICON_URLS = {
 
 export const OAK_UI_URLS = {
   worldMap: resolvePublicUrl('ui/oak/world_map_oak.jpg'),
+  splashBg: resolvePublicUrl('ui/oak/splash_oakward.jpg'),
+  logoOakward: resolvePublicUrl('ui/oak/logo_oakward.png'),
   talentTreeBg: resolvePublicUrl('ui/oak/talent_tree_bg.jpg'),
   navMap: resolvePublicUrl('ui/oak/nav_map.png'),
   navArena: resolvePublicUrl('ui/oak/nav_arena.png'),

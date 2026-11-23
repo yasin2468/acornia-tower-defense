@@ -5,3 +5,6 @@ export const ONLINE_ARENA_ENABLED = false;
 
 /** Set to true once native IAP / Rewarded Ad SDKs (RevenueCat / AdMob) are linked. */
 export const MONETIZATION_ENABLED = false;
+
+export const PRIVACY_POLICY_URL = 'https://oakwardgame.com/privacy-policy.html';
+export const SUPPORT_URL = 'https://oakwardgame.com/support.html';

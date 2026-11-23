@@ -228,9 +228,11 @@ describe('UI-1 — Ulu Mese Parsomeni menu ve boyama ozel oak UI varliklari', ()
       view.activeTab = 'multi';
       renderInto();
       assert.ok(container.innerHTML.includes('id="league-panel"'), 'Arena sekmesi eksik');
-      assert.ok(container.innerHTML.includes('id="arena-coming-soon"'), 'Arena Yakinda ekrani render edilmeli');
+      assert.ok(container.innerHTML.includes('id="arena-offline-hub"'), 'Arena Cevrimdisi Mucadele merkezi render edilmeli');
       assert.ok(container.innerHTML.includes('id="btn-arena-goto-map"'), 'Arena haritaya don butonu olmali');
-      assert.ok(container.innerHTML.includes('class="nav-soon-tag"'), 'Alt menude v1.1 rozeti olmali');
+      assert.ok(container.innerHTML.includes('id="btn-arena-open-daily"'), 'Arena Gunluk Mucadele butonu olmali');
+      assert.ok(!container.innerHTML.includes('daily.tab') && !container.innerHTML.includes('endless.tab'), 'Arena hub basliklari yerellestirilmis olmali');
+      assert.ok(!container.innerHTML.includes('nav-soon-tag'), 'Apple 2.3.1 uyumu icin Yakinda rozeti gizli olmali');
       assert.ok(!container.innerHTML.includes('id="input-room"'), 'v1.0 surumunde canli oda girisi gizli olmali');
       const multiBtnMatch = container.innerHTML.match(/<button class="nav-tab[^"]*" data-tab="multi">[\s\S]*?<\/button>/);
       assert.ok(multiBtnMatch, 'Arena alt sekme butonu olmali');

@@ -1,0 +1,20 @@
+# Oakward: Tower Defense
+
+> Offline-first 3D portrait woodland tower defense strategy game (English & Turkish).
+
+Oakward: Tower Defense blends carved storybook woodland visuals, real-time 3D combat on portrait screens, elemental tower synergies, and tactical hero positioning into an offline single-player experience with zero account wall and zero tracking SDKs.
+
+## Core Facts (v1.0.0)
+- **Title (EN):** Oakward: Tower Defense
+- **Title (TR):** Oakward: Kule Savunması
+- **Platforms:** iOS, Android, Installable Web PWA
+- **Campaign:** 50 handcrafted stages spanning 13 visual regions, scaling up to 12 build pads, 8 rune altars, and 14-wave boss sieges.
+- **Towers (8 Base, 16 Tier-3 Evolutions):** Squirrel (Sharp Sniper / Acorn Gatling), Beaver (Burning Resin / Big Splash), Owl (Glacier Echo / Radar), Hedgehog (Triple Shard / Armor Breaker), Raccoon (Inferno Brew / Acid Cauldron), Raven (Storm Feather / Sky Marksman), Mole (Seismic Slam / Resonance Totem), Ermine (Frost Lance / Absolute Zero).
+- **Playable Heroes (4):** Boz Pence (Bear Fighter), Crimson Tail (Fox Alchemist), Rock Tusk (Armored Boar), Moon Wolf (Arctic Guardian), each with Viking / Royal class specializations and active ultimates.
+- **Challenge & Progression Modes:** Iron Mode, Daily Mutator Challenge, Endless Siege, 5-Stage Lost Forest Expedition, Lv.20 Unit Card upgrades, 10-node Tactical Talent Tree, Offline Patrol Chest, Monster Atlas codex.
+- **Privacy & Storage:** 100% client-side offline save data with portable `PK1:...` backup export/import. No ads, no personal data collection, no analytics SDKs.
+
+## Links
+- Web App: https://oakwardgame.com/
+- Privacy Policy: https://oakwardgame.com/privacy-policy.html
+- Support: https://oakwardgame.com/support.html

@@ -1,14 +1,51 @@
 <!doctype html>
-<html lang="tr">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
+    <title>Oakward: Tower Defense — Offline 3D Woodland Strategy Game</title>
+    <meta
+      name="description"
+      content="Defend the Sovereign Oak Throne in Oakward: Tower Defense — an offline 3D woodland tower defense game featuring 50 campaign stages, 8 towers with 16 evolutions, 4 heroes, and Iron, Daily & Endless challenge modes."
+    />
+    <meta
+      name="keywords"
+      content="Oakward, Oakward Tower Defense, woodland tower defense, 3D offline strategy game, TD mobile game, kule savunma oyunu, orman savunmasi"
+    />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://oakwardgame.com/" />
+    <link rel="alternate" hreflang="en" href="https://oakwardgame.com/?lang=en" />
+    <link rel="alternate" hreflang="tr" href="https://oakwardgame.com/?lang=tr" />
+    <link rel="alternate" hreflang="x-default" href="https://oakwardgame.com/" />
+
+    <!-- Open Graph / Social Sharing -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Oakward: Tower Defense" />
+    <meta property="og:title" content="Oakward: Tower Defense — Offline 3D Woodland Strategy" />
+    <meta
+      property="og:description"
+      content="50 handcrafted 3D stages across 13 biomes, 8 woodland towers, 16 Tier-3 evolutions, 4 playable heroes, and zero ads or tracking."
+    />
+    <meta property="og:url" content="https://oakwardgame.com/" />
+    <meta property="og:image" content="https://oakwardgame.com/og-cover.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Oakward: Tower Defense — Offline 3D Woodland Strategy" />
+    <meta
+      name="twitter:description"
+      content="Command woodland guardians, elemental tower synergies, and 4 heroes across 50 offline 3D stages."
+    />
+    <meta name="twitter:image" content="https://oakwardgame.com/og-cover.jpg" />
+
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Palamut Kalesi" />
+    <meta name="apple-mobile-web-app-title" content="Oakward" />
     <meta name="theme-color" content="#24140a" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -17,9 +54,60 @@
       rel="stylesheet"
     />
     <link rel="manifest" href="./manifest.webmanifest" />
-    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <link rel="icon" href="./icon-192.png" type="image/png" sizes="192x192" />
     <link rel="apple-touch-icon" sizes="180x180" href="./icon-180.png" />
-    <title>Palamut Kalesi</title>
+
+    <!-- Structured Data (SEO & GEO) -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "VideoGame",
+            "name": "Oakward: Tower Defense",
+            "alternateName": ["Oakward", "Oakward: Kule Savunmasi"],
+            "description": "Oakward: Tower Defense is an offline-first 3D portrait woodland tower defense strategy game featuring 50 stages across 13 regions, 8 towers with 16 Tier-3 evolutions, 4 heroes, and Iron, Daily Mutator, Endless, and Expedition challenge modes.",
+            "genre": ["Tower Defense", "Strategy", "Tactical 3D"],
+            "applicationCategory": "GameApplication",
+            "operatingSystem": "iOS, Android, Web",
+            "inLanguage": ["en", "tr"],
+            "playMode": "SinglePlayer",
+            "url": "https://oakwardgame.com/",
+            "image": "https://oakwardgame.com/og-cover.jpg",
+            "softwareVersion": "1.0.0"
+          },
+          {
+            "@type": "FAQPage",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "Can Oakward: Tower Defense be played offline?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Yes. All 50 campaign stages, Iron Mode, Daily Mutator Challenges, Endless Siege, and the 5-stage Lost Forest Expedition run 100% offline with local save storage and PK1 backup codes."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "How many towers, evolutions, and heroes are in Oakward v1.0.0?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Oakward v1.0.0 includes 8 distinct woodland towers (each with 2 branching Tier-3 evolutions for 16 evolutions total), 4 playable heroes (Boz Pence, Crimson Tail, Rock Tusk, Moon Wolf), a 10-node Tactical Talent Tree, and Level 20 unit card upgrades."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Does Oakward collect personal data or run third-party ads?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "No. Oakward requires no login account, collects zero personal data or advertising identifiers, and ships without third-party ad or tracking SDKs."
+                }
+              }
+            ]
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
     <div id="app">

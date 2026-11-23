@@ -1,6 +1,6 @@
 const config = {
   appId: 'com.palamutkalesi.app',
-  appName: 'Palamut Kalesi',
+  appName: 'Oakward',
   webDir: 'dist',
   server: {
     androidScheme: 'https',

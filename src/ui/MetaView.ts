@@ -306,6 +306,7 @@ export class MetaView {
             <span class="brass-rivet tr" aria-hidden="true"></span>
             <span class="brass-rivet bl" aria-hidden="true"></span>
             <span class="brass-rivet br" aria-hidden="true"></span>
+            <img class="brand-plaque-icon" src="${OAK_UI_URLS.logoOakward}" alt="${t(loc, 'app.title')}" />
             <div class="brand-title-stack">
               <span>${t(loc, 'app.titleLine1')}</span>
               <span>${t(loc, 'app.titleLine2')}</span>
@@ -340,7 +341,7 @@ export class MetaView {
             <span class="nav-label">${t(loc, 'nav.map')}</span>
           </button>
           <button class="nav-tab ${this.activeTab === 'multi' ? 'active' : ''}" data-tab="multi">
-            ${ONLINE_ARENA_ENABLED ? navBadgeHtml(badges.multi, 'red') : `<span class="nav-soon-tag" aria-hidden="true">${t(loc, 'multi.soonShort')}</span>`}
+            ${ONLINE_ARENA_ENABLED ? navBadgeHtml(badges.multi, 'red') : ''}
             <img class="nav-art-ico" src="${OAK_UI_URLS.navArena}" alt="" />
             <span class="nav-label">${t(loc, 'nav.arena')}</span>
           </button>
@@ -1196,10 +1197,12 @@ export class MetaView {
   }
 
   private renderMultiTab(loc: Locale): string {
-    return ONLINE_ARENA_ENABLED ? this.renderLiveMultiTab(loc) : this.renderComingSoonMultiTab(loc);
+    return ONLINE_ARENA_ENABLED ? this.renderLiveMultiTab(loc) : this.renderOfflinePracticeHub(loc);
   }
 
-  private renderComingSoonMultiTab(loc: Locale): string {
+  private renderOfflinePracticeHub(loc: Locale): string {
+    const curSave = this.saveManager.get();
+    const curTier = getLeagueTierForTrophies(curSave.trophies);
     const tiersPreviewHtml = LEAGUE_TIERS.filter((tier) => tier.id !== 'oak')
       .map(
         (tier) => `
@@ -1211,7 +1214,7 @@ export class MetaView {
       .join('');
 
     return `
-      <div class="card-panel arena-soon-hero" id="arena-coming-soon">
+      <div class="card-panel arena-soon-hero" id="arena-offline-hub">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
           <div style="font-size:16px; font-weight:900; color:#ffe17a;">${t(loc, 'multi.title')}</div>
           <span class="pill-badge gold">${t(loc, 'multi.comingSoonBadge')}</span>
@@ -1222,27 +1225,32 @@ export class MetaView {
         <div class="arena-soon-modes">
           <div class="arena-soon-mode-card">
             <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
-              <strong style="color:#8cf7b0; font-size:12.5px;">${t(loc, 'multi.coopName')}</strong>
-              <span class="pill-badge" style="font-size:9.5px;">${t(loc, 'multi.soonShort')}</span>
+              <strong style="color:#8cf7b0; font-size:12.5px;">${t(loc, 'daily.title')}</strong>
+              <span class="pill-badge green" style="font-size:9.5px;">${t(loc, 'multi.soonShort')}</span>
             </div>
-            <div style="font-size:11px; color:var(--text-muted); line-height:1.35;">${t(loc, 'multi.coopDesc')}</div>
+            <div style="font-size:11px; color:var(--text-muted); line-height:1.35;">${t(loc, 'multi.dailySummary')}</div>
+            <button type="button" class="btn btn-sm btn-gold" id="btn-arena-open-daily">${t(loc, 'multi.playChallenge')}</button>
           </div>
           <div class="arena-soon-mode-card">
             <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
-              <strong style="color:#ffd564; font-size:12.5px;">${t(loc, 'multi.pvpName')}</strong>
-              <span class="pill-badge" style="font-size:9.5px;">${t(loc, 'multi.soonShort')}</span>
+              <strong style="color:#ffd564; font-size:12.5px;">${t(loc, 'endless.title')}</strong>
+              <span class="pill-badge green" style="font-size:9.5px;">${t(loc, 'multi.soonShort')}</span>
             </div>
-            <div style="font-size:11px; color:var(--text-muted); line-height:1.35;">${t(loc, 'multi.pvpDesc')}</div>
+            <div style="font-size:11px; color:var(--text-muted); line-height:1.35;">${t(loc, 'multi.endlessSummary')}</div>
+            <button type="button" class="btn btn-sm btn-gold" id="btn-arena-open-endless">${t(loc, 'multi.playChallenge')}</button>
           </div>
         </div>
 
-        <button type="button" class="btn btn-primary" id="btn-arena-goto-map">${t(loc, 'multi.backToCampaign')}</button>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button type="button" class="btn btn-primary" style="flex:1;" id="btn-arena-goto-map">${t(loc, 'multi.backToCampaign')}</button>
+          <button type="button" class="btn" id="btn-arena-open-expedition">${t(loc, 'rogue.title')}</button>
+        </div>
       </div>
 
       <div class="card-panel arena-soon-league" id="league-panel">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-          <div style="font-size:14.5px; font-weight:900; color:#ffe17a;">${t(loc, 'league.title')}</div>
-          <span class="pill-badge">${t(loc, 'multi.comingSoonBadge')}</span>
+          <div style="font-size:14.5px; font-weight:900; color:#ffe17a;">${t(loc, 'league.title')} · ${t(loc, `league.tier.${curTier.id}`)}</div>
+          <span class="pill-badge">${curSave.trophies} ${uiIcon('trophy')}</span>
         </div>
         <div style="font-size:11.5px; color:var(--text-muted); line-height:1.4;">${t(loc, 'multi.comingSoonLeagueNote')}</div>
         <div class="arena-soon-tier-list">${tiersPreviewHtml}</div>
@@ -2115,6 +2123,10 @@ export class MetaView {
           <div class="settings-privacy-box">
             <strong>${t(loc, 'settings.privacyTitle')}</strong>
             <span>${t(loc, 'settings.privacyBody')}</span>
+            <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:4px; font-size:12px; font-weight:700;">
+              <a href="./privacy-policy.html" target="_blank" rel="noopener noreferrer" style="color:#ffd564; text-decoration:underline;">${t(loc, 'settings.privacyLink')}</a>
+              <a href="./support.html" target="_blank" rel="noopener noreferrer" style="color:#ffd564; text-decoration:underline;">${t(loc, 'settings.supportLink')}</a>
+            </div>
           </div>
           <div class="settings-backup-box" id="save-backup-box">
             <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
@@ -2266,6 +2278,19 @@ export class MetaView {
         this.callbacks.onRefresh();
       };
     }
+
+    const openArenaMode = (tab: 'daily' | 'endless' | 'expedition') => {
+      this.activeTab = 'map';
+      this.specialModeTab = tab;
+      this.showExpeditionModal = true;
+      this.callbacks.onRefresh();
+    };
+    const arenaDailyBtn = container.querySelector<HTMLButtonElement>('#btn-arena-open-daily');
+    if (arenaDailyBtn) arenaDailyBtn.onclick = () => openArenaMode('daily');
+    const arenaEndlessBtn = container.querySelector<HTMLButtonElement>('#btn-arena-open-endless');
+    if (arenaEndlessBtn) arenaEndlessBtn.onclick = () => openArenaMode('endless');
+    const arenaExpBtn = container.querySelector<HTMLButtonElement>('#btn-arena-open-expedition');
+    if (arenaExpBtn) arenaExpBtn.onclick = () => openArenaMode('expedition');
 
     const prevMapBtn = container.querySelector<HTMLButtonElement>('#btn-map-prev');
     const nextMapBtn = container.querySelector<HTMLButtonElement>('#btn-map-next');

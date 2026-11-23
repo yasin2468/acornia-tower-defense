@@ -1,0 +1,7 @@
+Command woodland guardians and defend the Sovereign Oak in Oakward: Tower Defense, an offline-first 3D tactical strategy game built for portrait mobile play.
+
+• 50 Campaign Stages spanning 13 distinct regions, escalating to 12 build pads, 8 rune altars, and 14-wave boss sieges.
+• 8 Woodland Towers with 16 branching Tier-3 Evolutions and real-time elemental Synergy Combos.
+• 4 Playable Heroes with active battlefield positioning and tactical ultimates.
+• Deep offline progression: Lv.20 card upgrades, 10-node Talent Tree, Iron Mode, Daily Mutator Challenges, Endless Siege, and the Lost Forest Expedition.
+• Private & Offline-First: zero account walls, zero tracking SDKs, local save backups via PK1 codes.
