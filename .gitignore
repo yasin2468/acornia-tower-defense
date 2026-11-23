@@ -10,4 +10,5 @@ android/.gradle/
 android/app/build/
 android/build/
 build/
+store-assets/
 RELEASE-READINESS-REPORT.md
