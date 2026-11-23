@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://acorniagame.com/sitemap.xml
+Sitemap: https://yasin2468.github.io/acornia-tower-defense/sitemap.xml

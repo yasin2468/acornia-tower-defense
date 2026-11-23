@@ -15,6 +15,6 @@ Acornia: Tower Defense blends carved storybook woodland visuals, real-time 3D co
 - **Privacy & Storage:** 100% client-side offline save data with portable `PK1:...` backup export/import. No ads, no personal data collection, no analytics SDKs.
 
 ## Links
-- Web App: https://acorniagame.com/
-- Privacy Policy: https://acorniagame.com/privacy-policy.html
-- Support: https://acorniagame.com/support.html
+- Web App: https://yasin2468.github.io/acornia-tower-defense/
+- Privacy Policy: https://yasin2468.github.io/acornia-tower-defense/privacy-policy.html
+- Support: https://yasin2468.github.io/acornia-tower-defense/support.html

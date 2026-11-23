@@ -15,5 +15,5 @@
 
 ## Contact Information
 - Support Email: `support@acorniagame.com`
-- Privacy Policy: `https://acorniagame.com/privacy-policy.html`
-- Support URL: `https://acorniagame.com/support.html`
+- Privacy Policy: `https://yasin2468.github.io/acornia-tower-defense/privacy-policy.html`
+- Support URL: `https://yasin2468.github.io/acornia-tower-defense/support.html`

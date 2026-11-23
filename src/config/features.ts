@@ -6,5 +6,5 @@ export const ONLINE_ARENA_ENABLED = false;
 /** Set to true once native IAP / Rewarded Ad SDKs (RevenueCat / AdMob) are linked. */
 export const MONETIZATION_ENABLED = false;
 
-export const PRIVACY_POLICY_URL = 'https://acorniagame.com/privacy-policy.html';
-export const SUPPORT_URL = 'https://acorniagame.com/support.html';
+export const PRIVACY_POLICY_URL = 'https://yasin2468.github.io/acornia-tower-defense/privacy-policy.html';
+export const SUPPORT_URL = 'https://yasin2468.github.io/acornia-tower-defense/support.html';
